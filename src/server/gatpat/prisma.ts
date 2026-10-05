@@ -21,6 +21,18 @@ function createClient() {
   return new PrismaClient({ adapter: new PrismaPg(pool) });
 }
 
-export const gatpatPrisma = globalForPrisma.gatpatPrisma ?? createClient();
+function getClient() {
+  const client = globalForPrisma.gatpatPrisma ?? createClient();
+  if (process.env.NODE_ENV !== "production") globalForPrisma.gatpatPrisma = client;
+  return client;
+}
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.gatpatPrisma = gatpatPrisma;
+// Keep importing Web A server modules safe during builds that only deploy WebB.
+// The database connection is created only when a handler actually uses Prisma.
+export const gatpatPrisma = new Proxy({} as PrismaClient, {
+  get(_target, property) {
+    const client = getClient();
+    const value = Reflect.get(client, property, client);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});

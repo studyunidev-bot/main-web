@@ -1,0 +1,31 @@
+Table,Before,After,Difference,Reason
+AdminUser,1,1,0,Real admin kept
+Post,12,12,0,Real articles kept
+PostTranslation,8,8,0,Kept
+Portfolio,7,7,0,Real case studies kept
+PortfolioTranslation,0,0,0,Empty overlay table kept
+Service,3,3,0,Core services kept
+ContactSubmission,1,1,0,Not confirmed test
+CompanyInfo,1,1,0,Real company row kept
+BlogCategory,5,5,0,Real categories kept
+PasswordResetToken,0,0,0,Empty
+ProductCategory,4,4,0,Shop collections kept (structure)
+ProductCategoryLink,2,0,-2,Links belonged to demo product
+ProductCategoryTranslation,16,16,0,Kept
+Product,1,0,-1,CONFIRMED DEMO spider-man-backpack / asdasdas
+ProductTranslation,4,0,-4,Demo product translations
+ProductVariant,3,0,-3,Demo variants
+ProductVariantPrice,12,0,-12,Demo prices
+Cart,2,0,-2,Leftover demo carts
+CartItem,2,0,-2,Demo cart lines
+Wishlist,1,0,-1,Leftover demo wishlist
+WishlistItem,0,0,0,Empty
+Customer,1,0,-1,CONFIRMED TEST customer aaaa / naiiwolf00@gmail.com
+CustomerPasswordResetToken,0,0,0,Empty
+Order,8,0,-8,All orders were the demo product
+OrderItem,8,0,-8,Demo order lines
+PaymentNotification,0,0,0,Empty
+ShopCoupon,0,0,0,Empty
+ShopPaymentSettings,1,1,0,Kept
+PageView,917,917,0,Local analytics kept
+OutboundClick,2,2,0,Kept

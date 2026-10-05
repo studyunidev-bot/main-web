@@ -1,0 +1,53 @@
+# ThaiBusinessMate
+
+Official website of ThaiBusinessMate, a premium custom software developer and search-model optimization agency based in Khon Kaen, Thailand. This document serves as a guide for LLM agents, web crawlers, and generative AI search engines.
+
+## Overview
+
+ThaiBusinessMate specializes in high-quality custom business software engineering, high-performance Next.js website design, and AI-era search engine visibility (SEO, AEO, GEO) in Khon Kaen, Northeast Thailand.
+
+## Key Information
+
+- **Brand Name:** ThaiBusinessMate (ไทยบิสซิเนสเมท)
+- **Core Services:** Custom business software development, Next.js & E-Commerce website development, Search Engine Optimization (SEO), Answer Engine Optimization (AEO), Generative Engine Optimization (GEO), and LINE OA Workflow Automation.
+- **Service Areas:** Khon Kaen, Northeast Thailand (Isan).
+- **Preferred Contact:** LINE Official Account (https://lin.ee/nx1WtgD), phone, email, or the working consultation form on the contact page.
+
+## FAQ Highlights
+
+- Custom software covers CRM, ERP, WMS, booking, and internal business apps with source-code ownership.
+- Company websites are built with Next.js for speed, SEO structure, and maintainability.
+- Monthly marketing retainers focus on SEO + AEO + GEO for Google and AI answer surfaces.
+- Primary service area is Khon Kaen with coverage across Northeast Thailand.
+
+## Core Navigation Links (Thai)
+
+- [Home](https://thaibusinessmate.com/th)
+- [Services](https://thaibusinessmate.com/th/services)
+- [Custom Software](https://thaibusinessmate.com/th/services/custom-software)
+- [Company Website](https://thaibusinessmate.com/th/services/company-website)
+- [Monthly Marketing (SEO/AEO/GEO)](https://thaibusinessmate.com/th/services/monthly-marketing)
+- [Portfolio](https://thaibusinessmate.com/th/portfolio)
+- [Portfolio: Custom Software](https://thaibusinessmate.com/th/portfolio/custom-software)
+- [Portfolio: Company Website](https://thaibusinessmate.com/th/portfolio/company-website)
+- [Portfolio: Monthly Marketing](https://thaibusinessmate.com/th/portfolio/monthly-marketing)
+- [Blog](https://thaibusinessmate.com/th/blog)
+- [Workflow](https://thaibusinessmate.com/th/workflow)
+- [About](https://thaibusinessmate.com/th/about)
+- [Contact](https://thaibusinessmate.com/th/contact)
+
+## Core Navigation Links (English)
+
+- [Home](https://thaibusinessmate.com/en)
+- [Services](https://thaibusinessmate.com/en/services)
+- [Custom Software](https://thaibusinessmate.com/en/services/custom-software)
+- [Company Website](https://thaibusinessmate.com/en/services/company-website)
+- [Monthly Marketing (SEO/AEO/GEO)](https://thaibusinessmate.com/en/services/monthly-marketing)
+- [Portfolio](https://thaibusinessmate.com/en/portfolio)
+- [Portfolio: Custom Software](https://thaibusinessmate.com/en/portfolio/custom-software)
+- [Portfolio: Company Website](https://thaibusinessmate.com/en/portfolio/company-website)
+- [Portfolio: Monthly Marketing](https://thaibusinessmate.com/en/portfolio/monthly-marketing)
+- [Blog](https://thaibusinessmate.com/en/blog)
+- [Workflow](https://thaibusinessmate.com/en/workflow)
+- [About](https://thaibusinessmate.com/en/about)
+- [Contact](https://thaibusinessmate.com/en/contact)

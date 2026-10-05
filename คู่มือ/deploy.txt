@@ -1,0 +1,561 @@
+# 📘 คู่มือการ Deploy Next.js (App Router) + Prisma + MySQL 
+คู่มือฉบับสมบูรณ์สำหรับการติดตั้งและดูแลรักษาระบบทั้งบน VPS (Ubuntu Server) และ Shared Hosting (Hostinger Node.js) ทั้งแบบติดตั้งครั้งแรกและการอัปเดตโค้ดอย่างมืออาชีพ
+
+---
+
+## 🗄️ ส่วนที่ 0: จัดการฐานข้อมูลตอน Deploy (Local + Production ไม่ให้ข้อมูลหาย)
+
+โปรเจกต์นี้เก็บ schema ที่ `prisma/schema.prisma`  
+**ตอนนี้ยังไม่มีโฟลเดอร์ `prisma/migrations` ใน repo** — การซิงค์ตารางใช้แนว `prisma db push` เป็นหลัก (ไม่ใช่ `migrate deploy` แบบเต็มรูปแบบจนกว่าจะเริ่มสร้าง migration จริง)
+
+### 0.1 กฎเหล็ก (อ่านก่อนทุกครั้ง)
+
+| ✅ ทำ | ❌ ห้าม |
+|--------|---------|
+| แยก `.env` Local กับ Production คนละชุด — อย่า commit `.env` | อย่าใช้ `prisma db push --force-reset` / drop database บน Production |
+| Backup MySQL **ก่อน** แตะ schema บน Production | อย่าชี้ Local `.env` ไป DB จริงแล้วกดเซฟ/ลบข้อมูลเพลินๆ |
+| ถามตัวเอง: “รอบนี้มีแก้ `prisma/schema.prisma` ไหม?” | อย่า copy `.env` Production ทับ Local แล้วลืมเปลี่ยนกลับ |
+| รอบที่ **ไม่แก้ schema** → deploy โค้ดอย่างเดียว ไม่ต้อง push DB | อย่าคิดว่า `npm run build` จะอัปเดตตารางให้อัตโนมัติ |
+
+### 0.2 เช็คว่ารอบนี้โครงสร้าง DB เปลี่ยนหรือไม่
+
+ดูจาก git ก่อน Deploy:
+
+```bash
+git diff HEAD -- prisma/schema.prisma
+# หรือดูไฟล์ใน PR / commit ที่จะขึ้น Production
+```
+
+- **ไม่มี diff ใน `schema.prisma`** → ไปข้อ **0.3** (Deploy โค้ดอย่างเดียว)
+- **มี diff** (เพิ่มตาราง/คอลัมน์/ดัชนี ฯลฯ) → ไปข้อ **0.4** (Backup + sync schema อย่างระวัง)
+
+ตัวอย่างรอบอัปเดตร้านค้า (ฟอร์มสินค้า / รูปตามสี / คู่มือ / theme) — **ไม่แตะ schema** จึงไม่ต้อง `db push` บน Production
+
+### 0.3 กรณีไม่เปลี่ยนโครงสร้าง DB (Deploy โค้ดอย่างเดียว)
+
+ข้อมูล Local และ Production **ไม่ถูกแตะจาก schema** — อัปเดตแค่แอป:
+
+```bash
+# บนเครื่อง Build / เซิร์ฟเวอร์
+git pull
+npm install          # สำคัญถ้ามีแพ็กเกจใหม่ใน package.json
+npx prisma generate  # สร้าง Prisma Client จาก schema ปัจจุบัน (ไม่แก้ตาราง)
+npm run build
+# แล้ว restart / pm2 reload / Restart Application บน Hostinger
+```
+
+**.env**
+- Local: คง `DATABASE_URL` ชี้ DB local
+- Production: คง `DATABASE_URL` ในแผงโฮสต์ / `.env` บนเซิร์ฟเวอร์  
+- **ไม่ต้อง** สลับ `.env` ของเครื่องคุณไปชี้ Production เพื่อแค่ Deploy
+
+### 0.4 กรณีมีการเปลี่ยนแปลงโครงสร้าง DB (schema เปลี่ยน)
+
+ทำทีละฝั่ง — Local ทดลองก่อน แล้วค่อย Production
+
+#### ก) Backup ทั้งสองฝั่งก่อน
+
+```bash
+# ตัวอย่าง mysqldump (แก้ user / db / ชื่อไฟล์ให้ตรงของคุณ)
+
+# Local
+mysqldump -u root -p ชื่อ_db_local > backup-local-$(date +%Y%m%d).sql
+
+# Production (รันบนเซิร์ฟเวอร์ หรือเครื่องที่เข้าถึง MySQL จริงได้)
+mysqldump -u USER -p ชื่อ_db_production > backup-prod-$(date +%Y%m%d).sql
+```
+
+เก็บไฟล์ backup นอกเครื่องที่กำลังแก้ และอย่าลบจนกว่าจะยืนยันว่าร้านทำงานปกติ
+
+#### ข) Local ก่อน (ทดสอบ)
+
+1. ให้ `.env` Local ชี้ **DB local เท่านั้น**
+2. ดึงโค้ดที่มี `schema.prisma` ใหม่
+3. ซิงค์ตารางบน Local:
+
+```bash
+npx prisma generate
+npx prisma db push
+# หรือ: npm run prisma:push
+```
+
+4. เปิดแอป Local ทดสอบ CRUD (สินค้า / ออเดอร์ ฯลฯ) ให้แน่ใจว่าข้อมูลเดิมยังอยู่และฟีเจอร์ใหม่ใช้ได้
+
+#### ค) Production ทีหลัง
+
+1. Backup Production อีกครั้งก่อน sync (ข้อ ก)
+2. Deploy โค้ดขึ้น Production ให้ schema ใน repo = ตัวที่ทดสอบแล้ว
+3. บนเซิร์ฟเวอร์ (หรือ SSH Hostinger) ที่ `.env` / Env Vars ชี้ **DB จริง**:
+
+```bash
+npx prisma generate
+npx prisma db push
+# ห้าม: prisma db push --force-reset
+# ห้าม: DROP DATABASE / migrate reset บน Production
+```
+
+4. `npm run build` (ถ้ายังไม่ build) แล้ว Restart แอป
+5. เปิดหน้าร้าน + แอดมิน เช็คว่าข้อมูลเดิมครบ และฟีเจอร์ใหม่ทำงาน
+
+ถ้า `db push` ล้มเหลว / ข้อมูลเพี้ยน → **หยุด** แล้ว restore จากไฟล์ dump ในข้อ ก
+
+### 0.5 Local ต้องการดูข้อมูล Production ชั่วคราว
+
+```bash
+cp .env .env.local.backup          # สำรองค่า Local
+# แก้ DATABASE_URL ใน .env ให้ชี้ Production ชั่วคราว (อ่านอย่างเดียว / อย่าลบ-อย่าเซฟมั่ว)
+# เสร็จงานแล้วคืนทันที:
+mv .env.local.backup .env
+```
+
+แนะนำ: ใช้ mysqldump จาก Production แล้ว restore ลง Local clone แทนการชี้ Local ตรงไป DB จริง
+
+### 0.6 สรุปสั้นสำหรับทีมที่ไม่ใช่โปรแกรมเมอร์
+
+1. **อัปเดตหน้าเว็บ / ปุ่ม / ฟอร์ม** ส่วนใหญ่ = ไม่แตะ DB → Deploy โค้ดพอ ข้อมูลไม่หาย  
+2. **เพิ่มชนิดข้อมูลใหม่ในระบบ** (เช่น ฟิลด์ใหม่ทั้งตาราง) = ต้อง Backup แล้วค่อย sync schema ตามข้อ 0.4  
+3. **ไฟล์รหัสผ่าน / DATABASE_URL ของของจริง** อยู่ในโฮสต์เท่านั้น อย่าทับ `.env` ในเครื่องจนลืม  
+4. มีข้อสงสัยว่า schema เปลี่ยนไหม → ดูว่ามีแก้ไฟล์ `prisma/schema.prisma` ในรอบนั้นหรือไม่
+
+### 0.7 เมื่อโปรเจกต์เริ่มใช้ Prisma Migrate จริง (อนาคต)
+
+ถ้ามีโฟลเดอร์ `prisma/migrations/` ใน repo แล้ว:
+
+```bash
+npx prisma migrate deploy   # บน Production — ประยุกต์ใช้ migration ที่ commit มาแล้ว
+npx prisma generate
+```
+
+จนกว่าจะมีโฟลเดอร์นั้น — **อย่าพึ่ง `migrate deploy` เป็นคำสั่งหลัก** เพราะไม่มี migration ให้ apply; ใช้ checklist ข้อ 0.2–0.4 แทน
+
+---
+
+## 🖥️ ส่วนที่ 1: การ Deploy บน VPS (Ubuntu Server) แบบติดตั้งเองทั้งหมด
+
+การทำเซิร์ฟเวอร์เองช่วยให้ควบคุมการทำงาน ประสิทธิภาพ และการปรับแต่งระบบได้ดีที่สุด เหมาะสำหรับการใช้งานระยะยาว
+
+### 1.1 การเตรียมเซิร์ฟเวอร์และการรักษาความปลอดภัยเบื้องต้น
+หลังจากเช่า VPS (แนะนำ Ubuntu 22.04 LTS / 24.04 LTS) ให้เชื่อมต่อ SSH เข้าไปยัง IP ของเครื่อง:
+```bash
+ssh root@YOUR_SERVER_IP
+```
+
+ปรับปรุงซอฟต์แวร์ในเซิร์ฟเวอร์ให้เป็นเวอร์ชันล่าสุด:
+```bash
+sudo apt update && sudo apt upgrade -y
+```
+
+ตั้งค่าระบบความปลอดภัยเบื้องต้น (UFW Firewall):
+```bash
+# อนุญาตการเชื่อมต่อ SSH, HTTP และ HTTPS
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+```
+
+---
+
+### 1.2 การติดตั้ง Software Stack หลัก (Node.js, Git, Nginx, MySQL)
+
+#### A. ติดตั้ง Node.js ผ่าน NVM (Node Version Manager)
+การใช้ NVM ช่วยให้จัดการเวอร์ชันของ Node.js ได้ง่ายและปลอดภัย:
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+source ~/.bashrc
+nvm install 20 # แนะนำติดตั้ง Node.js v20.x
+nvm use 20
+nvm alias default 20
+```
+
+#### B. ติดตั้ง PM2 (สำหรับจัดการโปรเซส Node.js ให้ทำงานตลอดเวลา)
+```bash
+npm install --global pm2
+```
+
+#### C. ติดตั้ง Nginx (สำหรับทำ Web Server / Reverse Proxy)
+```bash
+sudo apt install nginx -y
+sudo systemctl start nginx
+sudo systemctl enable nginx
+```
+
+#### D. ติดตั้ง MySQL Database Server
+```bash
+sudo apt install mysql-server -y
+sudo systemctl start mysql
+sudo systemctl enable mysql
+```
+
+ตั้งค่าความปลอดภัยเบื้องต้นให้ MySQL:
+```bash
+sudo mysql_secure_installation
+```
+*(ทำตามขั้นตอนในหน้าจอเพื่อกำหนดรหัสผ่าน root และการปิดการเข้าถึงจากภายนอกที่ไม่ปลอดภัย)*
+
+สร้างฐานข้อมูลและผู้ใช้งานสำหรับโปรเจกต์:
+```bash
+sudo mysql
+```
+รันคำสั่ง SQL ด้านล่างใน MySQL Prompt:
+```sql
+CREATE DATABASE start_web CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'tbm_user'@'localhost' IDENTIFIED BY 'เปลี่ยนเป็นรหัสผ่านที่ปลอดภัย';
+GRANT ALL PRIVILEGES ON start_web.* TO 'tbm_user'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+---
+
+### 1.3 การเชื่อมต่อ GitHub ดึงโค้ด และตั้งค่า Environment
+สร้างโฟลเดอร์สำหรับเก็บโปรเจกต์ (เช่นที่ `/var/www/web-thaibusinessmate`):
+```bash
+sudo mkdir -p /var/www/web-thaibusinessmate
+sudo chown -R $USER:$USER /var/www/web-thaibusinessmate
+cd /var/www/web-thaibusinessmate
+```
+
+สร้าง SSH Key ในเซิร์ฟเวอร์เพื่อเชื่อมต่อไปยัง GitHub อย่างปลอดภัย:
+```bash
+ssh-keygen -t ed25519 -C "server-key"
+# กด Enter ผ่านเพื่อข้ามรหัสผ่านคีย์
+cat ~/.ssh/id_ed25519.pub
+```
+*คัดลอกคีย์ที่ปรากฏไปเพิ่มลงใน **GitHub Repository Settings → Deploy Keys → Add deploy key** (เลือก Allow write access หากต้องการดันโค้ดกลับ)*
+
+โคลนโค้ดลงมายังโฟลเดอร์โครงการ:
+```bash
+git clone git@github.com:USERNAME/REPOSITORY.git .
+```
+
+สร้างไฟล์คอนฟิกสภาพแวดล้อม:
+```bash
+cp .env.example .env
+nano .env
+```
+กำหนดค่าที่จำเป็นในไฟล์ `.env` สำหรับเครื่อง Production:
+```env
+NODE_ENV=production
+NEXT_PUBLIC_SITE_URL=https://yourdomain.com
+NEXTAUTH_URL=https://yourdomain.com
+NEXTAUTH_SECRET="สร้างรหัสผ่านสุ่มความยาว 32 ตัวอักษรขึ้นไป"
+AUTH_SECRET="สร้างรหัสผ่านสุ่มความยาว 32 ตัวอักษรขึ้นไป"
+DATABASE_URL="mysql://tbm_user:รหัสผ่านที่ตั้งไว้@localhost:3306/start_web"
+UPLOAD_DIR="/var/www/web-thaibusinessmate/images" # โฟลเดอร์เก็บไฟล์รูปภาพที่อัปโหลด
+```
+*(กด Ctrl+O เพื่อบันทึก และ Ctrl+X เพื่อออกจากโปรแกรม nano)*
+
+สร้างโฟลเดอร์เก็บรูปภาพภายนอกและกำหนดสิทธิ์:
+```bash
+mkdir -p /var/www/web-thaibusinessmate/images
+chmod 755 /var/www/web-thaibusinessmate/images
+```
+
+---
+
+### 1.4 การรันคำสั่งติดตั้ง Dependencies และ Prisma ฐานข้อมูล
+ติดตั้ง Node module dependencies:
+```bash
+npm install
+```
+
+ทำการซิงค์โครงสร้างตารางข้อมูลในฐานข้อมูลจริง  
+*(อ่านส่วนที่ 0 ก่อน — โปรเจกต์นี้ยังไม่มี `prisma/migrations` ใน repo เป็นหลัก ใช้แนวทางด้านล่าง)*
+```bash
+# ติดตั้งครั้งแรก / เมื่อ schema เปลี่ยนและ Backup แล้ว:
+npx prisma db push
+
+# เมื่อโปรเจกต์มีโฟลเดอร์ prisma/migrations ครบแล้ว ค่อยใช้:
+# npx prisma migrate deploy
+```
+
+สั่งสร้างตัวเชื่อมฐานข้อมูล (Prisma Client):
+```bash
+npx prisma generate
+```
+
+---
+
+### 1.5 การ Build และรันโปรเซสด้วย PM2
+สั่ง Build โปรเจกต์ Next.js:
+```bash
+npm run build
+```
+
+สร้างไฟล์ config ของ PM2 ชื่อ `ecosystem.config.js` ในโฟลเดอร์หลักของโปรเจกต์:
+```javascript
+module.exports = {
+  apps: [
+    {
+      name: "web-thaibusinessmate",
+      script: "node_modules/next/dist/bin/next",
+      args: "start -p 3000", // รันที่พอร์ต 3000
+      exec_mode: "cluster",  // ใช้ Cluster mode เพื่อกระจายการทำงานทุกแกน CPU
+      instances: "max",
+      env: {
+        NODE_ENV: "production",
+      },
+    },
+  ],
+};
+```
+
+สั่งรันแอปผ่าน PM2:
+```bash
+pm2 start ecosystem.config.js
+# บันทึกสถานะโปรเซสปัจจุบัน
+pm2 save
+# ตั้งค่าให้ PM2 รันอัตโนมัติเมื่อระบบเซิร์ฟเวอร์รีบูต
+pm2 startup
+```
+*(คัดลอกคำสั่งที่ได้จากหน้าจอไปรันเพื่อยืนยันระบบ Startup)*
+
+---
+
+### 1.6 การตั้งค่า Reverse Proxy และเปิดใช้งาน SSL ด้วย Nginx
+สร้างไฟล์คอนฟิกของ Nginx เพื่อส่งต่อผู้ใช้งานจากพอร์ต 80/443 ไปยังแอป Next.js ที่รันอยู่ที่พอร์ต 3000:
+```bash
+sudo nano /etc/nginx/sites-available/yourdomain.com
+```
+
+ใส่ข้อมูลลงไปดังนี้:
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com www.yourdomain.com;
+
+    # ขนาดไฟล์อัปโหลดสูงสุดที่อนุญาต (เช่น 20MB)
+    client_max_body_size 20M;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ชี้เป้าโฟลเดอร์สำหรับอ่านไฟล์ภาพอัปโหลดจากภายนอก
+    location /images/ {
+        alias /var/www/web-thaibusinessmate/images/;
+        expires 30d;
+        add_header Cache-Control "public, no-transform";
+    }
+}
+```
+
+เปิดใช้งานการเชื่อมต่อและทดสอบไฟล์คอนฟิก:
+```bash
+sudo ln -s /etc/nginx/sites-available/yourdomain.com /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+ติดตั้ง Certbot เพื่อของใบรับรองความปลอดภัย SSL ฟรีจาก Let's Encrypt:
+```bash
+sudo apt install certbot python3-certbot-nginx -y
+sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
+```
+*(กดเลือก Redirect traffic to HTTPS เสมอ ระบบจะปรับแก้ไขไฟล์ Nginx ให้เองโดยอัตโนมัติ)*
+
+---
+
+### 1.7 ขั้นตอนการอัปเดตโค้ดเวอร์ชันใหม่แบบมืออาชีพบน VPS (Update Script)
+เพื่อป้องกันไม่ให้หน้าเว็บล่มระหว่างดาวน์โหลดและบิลด์โค้ดใหม่ (Zero-Downtime) เราจะใช้วิธีอัปเดตโค้ดบิลด์เครื่องในเซิร์ฟเวอร์แล้วรีโหลด PM2 
+
+สร้างสคริปต์อัตโนมัติไว้ใช้งานด่วนในอนาคต:
+```bash
+nano update-app.sh
+```
+ใส่สคริปต์นี้ลงไป:
+```bash
+#!/bin/bash
+echo "=== 🚀 Starting Zero-Downtime App Update ==="
+
+# ดึงโค้ดล่าสุดจาก GitHub
+echo "1. Pulling code from Git..."
+git pull origin web-shopping
+
+# ติดตั้ง Dependencies เผื่อมีการอัปเดตแพ็กเกจ
+echo "2. Installing Node modules..."
+npm install
+
+# รันดึงตารางฐานข้อมูลและ Client — ดูส่วนที่ 0
+echo "3. Database schema (ถ้ามีเปลี่ยนใน prisma/schema.prisma)..."
+# ถ้า git diff แสดงว่า schema เปลี่ยน และ Backup แล้ว:
+# npx prisma db push
+npx prisma generate
+
+# บิลด์เว็บใหม่
+echo "4. Building Next.js project..."
+npm run build
+
+# สั่ง PM2 ให้รีโหลดแบบไม่หยุดการทำงาน (Graceful Reload)
+echo "5. Reloading application process..."
+pm2 reload web-thaibusinessmate
+
+echo "=== 🎉 Update Completed successfully! ==="
+```
+เปิดสิทธิ์การใช้งานให้สคริปต์:
+```bash
+chmod +x update-app.sh
+```
+
+**วิธีการสั่งอัปเดตระบบในอนาคต:** 
+เพียงแค่ต่อ SSH เข้ามายังโฟลเดอร์โปรเจกต์แล้วรันคำสั่งเดียว ระบบจะอัปเกรดตัวเองเสร็จสมบูรณ์ทันทีโดยหน้าเว็บไม่ล่ม:
+```bash
+./update-app.sh
+```
+
+---
+
+## 🌐 ส่วนที่ 2: การ Deploy บน Shared Hosting (Hostinger Node.js) + GitHub
+
+การติดตั้งบน Hostinger Node.js Web Hosting จะประหยัดงบ และแถมฐานข้อมูล MySQL มาให้อยู่แล้ว แต่จะต้องเข้าใจข้อจำกัดและการใช้ Standalone mode ใน Next.js
+
+### 2.1 การตั้งค่าระบบเชื่อมต่อ GitHub บน Hostinger
+สำหรับ Hostinger ในแพ็กเกจ Node.js สามารถเชื่อมโยงโฟลเดอร์โปรเจกต์กับ GitHub เพื่อสั่ง Pull ดึงโค้ดได้โดยตรงผ่านแถบเมนูในเครื่องมือของ Hostinger:
+1. ล็อกอินเข้าใช้งาน **hPanel**
+2. ไปที่เมนู **Advanced → Git** หรือเชื่อมต่อผ่าน **SSH Access**
+3. สร้างคีย์ Deploy key เพื่อผูก Git repository แบบเดียวกับขั้นตอนที่ 1.3
+4. ผูกกิ่งก้านการอัปเดตหลัก (เช่น `origin/web-shopping`) 
+
+---
+
+### 2.2 การสร้างและเชื่อมต่อฐานข้อมูล MySQL
+1. ไปที่เครื่องมือจัดการฐานข้อมูล **Databases → MySQL Databases**
+2. สร้างฐานข้อมูลใหม่ เช่น `u123456789_tbm` และสร้าง User กำหนดรหัสผ่านให้เรียบร้อย
+3. ระบบจะแสดงพิกัดที่ต้องใช้งาน เช่น `localhost:3306` หรือ IP ของ MySQL 
+4. คัดลอกพิกัดเหล่านี้ไว้เพื่อใช้ระบุเป็น `DATABASE_URL` ในขั้นถัดไป
+
+---
+
+### 2.3 การตั้งค่า Standalone Mode ในโค้ดโปรเจกต์
+เนื่องจากเซิร์ฟเวอร์แบบ Shared Hosting จะใช้ทรัพยากรจำกัด และถูกบังคับให้รันผ่านไฟล์เริ่มต้น `server.js` 
+1. เปิดไฟล์ `next.config.mjs` (ในเครื่อง Local หรือบนโฟลเดอร์หลัก)
+2. เพิ่มคุณสมบัติ `output: "standalone"` เพื่อบอกระบบเวลา Build ให้ย่อแพ็กเกจขนาดเบาที่สุด
+```javascript
+const nextConfig = {
+  output: "standalone",
+  // ...config อื่นๆ
+};
+export default nextConfig;
+```
+
+---
+
+### 2.4 การตั้งค่าตัวแปรระบบ Environment บน Hostinger Panel
+1. ใน hPanel ไปยังเมนูการจัดการแอป Node.js
+2. ในหัวข้อ **Environment Variables** ให้กรอกตัวแปรให้ครบเหมือนไฟล์ `.env` ที่เราต้องการใช้:
+   * `NODE_ENV` = `production`
+   * `DATABASE_URL` = `"mysql://u123456789_user:password@localhost:3306/u123456789_db"`
+   * `NEXTAUTH_URL` = `https://yourdomain.com`
+   * `NEXTAUTH_SECRET` = `"คีย์สุ่มป้องกันข้อมูล"`
+   * `AUTH_SECRET` = `"คีย์สุ่มป้องกันข้อมูล"`
+   * `UPLOAD_DIR` = `/home/u123456789/domains/yourdomain.com/images` (ต้องเป็นโฟลเดอร์ภายนอกโครงการ เพื่อไม่ให้ถูกทับตอนสั่งอัปเดตโค้ดใหม่)
+
+---
+
+### 2.5 ขั้นตอนการ Deploy ครั้งแรกและการเตรียมโครงสร้างไฟล์
+
+เนื่องจากระบบของ Hostinger จะทำงานผ่าน `server.js` ซึ่งถูกสร้างขึ้นหลังการบิลด์เท่านั้น การติดตั้งครั้งแรกจึงต้องทำการอัปโหลดโครงสร้างไฟล์บิลด์ขึ้นเซิร์ฟเวอร์:
+
+#### A. สั่งบิลด์โค้ดในเครื่องคอมพิวเตอร์ของคุณ (Local Machine)
+```bash
+npm run build
+```
+หลังจากบิลด์เสร็จสมบูรณ์ จะได้โฟลเดอร์ `.next/standalone` และโฟลเดอร์ `.next/static`
+
+#### B. การเตรียมโครงสร้างไฟล์เตรียมส่งออก
+สร้างโฟลเดอร์จัดระเบียบใหม่นอกโปรเจกต์ (เช่นชื่อโฟลเดอร์ `deploy-ready`) แล้วดึงโครงสร้างดังต่อไปนี้เข้ามารวมกัน:
+1. ก๊อปปี้ไฟล์และโฟลเดอร์ทั้งหมดที่อยู่ "ข้างใน" `.next/standalone/` (รวมถึงไฟล์ `server.js` และ `package.json` ด้านใน) มาวางที่โฟลเดอร์เตรียมอัปโหลดชั้นนอกสุด
+2. นำโฟลเดอร์ `public` จากโปรเจกต์หลัก มาวางไว้คู่กันกับ `server.js`
+3. สร้างโฟลเดอร์ใหม่ชื่อ `.next` ขึ้นมา แล้วเข้าไปข้างใน
+4. ก๊อปปี้โฟลเดอร์ `static` จาก `.next/static` ในโปรเจกต์หลัก มาวางไว้ด้านในโฟลเดอร์ `.next` ที่เพิ่งสร้างใหม่นี้ (ส่วนนี้สำคัญมาก เพื่อดึง CSS/JS ทั้งหมดมาทำงาน)
+5. ก๊อปปี้โฟลเดอร์ `prisma` มาวางไว้ชั้นนอกสุดคู่กับ `server.js`
+
+*โครงสร้างก่อนอัปโหลดหลังจัดเรียงเสร็จสิ้น จะต้องหน้าตาเหมือนกับโครงสร้างนี้:*
+```text
+/deploy-ready
+  ├── .next/
+  │     └── static/          <-- ดึงจากโปรเจกต์ .next/static
+  ├── public/                <-- ดึงจากโปรเจกต์หลัก
+  ├── prisma/                <-- เก็บไฟล์ schema.prisma และโฟลเดอร์ migrations
+  ├── node_modules/          <-- มีอยู่แล้วใน standalone
+  ├── server.js              <-- ไฟล์รันระบบหลัก
+  └── package.json           <-- สำหรับอ่านค่าแพ็กเกจ
+```
+
+#### C. บีบอัด Zip และส่งไฟล์เข้าเซิร์ฟเวอร์
+1. ทำการ Zip ไฟล์ทั้งหมดในโฟลเดอร์ `deploy-ready`
+2. ล็อกอินเข้าใช้งานหน้า **hPanel → File Manager**
+3. อัปโหลดไฟล์ Zip ไปติดตั้งไว้ที่โฟลเดอร์หลักของเว็บคุณ (ปกติคือ `public_html`) และทำการ Extract ไฟล์ทั้งหมดออกที่โฟลเดอร์หลักนั้นทันที
+
+#### D. สั่งทำโครงสร้างฐานข้อมูลผ่าน SSH
+ต่อเข้าใช้งาน SSH ในตัวเครื่องมือของ Hostinger (ไปดูพอร์ตและรหัสเชื่อมต่อในเมนู Advanced → SSH Access) แล้วรันคำสั่งเหล่านี้:
+```bash
+# เดินทางเข้าไปยังโฟลเดอร์หลักของโดเมน
+cd domains/yourdomain.com/public_html
+
+# สั่งอัปเดตโครงสร้างฐานข้อมูล — อ่านส่วนที่ 0 ก่อน
+# ติดตั้งครั้งแรกหรือเมื่อ schema เปลี่ยน (+ Backup แล้ว):
+npx prisma db push
+
+# เมื่อมี prisma/migrations จริงแล้ว ค่อยใช้:
+# npx prisma migrate deploy
+
+# สั่งเขียนโค้ดตัวเชื่อมต่อ Client
+npx prisma generate
+```
+
+---
+
+### 2.6 ขั้นตอนการอัปเดตเวอร์ชันใหม่ในอนาคตบน Hostinger (อย่างมืออาชีพ)
+หลังจากการ Deploy ครั้งแรกเสร็จสิ้น ในการอัปเดตระบบถัด ๆ ไป ไม่จำเป็นต้องอัปโหลด Zip ใหม่ทั้งหมด โดยเราจะนำข้อดีของ **Git Integration** มาช่วยจัดการ:
+
+1. ดันโค้ดล่าสุดขึ้น GitHub สาขาที่รันบิลด์ เช่น `git push origin web-shopping`
+2. ต่อ SSH เข้าเซิร์ฟเวอร์ของ Hostinger
+3. รันสคริปต์อัปเดต หรือพิมพ์คำสั่งเหล่านี้ทีละคำสั่ง:
+   ```bash
+   cd domains/yourdomain.com/public_html
+   
+   # 1. ดึงโค้ดล่าสุด
+   git pull origin web-shopping
+   
+   # 2. ฐานข้อมูล — อ่านส่วนที่ 0
+   # ถ้า schema.prisma ไม่เปลี่ยน: ข้าม db push ได้
+   # ถ้า schema เปลี่ยน: Backup ก่อน แล้วค่อย
+   # npx prisma db push
+   npx prisma generate
+   
+   # 3. สั่งบิลด์ (สามารถรันบิลด์บนรีโมตได้หากหน่วยความจำโฮสต์เพียงพอ)
+   npm run build
+   ```
+   *หากเซิร์ฟเวอร์มีหน่วยความจำไม่พอสำหรับบิลด์ ให้ใช้สคริปต์บิลด์ในเครื่อง Local แล้วส่งเฉพาะโฟลเดอร์ `.next` ขึ้นไปทับไฟล์เดิมบน File Manager*
+4. ไปยังหน้าควบคุม Node.js ใน hPanel ของ Hostinger แล้วกดปุ่ม **"Restart Application"** เพื่อเคลียร์การทำงานของ Node.js และเริ่มรันแอปพลิเคชันจากโค้ดตัวล่าสุดทันที
+
+---
+
+## 🛠️ ส่วนที่ 3: ข้อควรระวังและวิธีแก้ไขปัญหาที่พบบ่อย (Troubleshooting)
+
+* **อาการหน้าเว็บขาว-ดำ ไม่มีไฟล์ CSS / ภาพแตก:**
+  * **สาเหตุ:** เกิดจากการลืมนำไฟล์ในโฟลเดอร์ `static` ขึ้นไปวางไว้ที่โฟลเดอร์ปลายทาง
+  * **วิธีแก้:** เช็คให้แน่ใจว่ามีโฟลเดอร์ชื่อ `.next/static` อยู่เคียงข้างกับ `server.js` บนเซิร์ฟเวอร์
+
+* **รูปภาพที่ผู้ใช้อัปโหลดขึ้นมาเกิดอาการ 404 / หายไปเมื่อสั่งอัปโหลดโค้ดใหม่:**
+  * **สาเหตุ:** เนื่องจาก Next.js จะเสิร์ฟไฟล์ในโฟลเดอร์ `/public` เฉพาะตอนบิลด์เท่านั้น ไฟล์ใหม่ที่เกิดขึ้นหลังการรันจะไม่ถูกเสิร์ฟและอาจโดนเขียนทับตอนอัปเดต
+  * **วิธีแก้:** กำหนดตัวแปร `UPLOAD_DIR` ไปที่โฟลเดอร์ภายนอกนอกโครงการ เช่น `/var/www/web-thaibusinessmate/images` และเขียนระบบ API ชี้เป้าสำหรับการดึงภาพผ่าน URL ไปแสดงผลแทน
+
+* **เข้าสู่ระบบไม่ได้ / ได้รับแจ้งเตือนข้อผิดพลาด Next-Auth:**
+  * **สาเหตุ:** เกิดจากการระบุตัวแปรสภาพแวดล้อม `NEXTAUTH_URL` ไม่ตรงกับโดเมนที่เรียกใช้งานจริง หรือโปรโตคอลไม่ถูกต้อง
+  * **วิธีแก้:** ตรวจสอบโดเมนใน `.env` เช่น ต้องตรงกันหากระบบมี `www` หรือใช้พอร์ตที่ต่างออกไป และต้องมั่นใจว่าเชื่อมต่อด้วยโปรโตคอล `https://`
+
+* **กลัวข้อมูลหายตอน Deploy / สลับ `.env` ไปชี้ DB จริง:**
+  * **อ่าน:** ส่วนที่ 0 ทั้งชุด — Backup ก่อน sync schema · แยก Local/Production · รอบที่แก้แค่โค้ดไม่ต้อง `db push`
+  * **ห้าม:** `prisma db push --force-reset` หรือลบฐานข้อมูลบน Production
+xxxx

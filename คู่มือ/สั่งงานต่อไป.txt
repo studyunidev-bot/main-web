@@ -1,0 +1,11 @@
+Use docs/sdlc/README.md as the governing process.
+
+Create CR-2026-001.
+
+Task:
+<ระบุงาน>
+
+Do not expand scope.
+Do not modify production.
+Follow requirement → impact analysis → implementation → test → security gate → SEO gate → release readiness.
+Stop before deploy.

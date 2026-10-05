@@ -1,0 +1,398 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  STAFF
+  CHECKIN
+  VIEWER
+  ADMIN
+  SUPERADMIN
+}
+
+enum EnrollmentStatus {
+  DRAFT
+  REGISTERED
+  PAID
+  CANCELLED
+}
+
+enum ExamRound {
+  MORNING
+  AFTERNOON
+}
+
+enum EnrollmentSourceType {
+  ONSITE_EXCEL
+  SIMULATED_EXCEL
+  MANUAL
+  API
+}
+
+enum CheckInStatus {
+  SUCCESS
+  DUPLICATE
+  REJECTED
+}
+
+enum ForfeitRequestStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum SystemKey {
+  GENERAL
+}
+
+model Site {
+  id          String           @id @default(uuid())
+  key         String           @unique
+  name        String
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  memberships SiteMembership[]
+  students    Student[]
+  imports     ImportFile[]
+  locations   ExamLocation[]
+  enrollments Enrollment[]
+  settings    SystemSetting[]
+  rateLimits  RateLimitBucket[]
+  forfeitRequests ForfeitRequest[]
+  scores      Score[]
+  checkInSessions CheckInSession[]
+  checkIns    CheckIn[]
+  importMutations ImportMutation[]
+  importPreviews ImportPreview[]
+}
+
+model SiteMembership {
+  id        String   @id @default(uuid())
+  siteId    String
+  userId    String
+  role      Role
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([siteId, userId])
+  @@index([userId, role])
+}
+
+model User {
+  id                    String           @id @default(uuid())
+  email                 String           @unique
+  password              String
+  fullName              String?
+  role                  Role             @default(STAFF)
+  isActive              Boolean          @default(true)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @default(now()) @updatedAt
+  deletedAt             DateTime?
+
+  memberships           SiteMembership[]
+  uploadedImportFiles   ImportFile[]     @relation("UploadedImports")
+  createdCheckInSessions CheckInSession[] @relation("CreatedCheckInSessions")
+  scannerCheckIns       CheckIn[]        @relation("ScannerCheckIns")
+  updatedSettings       SystemSetting[]  @relation("UpdatedSystemSettings")
+  processedForfeitRequests ForfeitRequest[] @relation("ProcessedForfeitRequests")
+  createdImportPreviews ImportPreview[] @relation("CreatedImportPreviews")
+}
+
+model Student {
+  id             String        @id @default(uuid())
+  siteId         String
+  site           Site          @relation(fields: [siteId], references: [id])
+  nationalId     String
+  prefix         String?
+  firstNameTh    String
+  lastNameTh     String
+  firstNameEn    String?
+  lastNameEn     String?
+  email          String?
+  phone          String?
+  schoolName     String?
+  province       String?
+  birthDate      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  enrollments    Enrollment[]
+
+  @@unique([siteId, nationalId])
+  @@index([siteId, lastNameTh, firstNameTh])
+  @@index([phone])
+}
+
+model ImportFile {
+  id                String               @id @default(uuid())
+  fileName          String
+  originalName      String
+  siteId            String
+  site              Site                 @relation(fields: [siteId], references: [id])
+  sourceType        EnrollmentSourceType
+  academicYear      Int?
+  checksum          String?
+  uploadedById      String?
+  uploadedAt        DateTime             @default(now())
+  rowCount          Int                  @default(0)
+  successCount      Int                  @default(0)
+  failedCount       Int                  @default(0)
+  headerSnapshot    Json?
+  errorSnapshot     Json?
+
+  uploadedBy        User?                @relation("UploadedImports", fields: [uploadedById], references: [id])
+  onsiteLinks       Enrollment[]         @relation("OnsiteImportFile")
+  simulatedLinks    Enrollment[]         @relation("SimulatedImportFile")
+  locations         ExamLocation[]
+  mutations         ImportMutation[]
+  rolledBackAt      DateTime?
+  rolledBackById    String?
+
+  @@index([sourceType, academicYear])
+  @@index([uploadedAt])
+}
+
+model ImportMutation {
+  id           String     @id @default(uuid())
+  siteId       String
+  importFileId String?
+  previewId    String?
+  modelName    String
+  recordId     String?
+  sequence     Int        @default(0)
+  action       String
+  beforeData   Json?
+  afterData    Json?
+  createdAt    DateTime   @default(now())
+  site         Site       @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  importFile   ImportFile? @relation(fields: [importFileId], references: [id], onDelete: Cascade)
+  preview      ImportPreview? @relation(fields: [previewId], references: [id], onDelete: Cascade)
+
+  @@index([siteId, importFileId, createdAt])
+  @@index([siteId, previewId, createdAt])
+  @@index([siteId, modelName, recordId])
+}
+
+model ImportPreview {
+  id          String   @id @default(uuid())
+  siteId      String
+  createdById String
+  academicYear Int
+  fileManifest Json
+  result      Json
+  status      String   @default("READY")
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  appliedAt   DateTime?
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation("CreatedImportPreviews", fields: [createdById], references: [id])
+  mutations   ImportMutation[]
+
+  @@index([siteId, createdById, status, expiresAt])
+}
+
+model ExamLocation {
+  id                String          @id @default(uuid())
+  siteId            String
+  site              Site            @relation(fields: [siteId], references: [id])
+  code              String
+  name              String
+  province          String?
+  address           String?
+  seatCapacity      Int?
+  eventDate         DateTime?
+  eventStartMinutes Int?
+  eventEndMinutes   Int?
+  active            Boolean         @default(true)
+  importedFromId    String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  importedFrom      ImportFile?     @relation(fields: [importedFromId], references: [id])
+  enrollments       Enrollment[]
+  checkInSessions   CheckInSession[]
+
+  @@unique([siteId, code])
+  @@index([siteId, province])
+  @@index([active])
+}
+
+model Enrollment {
+  id                    String               @id @default(uuid())
+  siteId                String
+  site                  Site                 @relation(fields: [siteId], references: [id])
+  studentId             String
+  academicYear          Int
+  examRound             ExamRound
+  importedExamRoundLabel String?
+  status                EnrollmentStatus     @default(REGISTERED)
+  sourceType            EnrollmentSourceType
+  barcode               String
+  registrationStartAt   DateTime?
+  registrationEndAt     DateTime?
+  registeredAt          DateTime?
+  notes                 String?
+  examLocationId        String?
+  onsiteImportFileId    String?
+  simulatedImportFileId String?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  deletedAt             DateTime?
+
+  student               Student              @relation(fields: [studentId], references: [id])
+  examLocation          ExamLocation?        @relation(fields: [examLocationId], references: [id])
+  onsiteImportFile      ImportFile?          @relation("OnsiteImportFile", fields: [onsiteImportFileId], references: [id])
+  simulatedImportFile   ImportFile?          @relation("SimulatedImportFile", fields: [simulatedImportFileId], references: [id])
+  score                 Score?
+  checkIns              CheckIn[]
+  forfeitRequest        ForfeitRequest?
+
+  @@unique([siteId, barcode])
+  @@unique([siteId, studentId, academicYear, examRound, sourceType])
+  @@index([siteId, academicYear, examRound])
+  @@index([examLocationId])
+  @@index([status])
+}
+
+model ForfeitRequest {
+  id              String               @id @default(uuid())
+  siteId          String
+  enrollmentId    String               @unique
+  status          ForfeitRequestStatus @default(PENDING)
+  reason          String
+  fullName        String
+  address         String
+  phone           String
+  submittedAt     DateTime             @default(now())
+  processedAt     DateTime?
+  processedById   String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  enrollment      Enrollment           @relation(fields: [enrollmentId], references: [id])
+  site            Site                 @relation(fields: [siteId], references: [id])
+  processedBy     User?                @relation("ProcessedForfeitRequests", fields: [processedById], references: [id])
+
+  @@index([status])
+  @@index([submittedAt])
+}
+
+model Score {
+  id                String      @id @default(uuid())
+  siteId            String
+  enrollmentId      String      @unique
+  tgat              Decimal?    @db.Decimal(10, 4)
+  tgat1             Decimal?    @db.Decimal(10, 4)
+  tgat2             Decimal?    @db.Decimal(10, 4)
+  tgat3             Decimal?    @db.Decimal(10, 4)
+  rankingOverall    Int?
+  rankingLocation   Int?
+  rankingOverallTgat1  Int?
+  rankingLocationTgat1 Int?
+  rankingOverallTgat2  Int?
+  rankingLocationTgat2 Int?
+  rankingOverallTgat3  Int?
+  rankingLocationTgat3 Int?
+  percentile        Decimal?    @db.Decimal(5, 2)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  enrollment        Enrollment  @relation(fields: [enrollmentId], references: [id])
+  site              Site        @relation(fields: [siteId], references: [id])
+
+  @@index([rankingOverall])
+  @@index([rankingLocation])
+  @@index([rankingOverallTgat1])
+  @@index([rankingLocationTgat1])
+  @@index([rankingOverallTgat2])
+  @@index([rankingLocationTgat2])
+  @@index([rankingOverallTgat3])
+  @@index([rankingLocationTgat3])
+}
+
+model CheckInSession {
+  id              String        @id @default(uuid())
+  siteId          String
+  name            String
+  academicYear    Int
+  examRound       ExamRound
+  examLocationId  String?
+  isActive        Boolean       @default(true)
+  startedAt       DateTime      @default(now())
+  endedAt         DateTime?
+  createdById     String?
+
+  examLocation    ExamLocation? @relation(fields: [examLocationId], references: [id])
+  site            Site          @relation(fields: [siteId], references: [id])
+  createdBy       User?         @relation("CreatedCheckInSessions", fields: [createdById], references: [id])
+  checkIns        CheckIn[]
+
+  @@index([isActive, academicYear, examRound])
+  @@index([examLocationId])
+}
+
+model CheckIn {
+  id              String         @id @default(uuid())
+  siteId          String
+  enrollmentId    String
+  sessionId       String
+  barcode         String
+  status          CheckInStatus  @default(SUCCESS)
+  scannedAt       DateTime       @default(now())
+  deviceId        String?
+  scannerUserId   String?
+  note            String?
+
+  enrollment      Enrollment     @relation(fields: [enrollmentId], references: [id])
+  site            Site           @relation(fields: [siteId], references: [id])
+  session         CheckInSession @relation(fields: [sessionId], references: [id])
+  scannerUser     User?          @relation("ScannerCheckIns", fields: [scannerUserId], references: [id])
+
+  @@unique([enrollmentId, sessionId])
+  @@index([enrollmentId, status])
+  @@index([barcode])
+  @@index([scannedAt])
+  @@index([deviceId])
+}
+
+model SystemSetting {
+  id                String     @id @default(uuid())
+  siteId            String
+  site              Site       @relation(fields: [siteId], references: [id])
+  key               SystemKey  @default(GENERAL)
+  googleDriveLink   String?
+  facebookLink      String?
+  lineLink          String?
+  studentSearchHeroBannerUrl String?
+  studentExamHeroBannerUrl   String?
+  isUserPortalOpen  Boolean    @default(true)
+  userPortalOpensAt DateTime?
+  userPortalClosesAt DateTime?
+  isCheckInOpen     Boolean    @default(true)
+  announcement      String?
+  updatedAt         DateTime   @updatedAt
+  updatedById       String?
+
+  updatedBy         User?      @relation("UpdatedSystemSettings", fields: [updatedById], references: [id])
+
+  @@unique([siteId, key])
+}
+
+model RateLimitBucket {
+  id          String   @id @default(uuid())
+  siteId      String
+  bucketKey   String
+  hits        Int      @default(0)
+  windowEndsAt DateTime
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, bucketKey])
+  @@index([windowEndsAt])
+}

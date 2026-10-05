@@ -1,0 +1,2 @@
+ALTER TABLE "SiteMembership"
+ADD COLUMN "isActive" BOOLEAN NOT NULL DEFAULT true;

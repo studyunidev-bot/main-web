@@ -1,0 +1,64 @@
+"use client";
+
+import { FormEvent, useCallback, useEffect, useState } from "react";
+
+type Enrollment = { id: string; academicYear: number; examRound: string; status: string; sourceType: string; barcode: string; location: string };
+type StudentRow = { id: string; nationalId: string; prefix: string | null; firstNameTh: string; lastNameTh: string; firstNameEn: string | null; lastNameEn: string | null; phone: string | null; email: string | null; schoolName: string | null; province: string | null; updatedAt: string; enrollmentCount: number; enrollments: Enrollment[] };
+type Result = { items: StudentRow[]; meta: { page: number; pageSize: number; total: number; totalPages: number }; summary: { totalStudents: number; onsiteCount: number; simulatedCount: number; bothCount: number; pendingLocationCount: number } };
+const card = "rounded-xl border border-stroke bg-white shadow-1 dark:border-stroke-dark dark:bg-gray-dark";
+
+export default function GatpatStudentsPage() {
+  const [query, setQuery] = useState(""); const [search, setSearch] = useState(""); const [source, setSource] = useState("ALL"); const [year, setYear] = useState(""); const [pendingOnly, setPendingOnly] = useState(false); const [page, setPage] = useState(1); const [pageSize, setPageSize] = useState(10);
+  const [result, setResult] = useState<Result | null>(null); const [error, setError] = useState(""); const [loading, setLoading] = useState(false); const [busyId, setBusyId] = useState(""); const [selected, setSelected] = useState<StudentRow | null>(null); const [deleteTarget, setDeleteTarget] = useState<StudentRow | null>(null); const [deleteConfirmation, setDeleteConfirmation] = useState("");
+
+  useEffect(() => { const initialQuery = new URLSearchParams(window.location.search).get("q"); if (initialQuery) { setQuery(initialQuery); setSearch(initialQuery); } }, []);
+
+  const load = useCallback(async () => {
+    setLoading(true); setError("");
+    try {
+      const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize), q: search, source });
+      if (/^\d{4}$/.test(year)) params.set("academicYear", year);
+      if (pendingOnly) params.set("pendingLocationOnly", "true");
+      const response = await fetch(`/api/gatpat/admin/students?${params}`, { cache: "no-store" }); const body = await response.json();
+      if (!response.ok) throw new Error(body.message || "โหลดข้อมูลไม่สำเร็จ"); setResult(body);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "โหลดข้อมูลไม่สำเร็จ"); }
+    finally { setLoading(false); }
+  }, [page, pageSize, search, source, year, pendingOnly]);
+  useEffect(() => { void load(); }, [load]);
+
+  async function applyFilters(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setPage(1); setSearch(query); }
+  async function removeStudent() {
+    if (!deleteTarget || deleteConfirmation.trim() !== deleteTarget.nationalId) return;
+    const student = deleteTarget;
+    setBusyId(student.id); setError("");
+    try { const response = await fetch(`/api/gatpat/admin/students/${encodeURIComponent(student.id)}`, { method: "DELETE" }); const body = await response.json(); if (!response.ok) throw new Error(body.message || "ดำเนินการไม่สำเร็จ"); setDeleteTarget(null); setDeleteConfirmation(""); await load(); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : "ดำเนินการไม่สำเร็จ"); }
+    finally { setBusyId(""); }
+  }
+
+  const summary = result?.summary;
+  const summaries = [["นักเรียนทั้งหมด", summary?.totalStudents], ["สมัคร Onsite", summary?.onsiteCount], ["สมัครสอบจำลอง", summary?.simulatedCount], ["สมัครทั้งสองประเภท", summary?.bothCount], ["รอจับคู่สนามสอบ", summary?.pendingLocationCount]] as const;
+
+  return <div className="space-y-5">
+    <div><h1 className="mt-1 text-2xl font-bold text-dark dark:text-white">จัดการนักเรียน</h1><p className="mt-1 text-sm text-dark-6">ค้นหาและตรวจสอบข้อมูลนักเรียนกับใบสมัครในระบบ</p></div>
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{summaries.map(([label, value]) => <article key={label} className={`${card} p-4`}><p className="text-xs text-dark-6">{label}</p><p className="mt-2 text-2xl font-bold text-dark dark:text-white">{value?.toLocaleString("th-TH") ?? "—"}</p></article>)}</section>
+    {error && <p role="alert" className="rounded-lg border border-red/30 bg-red/5 p-4 text-sm text-red">{error}</p>}
+    <form onSubmit={applyFilters} className={`${card} grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_180px_150px_170px_170px_auto]`}>
+      <input className="rounded-lg border border-stroke px-3 py-2 text-sm dark:border-stroke-dark dark:bg-dark-2 dark:text-white" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ค้นหาเลขบัตร ชื่อ โรงเรียน อีเมล หรือโทรศัพท์" />
+      <select className="rounded-lg border border-stroke px-3 py-2 text-sm dark:border-stroke-dark dark:bg-dark-2 dark:text-white" value={source} onChange={(event) => { setSource(event.target.value); setPage(1); }}><option value="ALL">ทุกแหล่งข้อมูล</option><option value="ONSITE">Onsite</option><option value="SIMULATED">สอบจำลอง</option><option value="BOTH">สมัครทั้งสองประเภท</option></select>
+      <input className="rounded-lg border border-stroke px-3 py-2 text-sm dark:border-stroke-dark dark:bg-dark-2 dark:text-white" inputMode="numeric" value={year} onChange={(event) => { setYear(event.target.value.replace(/\D/g, "").slice(0, 4)); setPage(1); }} placeholder="ปี พ.ศ." />
+      <select className="rounded-lg border border-stroke px-3 py-2 text-sm dark:border-stroke-dark dark:bg-dark-2 dark:text-white" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}><option value={10}>10 รายการ/หน้า</option><option value={20}>20 รายการ/หน้า</option><option value={50}>50 รายการ/หน้า</option></select>
+      <label className="flex items-center gap-2 rounded-lg border border-stroke px-3 py-2 text-sm text-dark-6 dark:border-stroke-dark"><input type="checkbox" checked={pendingOnly} onChange={(event) => { setPendingOnly(event.target.checked); setPage(1); }} />รอจับคู่สนาม</label>
+      <button type="submit" className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white">ค้นหา</button>
+    </form>
+    <section className={`${card} overflow-hidden`}>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stroke px-4 py-3 dark:border-stroke-dark"><h2 className="font-semibold text-dark dark:text-white">รายชื่อนักเรียน</h2><span className="text-sm text-dark-6">{result?.meta.total.toLocaleString("th-TH") ?? "—"} รายการ · หน้า {result?.meta.page ?? page}/{result?.meta.totalPages ?? 1}</span></div>
+      <div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-left text-sm"><thead className="bg-gray-2 text-dark-6 dark:bg-dark-2"><tr>{["นักเรียน / รหัสประชาชน", "แหล่งสมัคร", "การสมัครล่าสุด", "โรงเรียน / ช่องทางติดต่อ", "สนามสอบ", "จัดการ"].map((x) => <th key={x} className="px-4 py-3 font-semibold">{x}</th>)}</tr></thead>
+        <tbody>{loading ? <tr><td colSpan={6} className="p-10 text-center text-dark-6">กำลังโหลด…</td></tr> : result?.items.length ? result.items.map((student) => { const latest = student.enrollments[0]; const sources = [...new Set(student.enrollments.map((e) => e.sourceType))]; return <tr key={student.id} className="border-t border-stroke align-top dark:border-stroke-dark"><td className="px-4 py-3"><button className="text-left font-semibold text-primary hover:underline" onClick={() => setSelected(student)}>{student.prefix} {student.firstNameTh} {student.lastNameTh}</button><p className="mt-1 font-mono text-xs text-dark-6">{student.nationalId}</p><p className="mt-1 text-xs text-dark-6">{student.enrollmentCount} ใบสมัคร</p></td><td className="px-4 py-3"><div className="flex flex-wrap gap-1">{sources.map((x) => <span key={x} className="rounded-full bg-primary/10 px-2 py-1 text-xs text-primary">{x === "ONSITE_EXCEL" ? "Onsite" : x === "SIMULATED_EXCEL" ? "สอบจำลอง" : x}</span>)}</div></td><td className="px-4 py-3">{latest ? <><p>{latest.academicYear.toLocaleString("th-TH")} · {latest.examRound}</p><p className="mt-1 text-xs text-dark-6">{latest.status} · {latest.barcode}</p></> : "—"}</td><td className="px-4 py-3">{student.schoolName ?? "—"}<p className="mt-1 text-xs text-dark-6">{[student.province, student.phone, student.email].filter(Boolean).join(" · ")}</p></td><td className="px-4 py-3">{latest?.location || <span className="text-amber-700">รอจับคู่สนาม</span>}</td><td className="px-4 py-3 text-right"><button disabled={Boolean(busyId)} onClick={() => { setDeleteTarget(student); setDeleteConfirmation(""); }} className="rounded-lg border border-red/30 px-3 py-2 text-xs font-semibold text-red disabled:opacity-50">ซ่อนข้อมูล</button></td></tr>; }) : <tr><td colSpan={6} className="p-10 text-center text-dark-6">ไม่พบข้อมูลตามเงื่อนไข</td></tr>}</tbody>
+      </table></div>
+      <div className="flex items-center justify-between gap-3 border-t border-stroke px-4 py-3 dark:border-stroke-dark"><p className="text-xs text-dark-6">แสดง {result?.items.length ?? 0} จาก {result?.meta.total.toLocaleString("th-TH") ?? 0} รายการ</p><div className="flex gap-2"><button disabled={page <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))} className="rounded-lg border border-stroke px-3 py-2 text-sm disabled:opacity-40">ก่อนหน้า</button><button disabled={page >= (result?.meta.totalPages ?? 1) || loading} onClick={() => setPage((p) => p + 1)} className="rounded-lg border border-stroke px-3 py-2 text-sm disabled:opacity-40">ถัดไป</button></div></div>
+    </section>
+    {selected && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setSelected(null)}><section role="dialog" aria-modal="true" className={`${card} max-h-[90vh] w-full max-w-2xl overflow-y-auto p-6`} onClick={(event) => event.stopPropagation()}><div className="flex justify-between gap-3"><div><p className="text-sm text-primary">ข้อมูลผู้สมัคร</p><h2 className="mt-1 text-xl font-bold text-dark dark:text-white">{selected.prefix} {selected.firstNameTh} {selected.lastNameTh}</h2><p className="mt-1 font-mono text-sm text-dark-6">{selected.nationalId}</p></div><button onClick={() => setSelected(null)} className="h-fit rounded-lg border border-stroke px-3 py-2 text-sm">ปิด</button></div><dl className="mt-5 grid gap-3 sm:grid-cols-2">{[["ชื่อภาษาอังกฤษ", `${selected.firstNameEn ?? ""} ${selected.lastNameEn ?? ""}`], ["โรงเรียน", selected.schoolName], ["จังหวัด", selected.province], ["โทรศัพท์", selected.phone], ["อีเมล", selected.email]].map(([label, value]) => <div key={label} className="rounded-lg bg-gray-2 p-3 dark:bg-dark-2"><dt className="text-xs text-dark-6">{label}</dt><dd className="mt-1 text-sm font-medium text-dark dark:text-white">{value || "—"}</dd></div>)}</dl><h3 className="mt-6 font-semibold text-dark dark:text-white">รายการใบสมัคร</h3><div className="mt-3 space-y-2">{selected.enrollments.map((enrollment) => <article key={enrollment.id} className="rounded-lg border border-stroke p-3 text-sm dark:border-stroke-dark"><p className="font-semibold text-dark dark:text-white">{enrollment.academicYear.toLocaleString("th-TH")} · {enrollment.examRound} · {enrollment.sourceType}</p><p className="mt-1 text-xs text-dark-6">{enrollment.status} · Barcode {enrollment.barcode} · {enrollment.location || "รอจับคู่สนาม"}</p></article>)}</div></section></div>}
+    {deleteTarget && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"><section role="dialog" aria-modal="true" aria-labelledby="delete-student-title" className={`${card} w-full max-w-lg p-6`}><h2 id="delete-student-title" className="text-lg font-bold text-dark dark:text-white">ยืนยันการซ่อนข้อมูลนักเรียน</h2><p className="mt-2 text-sm text-dark-6">ข้อมูลของ {deleteTarget.firstNameTh} {deleteTarget.lastNameTh} จะถูกซ่อนจากรายการ และประวัติใบสมัครจะยังคงอยู่</p><label className="mt-4 grid gap-2 text-sm text-dark-6">พิมพ์เลขบัตรประชาชนเพื่อยืนยัน<input autoFocus inputMode="numeric" value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} className="rounded-lg border border-stroke px-3 py-2 font-mono text-dark dark:border-stroke-dark dark:bg-dark-2 dark:text-white" /></label><p className="mt-2 font-mono text-xs text-dark-6">เลขบัตร: {deleteTarget.nationalId}</p><div className="mt-5 flex justify-end gap-2"><button disabled={Boolean(busyId)} onClick={() => setDeleteTarget(null)} className="rounded-lg border border-stroke px-4 py-2 text-sm">ยกเลิก</button><button disabled={Boolean(busyId) || deleteConfirmation.trim() !== deleteTarget.nationalId} onClick={() => void removeStudent()} className="rounded-lg bg-red px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">{busyId ? "กำลังซ่อน…" : "ยืนยันซ่อนข้อมูล"}</button></div></section></div>}
+  </div>;
+}

@@ -1,0 +1,714 @@
+@config "../../tailwind.admin.config.ts";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --theme-primary: #4934d4;
+    --theme-secondary: #6153df;
+    --theme-accent: #796fd7;
+    --theme-background: #ffffff;
+    --theme-text-main: #111928;
+  }
+  
+  /* ตัวอย่างการตั้ง Template สีลูกค้าเจ้าอื่น */
+  .theme-client-a {
+    --theme-primary: #3b82f6; 
+    --theme-secondary: #1e3a8a;
+    --theme-background: #f8fafc;
+    --theme-text-main: #000000;
+  }
+
+  body {
+    @apply bg-[var(--theme-background)] text-[var(--theme-text-main)] dark:bg-[#020D1A] dark:text-dark-6;
+  }
+}
+
+@layer utilities {
+  /* Chrome, Safari and Opera */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
+   .custom-scrollbar {
+    @apply overflow-auto;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    @apply size-2;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply relative flex-1 rounded-full bg-neutral-200/40 dark:bg-stroke-dark;
+  }
+
+  
+  .chat-height {
+    @apply h-[calc(100vh_-_8.125rem)] lg:h-[calc(100vh_-_5.625rem)];
+  }
+
+  .inbox-height {
+    @apply h-[calc(100vh_-_8.125rem)] lg:h-[calc(100vh_-_5.625rem)];
+  }
+}
+
+/* third-party libraries CSS */
+
+.tableCheckbox:checked ~ div span {
+  @apply opacity-100;
+}
+
+.tableCheckbox:checked ~ div {
+  @apply border-primary bg-primary;
+}
+
+.apexcharts-legend-text {
+  @apply !text-dark-5 dark:!text-dark-6;
+}
+
+.apexcharts-text {
+  @apply !fill-dark-5 dark:!fill-dark-6;
+}
+
+.apexcharts-yaxis-label {
+  @apply text-xs;
+}
+
+.apexcharts-xaxis-label {
+  @apply text-body-sm font-medium;
+}
+
+.apexcharts-xcrosshairs {
+  @apply !fill-stroke dark:!fill-dark-3;
+}
+
+.apexcharts-gridline {
+  @apply !stroke-stroke dark:!stroke-dark-3;
+}
+
+.apexcharts-series.apexcharts-pie-series path {
+  @apply dark:!stroke-transparent;
+}
+
+.apexcharts-legend-series {
+  @apply !inline-flex gap-1.5;
+}
+
+.apexcharts-tooltip.apexcharts-theme-light {
+  @apply !rounded-[7px] !text-base !font-medium !text-dark !shadow-card-2 dark:!border-dark-3 dark:!bg-gray-dark dark:!text-white;
+}
+
+.apexcharts-tooltip.apexcharts-theme-light .apexcharts-tooltip-title {
+  @apply dark:!border-dark-3 dark:!bg-dark-2;
+}
+
+.apexcharts-xaxistooltip,
+.apexcharts-yaxistooltip {
+  @apply dark:!border-dark-2 dark:!bg-dark-2 dark:!text-dark-3;
+}
+
+.apexcharts-xaxistooltip-bottom:after {
+  @apply !border-b-gray dark:!border-b-dark;
+}
+
+.apexcharts-xaxistooltip-bottom:before {
+  @apply !border-b-gray dark:!border-b-dark;
+}
+
+.apexcharts-xaxistooltip-bottom {
+  @apply !rounded !border-none !bg-gray !text-sm !font-medium !text-dark dark:!bg-dark dark:!text-white;
+}
+
+.apexcharts-tooltip-series-group {
+  @apply !pb-px !pl-2.5 !pr-3.5;
+}
+
+.apexcharts-tooltip-series-group .apexcharts-tooltip-text {
+  @apply !text-base !font-medium;
+}
+
+.apexcharts-datalabels-group .apexcharts-datalabel-label {
+  @apply !fill-dark-5 dark:!fill-dark-6;
+}
+
+.apexcharts-datalabels-group .apexcharts-datalabel-value {
+  @apply !fill-dark dark:!fill-white;
+}
+
+.flatpickr-wrapper {
+  @apply w-full;
+}
+
+.flatpickr-months .flatpickr-prev-month:hover svg,
+.flatpickr-months .flatpickr-next-month:hover svg {
+  @apply !fill-primary;
+}
+
+.flatpickr-calendar.arrowTop:before {
+  @apply dark:!border-b-gray-dark;
+}
+
+.flatpickr-calendar.arrowTop:after {
+  @apply dark:!border-b-gray-dark;
+}
+
+.flatpickr-calendar {
+  @apply !p-6 !shadow-3 dark:!bg-gray-dark dark:!text-dark-6 dark:!shadow-card 2xsm:!w-auto;
+}
+
+.flatpickr-day {
+  @apply dark:!text-dark-6 dark:hover:!border-dark-2 dark:hover:!bg-dark-2;
+}
+
+.flatpickr-months .flatpickr-prev-month,
+.flatpickr-months .flatpickr-next-month {
+  @apply !top-7 dark:!fill-white dark:!text-white;
+}
+
+.flatpickr-months .flatpickr-prev-month.flatpickr-prev-month,
+.flatpickr-months .flatpickr-next-month.flatpickr-prev-month {
+  @apply !left-7;
+}
+
+.flatpickr-months .flatpickr-prev-month.flatpickr-next-month,
+.flatpickr-months .flatpickr-next-month.flatpickr-next-month {
+  @apply !right-7;
+}
+
+span.flatpickr-weekday,
+.flatpickr-months .flatpickr-month {
+  @apply dark:!fill-white dark:!text-white;
+}
+
+.flatpickr-day.inRange {
+  box-shadow:
+    -5px 0 0 #f3f4f6,
+    5px 0 0 #f3f4f6 !important;
+  @apply dark:!shadow-datepicker;
+}
+
+.flatpickr-day.inRange,
+.flatpickr-day.prevMonthDay.inRange,
+.flatpickr-day.nextMonthDay.inRange,
+.flatpickr-day.today.inRange,
+.flatpickr-day.prevMonthDay.today.inRange,
+.flatpickr-day.nextMonthDay.today.inRange,
+.flatpickr-day:hover,
+.flatpickr-day.prevMonthDay:hover,
+.flatpickr-day.nextMonthDay:hover,
+.flatpickr-day:focus,
+.flatpickr-day.prevMonthDay:focus,
+.flatpickr-day.nextMonthDay:focus {
+  @apply !border-gray-2 !bg-gray-2 dark:!border-dark-2 dark:!bg-dark-2;
+}
+
+.flatpickr-day.selected,
+.flatpickr-day.startRange,
+.flatpickr-day.selected,
+.flatpickr-day.endRange {
+  @apply dark:!text-white;
+}
+
+.flatpickr-day.today {
+  @apply !border-none hover:!bg-gray-2 hover:!text-dark dark:hover:!bg-dark-2 dark:hover:!text-white;
+}
+
+.flatpickr-day.selected,
+.flatpickr-day.startRange,
+.flatpickr-day.endRange,
+.flatpickr-day.selected.inRange,
+.flatpickr-day.startRange.inRange,
+.flatpickr-day.endRange.inRange,
+.flatpickr-day.selected:focus,
+.flatpickr-day.startRange:focus,
+.flatpickr-day.endRange:focus,
+.flatpickr-day.selected:hover,
+.flatpickr-day.startRange:hover,
+.flatpickr-day.endRange:hover,
+.flatpickr-day.selected.prevMonthDay,
+.flatpickr-day.startRange.prevMonthDay,
+.flatpickr-day.endRange.prevMonthDay,
+.flatpickr-day.selected.nextMonthDay,
+.flatpickr-day.startRange.nextMonthDay,
+.flatpickr-day.endRange.nextMonthDay {
+  background: #3c50e0;
+  @apply !border-primary !bg-primary hover:!border-primary hover:!bg-primary;
+}
+
+.flatpickr-day.selected.startRange + .endRange:not(:nth-child(7n + 1)),
+.flatpickr-day.startRange.startRange + .endRange:not(:nth-child(7n + 1)),
+.flatpickr-day.endRange.startRange + .endRange:not(:nth-child(7n + 1)) {
+  box-shadow: -10px 0 0 #3c50e0;
+}
+
+.map-btn .jvm-zoom-btn {
+  @apply flex h-7.5 w-7.5 items-center justify-center rounded border border-stroke bg-white px-0 pb-0.5 pt-0 text-2xl leading-none text-dark-5 hover:border-primary hover:bg-primary hover:text-white dark:border-dark-3 dark:bg-dark-2 dark:text-dark-6 dark:hover:border-primary dark:hover:bg-primary dark:hover:text-white;
+}
+
+.mapOne .jvm-zoom-btn {
+  @apply !bottom-0 !left-auto !top-auto;
+}
+
+.mapOne .jvm-zoom-btn.jvm-zoomin {
+  @apply !right-10;
+}
+
+.mapOne .jvm-zoom-btn.jvm-zoomout {
+  @apply !right-0;
+}
+
+.mapTwo .jvm-zoom-btn {
+  @apply !bottom-0 !top-auto;
+}
+
+.mapTwo .jvm-zoom-btn.jvm-zoomin {
+  @apply !left-0;
+}
+
+.mapTwo .jvm-zoom-btn.jvm-zoomout {
+  @apply !left-10;
+}
+
+.taskCheckbox:checked ~ .box span {
+  @apply opacity-100;
+}
+
+.taskCheckbox:checked ~ p {
+  @apply line-through;
+}
+
+.taskCheckbox:checked ~ .box {
+  @apply border-primary bg-primary dark:border-primary;
+}
+
+.custom-input-date::-webkit-calendar-picker-indicator {
+  background: transparent;
+}
+
+.data-stats-slider-outer .swiper-button-next:after,
+.data-stats-slider-outer .swiper-button-prev:after,
+.carouselOne .swiper-button-next:after,
+.carouselOne .swiper-button-prev:after,
+.carouselThree .swiper-button-next:after,
+.carouselThree .swiper-button-prev:after {
+  @apply hidden;
+}
+
+.data-stats-slider-outer .swiper-button-next svg,
+.data-stats-slider-outer .swiper-button-prev svg,
+.carouselOne .swiper-button-next svg,
+.carouselOne .swiper-button-prev svg,
+.carouselThree .swiper-button-next svg,
+.carouselThree .swiper-button-prev svg {
+  @apply size-auto;
+}
+
+.carouselOne .swiper-button-next,
+.carouselOne .swiper-button-prev,
+.carouselThree .swiper-button-next,
+.carouselThree .swiper-button-prev {
+  @apply h-10 w-10 rounded-full bg-white !text-dark-5 shadow-card-2 dark:bg-dark-2 dark:!text-dark-6 sm:h-12.5 sm:w-12.5;
+}
+
+.carouselOne .swiper-button-prev,
+.carouselThree .swiper-button-prev {
+  @apply sm:!left-10;
+}
+
+.carouselOne .swiper-button-next,
+.carouselThree .swiper-button-next {
+  @apply sm:!right-10;
+}
+
+.carouselTwo .swiper-pagination-bullet,
+.carouselThree .swiper-pagination-bullet {
+  @apply h-[5px] w-7.5 rounded-none bg-white/50;
+}
+
+.carouselTwo .swiper-pagination-bullet-active,
+.carouselThree .swiper-pagination-bullet-active {
+  @apply bg-white;
+}
+
+.carouselTwo .swiper-pagination,
+.carouselThree .swiper-pagination {
+  @apply xl:!bottom-8;
+}
+
+.data-stats-slider-outer .swiper-button-next,
+.data-stats-slider-outer .swiper-button-prev {
+  @apply top-1/2 h-11.5 w-11.5 rounded-full border border-stroke bg-white !text-dark drop-shadow-card dark:border-dark-3 dark:bg-dark-2 dark:!text-white;
+}
+
+.data-stats-slider-outer .swiper-button-next.swiper-button-disabled,
+.data-stats-slider-outer .swiper-button-prev.swiper-button-disabled {
+  @apply hidden;
+}
+
+.data-stats-slider-outer .swiper-button-prev {
+  @apply -left-[23px];
+}
+
+.data-stats-slider-outer .swiper-button-next {
+  @apply -right-[23px];
+}
+
+.data-table-common .datatable-search {
+  @apply relative !ml-0 w-100 overflow-hidden rounded;
+}
+
+.data-table-one .datatable-search input {
+  @apply h-[46px] w-full rounded border border-stroke bg-transparent px-5 outline-none focus:border-primary dark:border-dark-3 dark:bg-dark-2 dark:focus:border-primary;
+}
+
+.data-table-common .datatable-selector {
+  @apply relative z-20 inline-flex bg-transparent p-0 font-medium text-dark-5 outline-none dark:text-dark-6;
+}
+
+.data-table-common .datatable-top {
+  @apply flex flex-col gap-4 border-b border-stroke px-7.5 py-4.5 after:hidden dark:border-dark-6 sm:flex-row-reverse sm:items-center sm:justify-between sm:gap-x-4 sm:gap-y-0;
+}
+
+.data-table-common .datatable-dropdown label {
+  @apply inline-flex items-center gap-2.5 font-medium capitalize text-dark dark:text-white;
+}
+
+.datatable-table .datatable-sorter {
+  @apply before:hidden after:hidden;
+}
+
+.datatable-table > thead > tr:first-child > th {
+  @apply border-transparent px-2.5 pb-2.5 pt-9 font-medium;
+}
+
+.data-table-common .datatable-table > tbody > tr > td:first-child,
+.data-table-common .datatable-table > thead > tr > th:first-child {
+  @apply pl-8;
+}
+
+.data-table-common .datatable-table > tbody > tr > td:last-child,
+.data-table-common .datatable-table > thead > tr > th:last-child {
+  @apply pr-8;
+}
+
+.data-table-common .datatable-table > thead > tr:last-child > th {
+  @apply !border-b border-stroke pb-6 dark:border-dark-3;
+}
+
+.data-table-common .datatable-table > thead > tr:last-child > th input {
+  @apply h-[34px] w-full rounded border border-stroke bg-transparent px-3 text-sm outline-none focus:border-primary dark:border-dark-3 dark:bg-dark-2 dark:focus:border-primary;
+}
+
+.data-table-common .datatable-table > tbody > tr {
+  @apply hover:bg-primary hover:bg-opacity-5;
+}
+
+.data-table-one .datatable-table > tbody > tr > td:first-child {
+  @apply text-primary dark:text-white;
+}
+
+.data-table-common .datatable-table > tbody > tr > td {
+  @apply border-b border-stroke py-5 font-medium dark:border-dark-3;
+}
+
+.data-table-one .datatable-bottom {
+  @apply flex flex-col gap-4 px-8 py-7 after:hidden sm:flex-row-reverse sm:items-center sm:justify-between sm:gap-0 sm:space-x-4;
+}
+
+.data-table-common .datatable-wrapper.no-footer .datatable-container {
+  @apply border-none;
+}
+
+.data-table-common .datatable-info {
+  @apply !m-0 font-medium;
+}
+
+.data-table-common .datatable-pagination {
+  @apply !m-0;
+}
+
+.data-table-common .datatable-pagination a {
+  @apply flex h-8 w-8 cursor-pointer items-center justify-center rounded p-0 font-medium text-dark-5 hover:bg-primary hover:text-white dark:text-dark-6;
+}
+
+.data-table-common .datatable-pagination .datatable-active a {
+  @apply bg-primary text-white;
+}
+
+.data-table-common .datatable-pagination li.datatable-hidden {
+  @apply !visible;
+}
+
+.data-table-two .datatable-bottom {
+  @apply flex flex-col gap-4 px-8 py-7 after:hidden sm:flex-row sm:items-center sm:justify-between sm:gap-0 sm:space-x-4;
+}
+
+.data-table-two .datatable-search input {
+  @apply h-11.5 w-full rounded border border-stroke bg-gray-2 px-5 outline-none focus:border-primary dark:border-dark-3 dark:bg-dark-2 dark:focus:border-primary;
+}
+
+.rangeSliderCommon .noUi-target {
+  @apply border-none bg-transparent shadow-none;
+}
+
+.rangeSliderCommon .noUi-connects {
+  @apply h-1.5 rounded-full bg-stroke dark:bg-dark-3;
+}
+
+.rangeSliderCommon .noUi-connect {
+  @apply h-1.5 rounded-full bg-primary;
+}
+
+.rangeSliderOne .noUi-horizontal .noUi-handle {
+  @apply -top-2 h-5.5 w-5.5 rounded-full border-none bg-primary shadow-none;
+}
+
+.rangeSliderTwo .noUi-horizontal .noUi-handle {
+  @apply -top-2 h-6 w-6 rounded-full border-[6px] border-primary bg-white shadow-none dark:bg-dark;
+}
+
+.noUi-horizontal .noUi-handle:after,
+.noUi-horizontal .noUi-handle:before {
+  @apply hidden;
+}
+
+input[type="search"]::-webkit-search-cancel-button {
+  @apply appearance-none;
+}
+
+.custom-input-date::-webkit-calendar-picker-indicator {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 20px;
+}
+
+.custom-gradient-1 {
+  background-image: linear-gradient(145deg, #eef 0%, #fff8fc 100%);
+}
+
+.bg-red-500 {
+  background-color: #ef4444 !important;
+  color: #fff !important;
+}
+
+/* Print */
+
+.chinese-receipt-frame {
+  border-image-source: url('/images/logo/border.png');
+}
+
+
+.watermark-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  /* ใส่รูปลายเทพเจ้าที่ตัดพื้นหลังแล้ว */
+  background-image: url('/images/logo/logo.png');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 70%;
+  opacity: 0.08; /* ปรับให้จางมากๆ เหมือนต้นฉบับ */
+  pointer-events: none; /* เพื่อให้ยังเลือกข้อความข้างใต้ได้ */
+  z-index: 0;
+}
+
+/* Infinite Marquee Logo Slider */
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 40s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* ────────────────────────────────────────────────────────
+   Rich Text Editor Content Styles
+   ──────────────────────────────────────────────────────── */
+.rich-text-content {
+  line-height: 1.75 !important;
+  color: #374151 !important;
+}
+
+.rich-text-content p {
+  margin-top: 0 !important;
+  margin-bottom: 1.5rem !important;
+}
+
+.rich-text-content h2,
+.rich-text-content h3,
+.rich-text-content h4 {
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  line-height: 1.35 !important;
+  margin-top: 2.25rem !important;
+  margin-bottom: 1rem !important;
+}
+
+.rich-text-content h2 {
+  font-size: 1.625rem !important;
+}
+
+.rich-text-content h3 {
+  font-size: 1.375rem !important;
+}
+
+.rich-text-content h4 {
+  font-size: 1.125rem !important;
+}
+
+.rich-text-content ul {
+  margin-top: 1rem !important;
+  margin-bottom: 1.5rem !important;
+  padding-left: 0 !important;
+  list-style: none !important;
+}
+
+.rich-text-content ul li {
+  position: relative !important;
+  padding-left: 1.25rem !important;
+  margin-bottom: 0.625rem !important;
+  list-style-type: none !important;
+}
+
+.rich-text-content ul li::before {
+  content: "—" !important;
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  color: var(--theme-primary, #4934d4) !important;
+  font-weight: bold !important;
+}
+
+.rich-text-content ol {
+  margin-top: 1rem !important;
+  margin-bottom: 1.5rem !important;
+  padding-left: 1.5rem !important;
+  list-style-type: decimal !important;
+}
+
+.rich-text-content ol li {
+  margin-bottom: 0.625rem !important;
+  padding-left: 0.25rem !important;
+}
+
+.rich-text-content a {
+  color: var(--theme-primary, #4934d4) !important;
+  text-decoration: underline !important;
+  font-weight: 500 !important;
+}
+
+.rich-text-content a:hover {
+  color: var(--theme-secondary, #6153df) !important;
+}
+
+.rich-text-content a:focus-visible {
+  outline: 2px solid var(--theme-primary, #4934d4) !important;
+  outline-offset: 2px !important;
+}
+
+.rich-text-content strong {
+  font-weight: 700 !important;
+  color: #0f172a !important;
+}
+
+.rich-text-content blockquote {
+  border-left: 4px solid var(--theme-primary, #4934d4) !important;
+  padding-left: 1.25rem !important;
+  font-style: italic !important;
+  color: #4b5563 !important;
+  margin: 1.5rem 0 !important;
+}
+
+.rich-text-content img {
+  display: block !important;
+  border-radius: 12px !important;
+  margin: 1.5rem auto !important;
+  max-width: 100% !important;
+  height: auto !important;
+  object-fit: contain !important;
+}
+
+.rich-text-content figure {
+  margin: 1.75rem 0 !important;
+}
+
+.rich-text-content figcaption {
+  margin-top: 0.5rem !important;
+  text-align: center !important;
+  font-size: 0.875rem !important;
+  line-height: 1.5 !important;
+  color: #64748b !important;
+}
+
+.rich-text-content pre,
+.rich-text-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+}
+
+.rich-text-content code {
+  border-radius: 4px !important;
+  background: #f1f5f9 !important;
+  padding: 0.1rem 0.35rem !important;
+  font-size: 0.9em !important;
+}
+
+.rich-text-content pre {
+  overflow-x: auto !important;
+  border-radius: 12px !important;
+  background: #0f172a !important;
+  color: #e2e8f0 !important;
+  padding: 1rem 1.25rem !important;
+  margin: 1.5rem 0 !important;
+}
+
+.rich-text-content pre code {
+  background: transparent !important;
+  color: inherit !important;
+  padding: 0 !important;
+}
+
+.rich-text-content table {
+  display: block !important;
+  width: 100% !important;
+  overflow-x: auto !important;
+  max-width: 100% !important;
+  border-collapse: collapse !important;
+  margin: 1.5rem 0 !important;
+}
+
+.rich-text-content th,
+.rich-text-content td {
+  border: 1px solid #e2e8f0 !important;
+  padding: 0.65rem 0.85rem !important;
+  text-align: left !important;
+  vertical-align: top !important;
+}
+
+.rich-text-content th {
+  background: #f8fafc !important;
+  font-weight: 700 !important;
+}

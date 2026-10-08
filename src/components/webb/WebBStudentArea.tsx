@@ -12,6 +12,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { PublicFooter, WebBBrand } from "./PublicShell";
 import { getProduct } from "./data";
 import { WebBImage } from "./WebBImage";
+import { DEMO_ACCOUNT_KEY, readDemoAccount, readSocialSettings, safeWrite } from "./demo-store";
 
 type StudentMode =
   | "student"
@@ -37,7 +38,7 @@ const views: { id: StudentView; label: string }[] = [
   { id: "exam", label: "ห้องสอบ" },
   { id: "results", label: "ผลสอบ" },
   { id: "solutions", label: "เฉลย" },
-  { id: "profile", label: "ข้อมูลผู้เข้าสอบ" },
+  { id: "profile", label: "โปรไฟล์ของฉัน" },
 ];
 
 const homepageLinks = [
@@ -174,6 +175,7 @@ function modeToView(mode: StudentMode): StudentView {
   if (mode === "student") return "overview";
   if (mode === "exam") return "exam";
   if (mode === "ranking") return "results";
+  if (mode === "profile") return "personal";
   return mode;
 }
 
@@ -211,6 +213,7 @@ function StudentHeader({
   onClose: () => void;
   onSelect: (view: StudentView) => void;
 }) {
+  const [helpOpen, setHelpOpen] = useState(false);
   useEffect(() => {
     if (!menuOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -237,6 +240,7 @@ function StudentHeader({
             ))}
           </nav>
           <div className="wb-header-actions wb-dashboard-desktop-user">
+            <Link className="wb-pill-button wb-pill-yellow" href="/webb/products">ซื้อข้อสอบเพิ่ม</Link>
             <button
               type="button"
               onClick={onMenu}
@@ -270,19 +274,20 @@ function StudentHeader({
                 </span>
                 <LuChevronRight aria-hidden="true" />
               </button>
-              <a
+              <button
                 className="wb-dashboard-account-action"
-                href="mailto:support@studyunith.com"
-                onClick={onClose}
+                type="button"
+                onClick={() => { onClose(); setHelpOpen(true); }}
               >
                 <LuHeadset aria-hidden="true" />
                 ขอความช่วยเหลือ
-              </a>
+              </button>
               <Link
                 className="wb-dashboard-account-action"
                 href="/webb"
                 onClick={() => {
                   localStorage.removeItem("webb-demo-student-auth");
+                  window.dispatchEvent(new Event("webb-demo-auth-updated"));
                   onClose();
                 }}
               >
@@ -332,6 +337,8 @@ function StudentHeader({
                 {link.label}
               </Link>
             ))}
+            <Link href="/webb/products" onClick={onClose}>ซื้อข้อสอบเพิ่ม</Link>
+            <Link href="/webb/status" onClick={onClose}>รายการที่ซื้อแล้ว</Link>
           </div>
           <button
             type="button"
@@ -351,13 +358,16 @@ function StudentHeader({
             <i>›</i>
           </button>
           <div className="wb-dashboard-menu-section is-secondary">
-            <a href="mailto:support@studyunith.com" onClick={onClose}>
+            <button type="button" onClick={() => { onClose(); setHelpOpen(true); }}>
               <LuHeadset aria-hidden="true" />
               ขอความช่วยเหลือ
-            </a>
+            </button>
             <Link
               href="/webb"
-              onClick={() => localStorage.removeItem("webb-demo-student-auth")}
+              onClick={() => {
+                localStorage.removeItem("webb-demo-student-auth");
+                window.dispatchEvent(new Event("webb-demo-auth-updated"));
+              }}
             >
               <LuLogOut aria-hidden="true" />
               ออกจากระบบ
@@ -366,8 +376,27 @@ function StudentHeader({
           {/* Logged-in student menu intentionally has no registration action. */}
         </nav>
       </div>
+      {helpOpen && <StudentHelpDialog onClose={() => setHelpOpen(false)} />}
     </>
   );
+}
+
+function StudentHelpDialog({ onClose }: { onClose: () => void }) {
+  const settings = readSocialSettings();
+  const links = [
+    ["LINE", settings.lineUrl, settings.lineId],
+    ["Facebook", settings.facebookUrl, ""],
+    ["Instagram", settings.instagramUrl, ""],
+    ["TikTok", settings.tiktokUrl, ""],
+    ["YouTube", settings.youtubeUrl, ""],
+  ].filter(([, href]) => href);
+  return <div className="wb-contact-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <section className="wb-contact-dialog" role="dialog" aria-modal="true" aria-labelledby="wb-student-help-title">
+      <button type="button" className="wb-contact-close" aria-label="ปิด" onClick={onClose}>×</button>
+      <span className="webb-kicker">STUDY UNITH · SUPPORT</span><h2 id="wb-student-help-title">ขอความช่วยเหลือ</h2><p>เลือกช่องทางติดต่อจากการตั้งค่ากลางของระบบ</p>
+      <div className="wb-contact-links">{links.map(([label, href, handle]) => <a href={href} key={label} target="_blank" rel="noreferrer"><i>↗</i><span><b>{label}</b>{handle && <small>{handle}</small>}</span><strong>↗</strong></a>)}{settings.supportEmail && <a href={`mailto:${settings.supportEmail}`}><i>✉</i><span><b>อีเมลช่วยเหลือ</b><small>{settings.supportEmail}</small></span><strong>↗</strong></a>}</div>
+    </section>
+  </div>;
 }
 
 function StudentSidebar({
@@ -387,7 +416,7 @@ function StudentSidebar({
         </p>
         <span className="wb-dashboard-location">⌖ {student.province}</span>
         <button type="button" onClick={() => onSelect("personal")}>
-          ข้อมูลผู้เข้าสอบ
+          โปรไฟล์ของฉัน
         </button>
       </section>
       <section className="wb-dashboard-enroll-card">
@@ -492,7 +521,7 @@ function StudentOverview({
             <i>
               <em style={{ width: `${score}%` }} />
             </i>
-            <button onClick={() => onSelect("results")}>ดูรายละเอียด</button>
+            <button onClick={() => onSelect("detail")}>ดูรายละเอียด</button>
           </article>
         ))}
       </section>
@@ -604,7 +633,7 @@ function ExamResults({ onSelect }: { onSelect: (view: StudentView) => void }) {
             ↓ ดาวน์โหลดใบวิเคราะห์ (PDF)
           </button>
           <button onClick={() => onSelect("ranking")}>🏆 จัดคะแนนอันดับ</button>
-          <button className="is-primary" onClick={() => onSelect("ranking")}>
+          <button className="is-primary" onClick={() => onSelect("detail")}>
             ดูคะแนนสอบ →
           </button>
         </footer>
@@ -832,6 +861,64 @@ function Ranking({
   const [grade, setGrade] = useState("ทุกระดับชั้น");
   const [province, setProvince] = useState("ทุกจังหวัด");
   const [period, setPeriod] = useState("ทุกช่วงเวลา");
+  const [search, setSearch] = useState("");
+  const [candidateMode, setCandidateMode] = useState<"actual" | "under" | "over">("actual");
+  const [currentUsername, setCurrentUsername] = useState("");
+  const [rankRecords, setRankRecords] = useState<{ username: string; email: string; student: string; grade: string; province: string; productId: string; version: string; score: number; submittedAt: number }[]>([]);
+  const minimumRank = 100;
+  useEffect(() => {
+    const refresh = () => {
+      try { setRankRecords(JSON.parse(localStorage.getItem("webb-demo-ranking-results") || "[]")); }
+      catch { setRankRecords([]); }
+      setCurrentUsername(readDemoAccount()?.username || "");
+    };
+    refresh();
+    window.addEventListener("webb-demo-ranking-updated", refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener("webb-demo-ranking-updated", refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, []);
+  const ownResult = rankRecords.find((row) => currentUsername ? row.username.toLowerCase() === currentUsername.toLowerCase() : row.email.toLowerCase() === student.email.toLowerCase());
+  const rankingProductId = ownResult?.productId || "tgat1";
+  const rankingVersion = ownResult?.version;
+  const actualRows = rankRecords.filter((row) => row.productId === rankingProductId && (!rankingVersion || row.version === rankingVersion));
+  const candidates = candidateMode === "actual" ? actualRows.length : candidateMode === "under" ? 96 : 124;
+  const canFilter = candidates > minimumRank;
+  const mockRows = Array.from({ length: candidateMode === "under" ? 96 : 124 }, (_, index) => ({
+    username: `sample-${index + 1}`,
+    email: `candidate-${index + 1}@example.test`,
+    name: `${[`ศิรศักดิ์ ผ.`, `กมลชนก ต.`, `ธนกร ส.`, `ปาริชาติ ว.`, `ณัฐชา ก.`][index % 5]} ${String(index + 1).padStart(3, "0")}`,
+    grade: index % 3 === 0 ? "มัธยมศึกษาปีที่ 5" : "มัธยมศึกษาปีที่ 6",
+    province: ["ขอนแก่น", "กรุงเทพมหานคร", "เชียงใหม่"][index % 3],
+    period: index % 2 === 0 ? "เดือนนี้" : "สัปดาห์นี้",
+    score: Math.round((45 + ((index * 37) % 520) / 10) * 10) / 10,
+    submittedAt: Date.now() - (index % 25) * 86400000,
+  }));
+  const ownRankRow = ownResult ? {
+    username: ownResult.username, email: ownResult.email, name: ownResult.student, grade: ownResult.grade,
+    province: ownResult.province, period: Date.now() - ownResult.submittedAt < 7 * 86400000 ? "สัปดาห์นี้" : "เดือนนี้",
+    score: ownResult.score, submittedAt: ownResult.submittedAt,
+  } : null;
+  const sampleOwnRow = ownRankRow || {
+    username: currentUsername || "current-demo-student", email: student.email, name: student.name,
+    grade: student.grade.includes("6") ? "มัธยมศึกษาปีที่ 6" : student.grade.includes("5") ? "มัธยมศึกษาปีที่ 5" : "มัธยมศึกษาปีที่ 4",
+    province: student.province, period: "เดือนนี้", score: 60.7, submittedAt: Date.now(),
+  };
+  const rows = candidateMode === "actual" ? actualRows.map((row) => ({ ...row, name: row.student, period: Date.now() - row.submittedAt < 7 * 86400000 ? "สัปดาห์นี้" : "เดือนนี้" })) : [
+    ...mockRows.slice(0, Math.max(0, candidates - 1)),
+    sampleOwnRow,
+  ];
+  const ownScore = candidateMode === "actual" ? ownResult?.score : sampleOwnRow.score;
+  const ownRank = ownScore === undefined ? null : rows.filter((row) => row.score > ownScore).length + 1;
+  const filteredRows = rows.filter((row) => {
+    if (!canFilter) return true;
+    return (grade === "ทุกระดับชั้น" || row.grade === grade) &&
+      (province === "ทุกจังหวัด" || row.province === province) &&
+      (period === "ทุกช่วงเวลา" || row.period === period) &&
+      row.name.toLowerCase().includes(search.toLowerCase());
+  });
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -866,50 +953,24 @@ function Ranking({
         </div>
         <h2>{student.name}</h2>
         <p>วิชา TGAT ความถนัดทั่วไป</p>
-        <div className="wb-ranking-score">
-          <span>คะแนน</span>
-          <b>60.7/100</b>
+        <div className="wb-ranking-score"><span>คะแนน</span><b>{ownScore === undefined ? "—" : `${ownScore.toFixed(1)}/100`}</b></div>
+        <div className="wb-ranking-place">อันดับของคุณ <strong>{ownRank ?? "—"}</strong>/{candidates}<small>คำนวณจากผู้ส่งข้อสอบสำเร็จในชุดและเวอร์ชันเดียวกัน</small></div>
+        <div className="wb-ranking-demo-cases" aria-label="กรณีตัวอย่างจำนวนผู้สอบ">
+          <b>ข้อมูล Ranking</b>
+          <button type="button" className={candidateMode === "actual" ? "is-active" : ""} onClick={() => setCandidateMode("actual")}>ผลสอบที่ส่งแล้ว · {actualRows.length} คน</button>
+          <button type="button" className={candidateMode === "under" ? "is-active" : ""} onClick={() => setCandidateMode("under")}>ตัวอย่าง 96 คน · ยังไม่เกิน 100</button>
+          <button type="button" className={candidateMode === "over" ? "is-active" : ""} onClick={() => setCandidateMode("over")}>ตัวอย่าง 124 คน · เกิน 100</button>
         </div>
-        <div className="wb-ranking-place">
-          ลำดับที่ <strong>415</strong>/2709
-          <small>คิดจากจำนวนผู้เข้าสอบทั้งหมด ณ วันที่ 19 ธันวาคม 2569</small>
-        </div>
-        <h3>กรองข้อมูลการจัดอันดับ</h3>
-        <div className="wb-ranking-filters">
-          <label>
-            ระดับชั้น
-            <select value={grade} onChange={(e) => setGrade(e.target.value)}>
-              <option>ทุกระดับชั้น</option>
-              <option>มัธยมศึกษาปีที่ 4</option>
-              <option>มัธยมศึกษาปีที่ 5</option>
-              <option>มัธยมศึกษาปีที่ 6</option>
-            </select>
-          </label>
-          <label>
-            จังหวัด
-            <select
-              value={province}
-              onChange={(e) => setProvince(e.target.value)}
-            >
-              <option>ทุกจังหวัด</option>
-              <option>ขอนแก่น</option>
-              <option>กรุงเทพมหานคร</option>
-              <option>เชียงใหม่</option>
-            </select>
-          </label>
-          <label>
-            ช่วงเวลา
-            <select value={period} onChange={(e) => setPeriod(e.target.value)}>
-              <option>ทุกช่วงเวลา</option>
-              <option>เดือนนี้</option>
-              <option>สัปดาห์นี้</option>
-            </select>
-          </label>
-        </div>
-        <div className="wb-ranking-qr" role="img" aria-label="QR Code ตัวอย่าง">
-          ▦
-        </div>
-        <b>สแกน QR สมัครสอบเลย!</b>
+        {canFilter ? <>
+          <h3>กรองและค้นหา Ranking</h3>
+          <div className="wb-ranking-filters">
+            <label>ระดับชั้น<select value={grade} onChange={(e) => setGrade(e.target.value)}><option>ทุกระดับชั้น</option><option>มัธยมศึกษาปีที่ 4</option><option>มัธยมศึกษาปีที่ 5</option><option>มัธยมศึกษาปีที่ 6</option></select></label>
+            <label>จังหวัด<select value={province} onChange={(e) => setProvince(e.target.value)}><option>ทุกจังหวัด</option><option>ขอนแก่น</option><option>กรุงเทพมหานคร</option><option>เชียงใหม่</option></select></label>
+            <label>ช่วงเวลา<select value={period} onChange={(e) => setPeriod(e.target.value)}><option>ทุกช่วงเวลา</option><option>เดือนนี้</option><option>สัปดาห์นี้</option></select></label>
+          </div>
+          <input className="wb-ranking-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ค้นหาผู้สอบในชุดนี้" aria-label="ค้นหาผู้สอบในชุดนี้" />
+          <div className="wb-ranking-sample-list">{[...filteredRows].sort((left, right) => right.score - left.score).map((row, index) => <div key={row.username || row.name}><span>{index + 1}</span><b>{row.name}</b><small>{row.grade} · {row.province}</small><strong>{row.score.toFixed(1)}</strong></div>)}{filteredRows.length === 0 && <p>ไม่พบผู้สอบตามตัวกรองนี้</p>}</div>
+        </> : <div className="wb-ranking-locked"><b>ตัวกรองและค้นหาจะเปิดเมื่อเกิน {minimumRank} คน</b><span>{candidateMode === "actual" && candidates === 0 ? "ยังไม่มีผลสอบที่ส่งสำเร็จในชุดและเวอร์ชันนี้" : `ตอนนี้แสดงอันดับเทียบกับผู้สอบทั้งหมด ${candidates} คน`}</span></div>}
       </section>
     </div>
   );
@@ -1014,6 +1075,18 @@ function StudentProfile({
         education: saved.grade,
       }),
     );
+    const account = readDemoAccount();
+    if (account) safeWrite(DEMO_ACCOUNT_KEY, {
+      ...account,
+      citizenId: saved.citizenId,
+      firstName: String(data.firstName),
+      lastName: String(data.lastName),
+      phone: saved.phone,
+      email: saved.email,
+      province: saved.province,
+      school: saved.school,
+      education: saved.grade,
+    });
     onSave(saved);
   }
 
@@ -1079,7 +1152,7 @@ function StudentProfile({
             <div className="wb-profile-fields">
               <label>
                 ชื่อผู้ใช้งาน
-                <input value={student.name} readOnly />
+                <input value={readDemoAccount()?.username ?? student.name} readOnly />
               </label>
               <label>
                 บัตรประชาชน
@@ -1193,6 +1266,8 @@ export default function WebBStudentArea({ mode }: { mode: StudentMode }) {
     if (queryView === "ranking") {
       setActiveView("results");
       setRankingOpen(true);
+    } else if (queryView === "profile") {
+      setActiveView("personal");
     } else if (
       queryView &&
       [
@@ -1200,7 +1275,6 @@ export default function WebBStudentArea({ mode }: { mode: StudentMode }) {
         "exam",
         "results",
         "solutions",
-        "profile",
         "detail",
         "subresults",
         "personal",
@@ -1244,7 +1318,7 @@ export default function WebBStudentArea({ mode }: { mode: StudentMode }) {
 
   return (
     <div
-      className={`webb-site wb-shell wb-dashboard${activeView === "detail" || activeView === "profile" || activeView === "subresults" ? " is-detail-view" : ""}`}
+      className={`webb-site wb-shell wb-dashboard${activeView === "detail" || activeView === "subresults" ? " is-detail-view" : ""}`}
     >
       <StudentHeader
         student={student}

@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { WEBB_PRODUCTS, WEBB_DEMO_LABEL, formatBaht } from "./data";
+import { DEMO_PURCHASES_KEY, defaultSocialSettings, productsOverlap, readDemoAccount, readDemoPurchases, readSocialSettings, safeWrite, writeSocialSettings, type SocialSettings } from "./demo-store";
 
 type DemoOrder = {
   ref: string;
   student: string;
+  username?: string;
   product: string;
   base: number;
   charged: number;
@@ -17,11 +19,12 @@ type DemoOrder = {
 type DemoStudent = {
   id: string;
   name: string;
+  username?: string;
   email: string;
   grade: string;
   school: string;
   joined: string;
-  status: "ใช้งาน" | "ระงับ";
+  status: "ใช้งาน" | "ระงับ" | "ลบข้อมูลแล้ว";
   entitlements: number;
 };
 type DemoProduct = {
@@ -37,6 +40,7 @@ type DemoProduct = {
 type DemoTicket = {
   id: string;
   student: string;
+  username?: string;
   product: string;
   reason: string;
   date: string;
@@ -45,9 +49,10 @@ type DemoTicket = {
 type DemoAttempt = {
   id: string;
   student: string;
+  username?: string;
   product: string;
   started: string;
-  status: "ส่งแล้ว" | "กำลังสอบ" | "ผิดปกติ" | "ยกเลิก";
+  status: "ส่งแล้ว" | "กำลังสอบ" | "รอเริ่มสอบ" | "ผิดปกติ" | "ยกเลิก";
   score: string;
 };
 type DemoAdmin = {
@@ -339,11 +344,13 @@ function Button({
   onClick,
   variant = "primary",
   type = "button",
+  disabled = false,
 }: {
   children: ReactNode;
   onClick?: () => void;
   variant?: "primary" | "outline" | "danger";
   type?: "button" | "submit";
+  disabled?: boolean;
 }) {
   const styles =
     variant === "primary"
@@ -355,7 +362,8 @@ function Button({
     <button
       type={type}
       onClick={onClick}
-      className={`inline-flex min-h-10 items-center justify-center rounded-xl px-3.5 py-2 text-sm font-semibold transition ${styles}`}
+      disabled={disabled}
+      className={`inline-flex min-h-10 items-center justify-center rounded-xl px-3.5 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${styles}`}
     >
       {children}
     </button>
@@ -432,12 +440,13 @@ export default function WebBAdminDemo() {
   const [orderQuery, setOrderQuery] = useState("");
   const [studentQuery, setStudentQuery] = useState("");
   const [message, setMessage] = useState("");
-  const [minimumRank, setMinimumRank] = useState(10);
+  const minimumRank = 100;
   const [publishedResults, setPublishedResults] = useState(true);
   const [openSales, setOpenSales] = useState(true);
   const [consentRequired, setConsentRequired] = useState(true);
   const [trackingEnabled, setTrackingEnabled] = useState(false);
   const [emailNoticeEnabled, setEmailNoticeEnabled] = useState(true);
+  const [socialSettings, setSocialSettings] = useState<SocialSettings>(defaultSocialSettings);
   const [paymentProvider, setPaymentProvider] = useState(
     "Demo Payment · ไม่เชื่อมต่อจริง",
   );
@@ -503,6 +512,53 @@ export default function WebBAdminDemo() {
     "D",
     "A",
   ]);
+  useEffect(() => setSocialSettings(readSocialSettings()), []);
+  useEffect(() => {
+    const account = readDemoAccount();
+    const purchases = readDemoPurchases();
+    if (account) {
+      const name = `${account.firstName} ${account.lastName}`.trim();
+      const joined = new Date().toISOString().slice(0, 10);
+      setStudents((current) => {
+        const existing = current.find((row) => row.email.toLowerCase() === account.email.toLowerCase() || row.username?.toLowerCase() === account.username.toLowerCase());
+        if (existing?.status === "ลบข้อมูลแล้ว") return current;
+        const student: DemoStudent = {
+          id: existing?.id || `ST-${account.username.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8) || Date.now()}`,
+          name,
+          username: account.username,
+          email: account.email,
+          grade: account.education.includes("6") ? "ม.6" : account.education.includes("5") ? "ม.5" : "ม.4",
+          school: account.school,
+          joined: existing?.joined || joined,
+          status: "ใช้งาน",
+          entitlements: purchases.filter((purchase) => purchase.profileSnapshot.username.toLowerCase() === account.username.toLowerCase()).length,
+        };
+        return existing ? current.map((row) => row.id === existing.id ? student : row) : [student, ...current];
+      });
+    }
+    if (purchases.length) {
+      setOrders((current) => {
+        const next = [...current];
+        for (const purchase of purchases) {
+          if (next.some((row) => row.ref === purchase.ref)) continue;
+          const item = WEBB_PRODUCTS.find((product) => product.id === purchase.productId);
+          const purchasedDate = new Date(purchase.purchasedAtIso || purchase.purchasedAt);
+          next.unshift({
+            ref: purchase.ref,
+            student: `${purchase.profileSnapshot.firstName} ${purchase.profileSnapshot.lastName}`.trim(),
+            username: purchase.profileSnapshot.username,
+            product: item?.name || purchase.productId,
+            base: purchase.baseAmount,
+            charged: purchase.amount,
+            method: purchase.payment,
+            day: Number.isNaN(purchasedDate.getTime()) ? new Date().toISOString().slice(0, 10) : purchasedDate.toISOString().slice(0, 10),
+            status: "สำเร็จ",
+          });
+        }
+        return next;
+      });
+    }
+  }, []);
   const settingToggles: {
     label: string;
     enabled: boolean;
@@ -550,6 +606,44 @@ export default function WebBAdminDemo() {
       ),
     [students, studentQuery],
   );
+
+  function hasActiveAttempt(productName: string) {
+    return attempts.some((attempt) =>
+      attempt.status === "กำลังสอบ" && productsOverlap(attempt.product, productName),
+    );
+  }
+
+  function deleteStudent(student: DemoStudent) {
+    if (student.status === "ลบข้อมูลแล้ว") return;
+    if (!window.confirm(`ลบข้อมูลส่วนตัวของ ${student.name} ไหม? ประวัติซื้อและสอบจะเก็บไว้แบบไม่ระบุตัวตน`)) return;
+    const deletedName = "ผู้ใช้งานที่ถูกลบไปแล้ว";
+    setStudents((current) => current.map((row) => row.id === student.id ? {
+      ...row, name: deletedName, username: deletedName, email: "—", grade: "—", school: "—", status: "ลบข้อมูลแล้ว",
+    } : row));
+    setOrders((current) => current.map((row) => row.student === student.name || (!!student.username && row.username?.toLowerCase() === student.username.toLowerCase()) ? { ...row, student: deletedName, username: deletedName } : row));
+    setAttempts((current) => current.map((row) => row.student === student.name || (!!student.username && row.username?.toLowerCase() === student.username.toLowerCase()) ? { ...row, student: deletedName, username: deletedName } : row));
+    setTickets((current) => current.map((row) => row.student === student.name || (!!student.username && row.username?.toLowerCase() === student.username.toLowerCase()) ? { ...row, student: deletedName, username: deletedName } : row));
+    const existingPurchases = readDemoPurchases();
+    const associatedEmails = new Set([student.email.toLowerCase(), ...existingPurchases.filter((purchase) => purchase.profileSnapshot.email === student.email || (!!student.username && purchase.profileSnapshot.username.toLowerCase() === student.username.toLowerCase())).map((purchase) => purchase.profileSnapshot.email.toLowerCase())]);
+    const purchases = existingPurchases.map((purchase) => purchase.profileSnapshot.email === student.email || (!!student.username && purchase.profileSnapshot.username.toLowerCase() === student.username.toLowerCase())
+      ? { ...purchase, profileSnapshot: { ...purchase.profileSnapshot, username: "ผู้ใช้งานที่ถูกลบไปแล้ว", citizenId: "", firstName: deletedName, lastName: "", phone: "", email: "", province: "", school: "", education: "" } }
+      : purchase);
+    safeWrite(DEMO_PURCHASES_KEY, purchases);
+    window.dispatchEvent(new Event("webb-demo-purchases-updated"));
+    try {
+      const rankingResults = JSON.parse(localStorage.getItem("webb-demo-ranking-results") || "[]") as { username: string; email: string; student: string; grade: string; province: string }[];
+      localStorage.setItem("webb-demo-ranking-results", JSON.stringify(rankingResults.map((row) => row.email === student.email || (!!student.username && row.username.toLowerCase() === student.username.toLowerCase()) ? { ...row, username: "ผู้ใช้งานที่ถูกลบไปแล้ว", email: "", student: deletedName, grade: "", province: "" } : row)));
+      window.dispatchEvent(new Event("webb-demo-ranking-updated"));
+      const account = JSON.parse(localStorage.getItem("webb-demo-account") || "null") as { email?: string; username?: string } | null;
+      if (account?.email === student.email || (!!student.username && account?.username?.toLowerCase() === student.username.toLowerCase())) {
+        ["webb-demo-account", "webb-demo-profile", "webb-demo-student-auth", "webb-registration"].forEach((key) => localStorage.removeItem(key));
+        window.dispatchEvent(new Event("webb-demo-auth-updated"));
+      }
+      const emails = JSON.parse(localStorage.getItem("webb-demo-emails") || "[]") as { to: string }[];
+      localStorage.setItem("webb-demo-emails", JSON.stringify(emails.map((email) => associatedEmails.has(email.to.toLowerCase()) ? { ...email, to: "ผู้ใช้งานที่ถูกลบไปแล้ว" } : email)));
+    } catch { /* Keep the demo audit history even if stored data is malformed. */ }
+    logAction("ลบข้อมูลส่วนตัวผู้เรียนและเก็บประวัติแบบไม่ระบุตัวตน", student.id);
+  }
 
   function logAction(action: string, target: string) {
     const time = new Date().toLocaleString("th-TH", {
@@ -855,9 +949,8 @@ export default function WebBAdminDemo() {
                           ดูข้อมูล
                         </Button>
                         <Button
-                          variant={
-                            student.status === "ใช้งาน" ? "danger" : "outline"
-                          }
+                          disabled={student.status === "ลบข้อมูลแล้ว"}
+                          variant={student.status === "ใช้งาน" ? "danger" : "outline"}
                           onClick={() => {
                             const status: DemoStudent["status"] =
                               student.status === "ใช้งาน" ? "ระงับ" : "ใช้งาน";
@@ -874,8 +967,9 @@ export default function WebBAdminDemo() {
                             );
                           }}
                         >
-                          {student.status === "ใช้งาน" ? "ระงับ" : "เปิดใช้"}
+                          {student.status === "ใช้งาน" ? "ระงับ" : student.status === "ระงับ" ? "เปิดใช้" : "ลบแล้ว"}
                         </Button>
+                        <Button variant="danger" disabled={student.status === "ลบข้อมูลแล้ว"} onClick={() => deleteStudent(student)}>ลบข้อมูล</Button>
                       </div>
                     </td>
                   </tr>
@@ -901,9 +995,9 @@ export default function WebBAdminDemo() {
                     "สินค้า / พาร์ท",
                     "เวอร์ชัน",
                     "ราคาขาย",
-                    "ยอดเรียกเก็บ Demo",
-                    "ชุดทดลอง",
-                    "สถานะ",
+                  "ยอดเรียกเก็บ Demo",
+                  "ชุดทดลอง",
+                    "มีสินค้า",
                     "การทำงาน",
                   ].map((h) => (
                     <th className={th} key={h}>
@@ -930,11 +1024,13 @@ export default function WebBAdminDemo() {
                       </Badge>
                     </td>
                     <td className={td}>
-                      <Badge
-                        tone={product.status === "เปิดขาย" ? "green" : "gray"}
-                      >
-                        {product.status}
-                      </Badge>
+                      <button type="button" role="switch" aria-checked={product.status === "เปิดขาย"} aria-label={`สถานะสินค้า ${product.name}`} onClick={() => {
+                        setProducts((current) => current.map((p) => p.id === product.id ? { ...p, status: (p.status === "เปิดขาย" ? "ปิดขาย" : "เปิดขาย") as DemoProduct["status"] } : p));
+                        logAction("เปลี่ยนสถานะสินค้า", `${product.name} · ${product.status === "เปิดขาย" ? "ไม่มีสินค้า" : "มีสินค้า"}`);
+                      }} className={`inline-flex min-h-8 items-center gap-2 rounded-full border px-2.5 text-xs font-bold ${product.status === "เปิดขาย" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-slate-100 text-slate-600"}`}>
+                        <span className={`relative h-4 w-7 rounded-full ${product.status === "เปิดขาย" ? "bg-emerald-500" : "bg-slate-400"}`}><i className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all ${product.status === "เปิดขาย" ? "left-3.5" : "left-0.5"}`} /></span>
+                        {product.status === "เปิดขาย" ? "มีสินค้า" : "ไม่มีสินค้า"}
+                      </button>
                     </td>
                     <td className={td}>
                       <div className="flex flex-wrap gap-2">
@@ -963,26 +1059,6 @@ export default function WebBAdminDemo() {
                           }}
                         >
                           แก้ราคา
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setProducts((current) =>
-                              current.map((p) =>
-                                p.id === product.id
-                                  ? {
-                                      ...p,
-                                      status: (p.status === "เปิดขาย"
-                                        ? "ปิดขาย"
-                                        : "เปิดขาย") as DemoProduct["status"],
-                                    }
-                                  : p,
-                              ),
-                            );
-                            logAction("เปลี่ยนสถานะขาย", product.name);
-                          }}
-                        >
-                          {product.status === "เปิดขาย" ? "ปิดขาย" : "เปิดขาย"}
                         </Button>
                         <Button
                           variant="outline"
@@ -1050,9 +1126,13 @@ export default function WebBAdminDemo() {
                     <p className="mt-1 text-xs text-slate-500">
                       {product.parts} · 60 ข้อ · 180 นาที
                     </p>
+                    {hasActiveAttempt(product.name) && <p className="mt-1 text-xs font-bold text-rose-700">มีผู้เข้าสอบอยู่ · ล็อกการแก้ไขข้อมูล</p>}
                   </div>
                   <div className="flex gap-2">
                     <Badge tone="blue">Draft</Badge>
+                    <Button variant="outline" disabled={hasActiveAttempt(product.name)} onClick={() => logAction("เปิดแก้ไขข้อมูลข้อสอบ", product.version)}>
+                      {hasActiveAttempt(product.name) ? "ล็อกแก้ไข" : "แก้ไขข้อมูลสอบ"}
+                    </Button>
                     <Button
                       variant="outline"
                       onClick={() =>
@@ -1061,7 +1141,7 @@ export default function WebBAdminDemo() {
                     >
                       ดู Preview
                     </Button>
-                    <Button
+                    <Button disabled={hasActiveAttempt(product.name)}
                       onClick={() =>
                         logAction("ส่งตรวจชุดข้อสอบ", product.version)
                       }
@@ -1114,6 +1194,7 @@ export default function WebBAdminDemo() {
                       <td className={td}>
                         <select
                           value={answer}
+                          disabled={hasActiveAttempt("TGAT1") || hasActiveAttempt("Full TGAT")}
                           onChange={(e) =>
                             setAnswerKey((current) =>
                               current.map((value, index) =>
@@ -1142,7 +1223,7 @@ export default function WebBAdminDemo() {
                 </tbody>
               </table>
             </div>
-            <Button onClick={() => logAction("บันทึกเฉลย Demo", "TGAT1 ชุด A")}>
+            <Button disabled={hasActiveAttempt("TGAT1") || hasActiveAttempt("Full TGAT")} onClick={() => logAction("บันทึกเฉลย Demo", "TGAT1 ชุด A")}>
               บันทึกเฉลย
             </Button>
           </Panel>
@@ -1655,16 +1736,7 @@ export default function WebBAdminDemo() {
             </div>
           </div>
           <div className="mb-4 flex flex-wrap items-end gap-4 rounded-xl bg-slate-50 p-4">
-            <label className="grid gap-1 text-xs font-semibold text-slate-500">
-              ผู้สอบขั้นต่ำก่อนเปิด Ranking
-              <input
-                type="number"
-                min="1"
-                value={minimumRank}
-                onChange={(e) => setMinimumRank(Number(e.target.value))}
-                className="w-36 rounded-lg border px-3 py-2 text-sm text-slate-800"
-              />
-            </label>
+            <div className="grid gap-1 text-xs font-semibold text-slate-500">เกณฑ์เปิดตัวกรอง Ranking<strong className="text-base text-slate-800">มากกว่า {minimumRank} คน</strong></div>
             <Badge tone={publishedResults ? "green" : "amber"}>
               {publishedResults ? "เผยแพร่แล้ว" : "พักการเผยแพร่"}
             </Badge>
@@ -2098,6 +2170,23 @@ export default function WebBAdminDemo() {
             </div>
           </Panel>
         </div>
+        <Panel>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h3 className="font-bold">ตั้งค่า Social และช่องทางช่วยเหลือ</h3><p className="mt-1 text-xs text-slate-500">บันทึกที่จุดเดียว แล้วแสดงทั้งปุ่ม Social ลอยหน้าแรกและหน้าต่างช่วยเหลือทั่ว WEB-B</p></div>
+            <Button onClick={() => { writeSocialSettings(socialSettings); logAction("บันทึกช่องทาง Social กลาง", "WEB-B"); }}>บันทึกช่องทาง</Button>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {([
+              ["lineId", "LINE ID", "@บัญชี LINE"],
+              ["lineUrl", "ลิงก์ LINE", "https://line.me/..."],
+              ["facebookUrl", "Facebook", "https://facebook.com/..."],
+              ["instagramUrl", "Instagram", "https://instagram.com/..."],
+              ["tiktokUrl", "TikTok", "https://tiktok.com/@..."],
+              ["youtubeUrl", "YouTube", "https://youtube.com/@..."],
+              ["supportEmail", "อีเมลช่วยเหลือ", "support@example.com"],
+            ] as [keyof SocialSettings, string, string][]).map(([key, label, placeholder]) => <label className="grid gap-1 text-xs font-semibold text-slate-600" key={key}>{label}<input value={socialSettings[key]} onChange={(event) => setSocialSettings((current) => ({ ...current, [key]: event.target.value }))} placeholder={placeholder} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal text-slate-900 outline-none focus:border-amber-400" /></label>)}
+          </div>
+        </Panel>
       </Section>
 
       <Panel className="flex flex-wrap items-center justify-between gap-3 bg-slate-50">

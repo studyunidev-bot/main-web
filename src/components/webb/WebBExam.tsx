@@ -11,6 +11,7 @@ import {
   LuSearch,
 } from "react-icons/lu";
 import type { ExamProduct } from "./data";
+import { addDemoEmail, currentPurchaseForProduct, examAnswersStorageKey, examResultStorageKey, readDemoAccount, recordDemoRankingResult, setPurchaseExamStatus, updateAdminAttempt } from "./demo-store";
 
 const TOTAL_QUESTIONS = 60;
 const initialAnswers: Record<number, string> = { 0: "0", 1: "1" };
@@ -214,8 +215,8 @@ export default function WebBExam({
   product: ExamProduct;
   examType?: "purchased" | "trial";
 }) {
-  const answerStorageKey = `webb-demo-answers:${product.id}:${examType}`;
-  const resultKey = `webb-demo-result:${product.id}:${examType}`;
+  const answerStorageKey = examAnswersStorageKey(product.id, examType);
+  const resultKey = examResultStorageKey(product.id, examType);
   const examDurationSeconds =
     product.id === "tgat-full" && examType === "purchased" ? 10 : 180 * 60;
   // const examDurationSeconds = 10;
@@ -233,6 +234,11 @@ export default function WebBExam({
   useEffect(() => {
     const redirectIfCompleted = () => {
       try {
+        if (examType === "purchased" && !currentPurchaseForProduct(product.id)) {
+          setAttemptStatus("submitted");
+          window.location.replace("/webb/products");
+          return true;
+        }
         const saved = localStorage.getItem(resultKey);
         const status = saved
           ? (JSON.parse(saved) as { status?: string }).status
@@ -244,6 +250,18 @@ export default function WebBExam({
           );
           return true;
         }
+        if (status === "interrupted") {
+          setAttemptStatus("submitted");
+          window.location.replace(`/webb/error?product=${product.id}&type=${examType}&reason=interrupted`);
+          return true;
+        }
+        if (status === "authorized") {
+          localStorage.removeItem(resultKey);
+          localStorage.removeItem(answerStorageKey);
+          localStorage.setItem(resultKey, JSON.stringify({ status: "in-progress", startedAt: Date.now() }));
+          setPurchaseExamStatus(product.id, "in-progress", true, currentPurchaseForProduct(product.id)?.ref);
+          updateAdminAttempt(product.id, "กำลังสอบ");
+        }
       } catch {
         /* Continue the demo exam if browser storage is unavailable. */
       }
@@ -254,7 +272,24 @@ export default function WebBExam({
     const onPageShow = () => redirectIfCompleted();
     window.addEventListener("pageshow", onPageShow);
     return () => window.removeEventListener("pageshow", onPageShow);
-  }, [resultKey, product.id, examType]);
+  }, [resultKey, answerStorageKey, product.id, examType]);
+
+  useEffect(() => {
+    if (attemptStatus !== "ready" || examType !== "purchased") return;
+    const markInterrupted = () => {
+      try {
+        const saved = localStorage.getItem(resultKey);
+        const status = saved ? (JSON.parse(saved) as { status?: string }).status : undefined;
+        if (status === "submitted" || status === "timeout" || status === "authorized") return;
+        localStorage.setItem(resultKey, JSON.stringify({ status: "interrupted", interruptedAt: Date.now() }));
+        localStorage.removeItem(answerStorageKey);
+        setPurchaseExamStatus(product.id, "interrupted", false, currentPurchaseForProduct(product.id)?.ref);
+        updateAdminAttempt(product.id, "ผิดปกติ");
+      } catch { /* Keep the interruption visible when storage is available. */ }
+    };
+    window.addEventListener("pagehide", markInterrupted);
+    return () => window.removeEventListener("pagehide", markInterrupted);
+  }, [attemptStatus, examType, resultKey, answerStorageKey, product.id]);
 
   useEffect(() => {
     try {
@@ -302,6 +337,13 @@ export default function WebBExam({
       resultKey,
       JSON.stringify({ answers, answeredCount, status: "timeout" }),
     );
+    if (examType === "purchased") {
+      setPurchaseExamStatus(product.id, "submitted", false, currentPurchaseForProduct(product.id)?.ref);
+      updateAdminAttempt(product.id, "ส่งแล้ว", `${answeredCount}/${TOTAL_QUESTIONS}`);
+      recordDemoRankingResult(product.id, 60.7);
+      const account = readDemoAccount();
+      if (account?.email) addDemoEmail(account.email, `หมดเวลาสอบ ${product.name}`, `ระบบส่งคำตอบล่าสุดของคุณแล้ว · ดูผลสอบและวิดีโอเฉลยได้ในบัญชีผู้เรียน (อีเมลนี้เป็นการจำลอง)`);
+    }
     setAttemptStatus("timeout");
     window.location.replace(
       `/webb/error?product=${product.id}&type=${examType}`,
@@ -333,6 +375,13 @@ export default function WebBExam({
       resultKey,
       JSON.stringify({ answers, answeredCount, status: "submitted" }),
     );
+    if (examType === "purchased") {
+      setPurchaseExamStatus(product.id, "submitted", false, currentPurchaseForProduct(product.id)?.ref);
+      updateAdminAttempt(product.id, "ส่งแล้ว", `${answeredCount}/${TOTAL_QUESTIONS}`);
+      recordDemoRankingResult(product.id, 60.7);
+      const account = readDemoAccount();
+      if (account?.email) addDemoEmail(account.email, `ส่งข้อสอบ ${product.name} สำเร็จ`, `ระบบบันทึกคำตอบ ${answeredCount} ข้อแล้ว · ดูผลสอบและวิดีโอเฉลยได้ในบัญชีผู้เรียน (อีเมลนี้เป็นการจำลอง)`);
+    }
     setAttemptStatus("submitted");
     window.location.replace(
       `/webb/success?product=${product.id}&type=${examType}`,
@@ -359,7 +408,7 @@ export default function WebBExam({
               {product.id === "tgat-full" ? "TGAT" : product.name}{" "}
               ความถนัดทั่วไป · ชุด A
             </strong>
-            <span>สมชาย ศิริกุล</span>
+            <span>{readDemoAccount() ? `${readDemoAccount()?.firstName} ${readDemoAccount()?.lastName}` : "สมชาย ศิริกุล"}</span>
           </div>
         </div>
         <div className="wb-answer-clock" aria-label="เวลาที่เหลือ">

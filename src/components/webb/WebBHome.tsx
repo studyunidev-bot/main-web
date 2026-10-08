@@ -1,6 +1,10 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { PublicShell } from "./PublicShell";
 import { WebBImage } from "./WebBImage";
+import { DEMO_AUTH_KEY } from "./demo-store";
 
 const benefits = [
   {
@@ -235,6 +239,29 @@ function MatrixPreview() {
 }
 
 export default function WebBHome() {
+  const [studentLoggedIn, setStudentLoggedIn] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    const syncLogin = () => {
+      setStudentLoggedIn(localStorage.getItem(DEMO_AUTH_KEY) === "true");
+      setAuthChecked(true);
+    };
+    syncLogin();
+    window.addEventListener("storage", syncLogin);
+    window.addEventListener("webb-demo-auth-updated", syncLogin);
+    window.addEventListener("pageshow", syncLogin);
+    window.addEventListener("popstate", syncLogin);
+    return () => {
+      window.removeEventListener("storage", syncLogin);
+      window.removeEventListener("webb-demo-auth-updated", syncLogin);
+      window.removeEventListener("pageshow", syncLogin);
+      window.removeEventListener("popstate", syncLogin);
+    };
+  }, []);
+
+  if (!authChecked) return null;
+
   return (
     <PublicShell>
       <main className="wb-home">
@@ -254,18 +281,18 @@ export default function WebBHome() {
               ออกข้อสอบโดยติวเตอร์ผู้เชี่ยวชาญ
             </p>
             <div className="wb-hero-actions">
-              <Link
-                className="wb-pill-button wb-pill-outline"
-                href="/webb/login"
-              >
-                เข้าห้องสอบ
-              </Link>
-              <Link
-                className="wb-pill-button wb-pill-yellow"
-                href="/webb/register"
-              >
-                สมัครสอบ
-              </Link>
+              {studentLoggedIn ? (
+                null
+              ) : (
+                <>
+                  <Link className="wb-pill-button wb-pill-outline" href="/webb/login">
+                    เข้าสอบ
+                  </Link>
+                  <Link className="wb-pill-button wb-pill-yellow" href="/webb/register">
+                    สมัคร
+                  </Link>
+                </>
+              )}
             </div>
           </div>
           <figure className="wb-hero-photo">

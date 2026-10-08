@@ -3,28 +3,20 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PublicShell } from "./PublicShell";
-import { formatBaht, getProduct, WEBB_DEMO_LABEL } from "./data";
-
-const demoOrder = {
-  ref: "DO-2570-0001",
-  product: "tgat-full",
-  amount: 275,
-  payment: "QR Payment",
-  date: "5 ตุลาคม 2569",
-  status: "ชำระเงินสำเร็จ (Demo)",
-};
-
-type Order = typeof demoOrder;
+import WebBMyPurchases from "./WebBMyPurchases";
+import { getProduct } from "./data";
+import { currentPurchaseForProduct, examAnswersStorageKey, examResultStorageKey, setPurchaseExamStatus, updateAdminAttempt } from "./demo-store";
 type FlowMode = "status" | "rules" | "success" | "error";
 type ExamType = "purchased" | "trial";
 
 function ExamStateScreen({
   success,
   productId,
+  interrupted = false,
 }: {
   success: boolean;
   productId: string;
+  interrupted?: boolean;
 }) {
   return (
     <main
@@ -36,13 +28,15 @@ function ExamStateScreen({
           <span>{success ? "🎉" : "⏰"}</span>
         </div>
         <h1>
-          {success ? "ส่งคำตอบสำเร็จ" : "หมดเวลาทำข้อสอบ"}
+          {success ? "ส่งคำตอบสำเร็จ" : interrupted ? "การเชื่อมต่อขัดข้อง" : "หมดเวลาทำข้อสอบ"}
           <span aria-hidden="true">{success ? "✧" : "〃"}</span>
         </h1>
         <p>
           {success
             ? "ระบบได้บันทึกคำตอบของคุณเรียบร้อยแล้ว สามารถดูผลสอบและเฉลยได้ในห้องสอบ"
-            : "การสอบเสร็จสิ้น ระบบได้บันทึกคำตอบของคุณเรียบร้อยแล้ว สามารถดูผลสอบและเฉลยได้ในห้องสอบ"}
+            : interrupted
+              ? "ระบบล้างคำตอบของรอบที่หลุดแล้ว เพื่อให้เริ่มรอบใหม่ได้อย่างถูกต้อง กรุณาติดต่อผู้ดูแลเพื่อขออนุมัติสิทธิ์สอบใหม่"
+              : "การสอบเสร็จสิ้น ระบบได้บันทึกคำตอบของคุณเรียบร้อยแล้ว สามารถดูผลสอบและเฉลยได้ในห้องสอบ"}
         </p>
         <dl className="wb-exam-state-summary">
           <div>
@@ -60,16 +54,16 @@ function ExamStateScreen({
         </dl>
         <div className="wb-exam-state-actions">
           <Link
-            href="/webb/student?view=profile"
+            href={interrupted ? "/webb/status" : "/webb/student?view=profile"}
             className="wb-exam-state-back"
           >
-            กลับหน้าโปรไฟล์
+            {interrupted ? "กลับรายการที่ซื้อแล้ว" : "กลับหน้าโปรไฟล์"}
           </Link>
           <Link
-            href={`/webb/results?product=${productId}`}
+            href={interrupted ? "/webb" : `/webb/results?product=${productId}`}
             className="wb-exam-state-results"
           >
-            ดูผลสอบ 
+            {interrupted ? "ติดต่อทีมช่วยเหลือ" : "ดูผลสอบ"}
           </Link>
         </div>
       </section>
@@ -89,9 +83,22 @@ function RulesScreen({
   const product = getProduct(productId);
   const router = useRouter();
   const [warningOpen, setWarningOpen] = useState(false);
+  const [hasEntitlement, setHasEntitlement] = useState(examType === "trial");
+  const [attemptState, setAttemptState] = useState("");
   const examHref = `/webb/exam?product=${product.id}&type=${examType}`;
   const backHref =
     returnTo === "home" ? "/webb" : `/webb/student?view=${returnTo}`;
+  const resultKey = examResultStorageKey(product.id, examType);
+  const answerKey = examAnswersStorageKey(product.id, examType);
+
+  useEffect(() => {
+    if (examType === "trial") return;
+    setHasEntitlement(!!currentPurchaseForProduct(product.id));
+    try {
+      const saved = localStorage.getItem(resultKey);
+      setAttemptState(saved ? (JSON.parse(saved) as { status?: string }).status || "" : "");
+    } catch { setAttemptState(""); }
+  }, [examType, product.id, resultKey]);
 
   useEffect(() => {
     if (!warningOpen) return;
@@ -182,9 +189,8 @@ function RulesScreen({
             <li>
               <span>4</span>
               <p>
-                ระหว่างเวลาสอบ หากเผลอปิดหน้าต่างไป เวลาจะยังเดินต่อไป
-                สามารถกลับเข้ามาทำต่อได้ คำตอบที่เลือกไว้จะยังคงอยู่
-                ระบบจะบันทึกชั่วคราวเป็นระยะ
+                หากเกิดข้อผิดพลาดหรือหลุดจากห้องสอบ ระบบจะล้างคำตอบของรอบนั้น
+                และต้องให้ผู้ดูแลอนุมัติเปิดรอบใหม่ก่อนจึงจะเริ่มสอบได้
               </p>
             </li>
             <li>
@@ -204,11 +210,15 @@ function RulesScreen({
           <button
             className="wb-rules-start"
             type="button"
+            disabled={!hasEntitlement || ["submitted", "timeout", "interrupted", "in-progress"].includes(attemptState)}
             onClick={() => setWarningOpen(true)}
           >
-            เริ่มทำข้อสอบ 
+            {!hasEntitlement ? "ไม่มีสิทธิ์สอบชุดนี้" : attemptState === "interrupted" ? "รอผู้ดูแลอนุมัติสอบใหม่" : ["submitted", "timeout"].includes(attemptState) ? "สอบชุดนี้แล้ว" : attemptState === "in-progress" ? "มีรอบสอบที่กำลังดำเนินการ" : "เริ่มทำข้อสอบ"}
           </button>
         </div>
+        {!hasEntitlement && examType === "purchased" && <p className="wb-exam-access-note">ยังไม่มีสิทธิ์ในชุดนี้ <Link href="/webb/products">เลือกซื้อข้อสอบ</Link></p>}
+        {attemptState === "interrupted" && <p className="wb-exam-access-note">ระบบรีเซ็ตรอบสอบที่หลุดแล้ว กรุณาติดต่อผู้ดูแลเพื่อขอเปิดสิทธิ์สอบใหม่</p>}
+        {["submitted", "timeout"].includes(attemptState) && <p className="wb-exam-access-note">ส่งข้อสอบแล้ว · กลับมาสอบซ้ำไม่ได้ แต่ดูวิดีโอเฉลยได้ตลอด</p>}
         <footer className="wb-rules-copyright">
           © 2569 บริษัท เรียนต่อมหาลัย จำกัด
         </footer>
@@ -280,9 +290,7 @@ function RulesScreen({
                 type="button"
                 onClick={() => {
                   try {
-                    const saved = localStorage.getItem(
-                      `webb-demo-result:${product.id}:${examType}`,
-                    );
+                    const saved = localStorage.getItem(resultKey);
                     const status = saved
                       ? (JSON.parse(saved) as { status?: string }).status
                       : undefined;
@@ -291,6 +299,15 @@ function RulesScreen({
                         `/webb/${status === "submitted" ? "success" : "error"}?product=${product.id}&type=${examType}`,
                       );
                       return;
+                    }
+                    if (status === "interrupted" || status === "in-progress") return;
+                    if (status === "authorized") {
+                      localStorage.removeItem(answerKey);
+                    }
+                    localStorage.setItem(resultKey, JSON.stringify({ status: "in-progress", startedAt: Date.now() }));
+                    if (examType === "purchased") {
+                      setPurchaseExamStatus(product.id, "in-progress", true, currentPurchaseForProduct(product.id)?.ref);
+                      updateAdminAttempt(product.id, "กำลังสอบ");
                     }
                   } catch {
                     /* Continue to the exam if browser storage is unavailable. */
@@ -313,64 +330,16 @@ export default function WebBFlow({
   productId = "tgat-full",
   examType = "purchased",
   returnTo = "overview",
+  interrupted = false,
 }: {
   mode: FlowMode;
   productId?: string;
   examType?: ExamType;
   returnTo?: "home" | "overview" | "exam";
+  interrupted?: boolean;
 }) {
   const product = getProduct(productId);
-  const [order, setOrder] = useState<Order>(demoOrder);
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("webb-demo-order");
-      if (saved) setOrder(JSON.parse(saved));
-    } catch {
-      /* Demo order details are optional. */
-    }
-  }, []);
-
-  if (mode === "status") {
-    const orderedProduct = getProduct(order.product);
-    return (
-      <PublicShell>
-        <main className="webb-inner-page">
-          <div className="webb-container">
-            <header className="webb-page-head">
-              <div>
-                <span className="webb-kicker">STUDY UNITH · TGAT</span>
-                <h1>รายการของฉัน</h1>
-                <p>ตรวจสอบคำสั่งซื้อและสิทธิ์สอบตัวอย่าง</p>
-              </div>
-              <Link href="/webb">กลับหน้าแรก</Link>
-            </header>
-            <section className="webb-card">
-              <h2>คำสั่งซื้อของฉัน</h2>
-              <p>{WEBB_DEMO_LABEL}</p>
-              <div className="webb-order-row">
-                <span className="webb-order-icon">✓</span>
-                <div>
-                  <b>{orderedProduct.name}</b>
-                  <span>
-                    เลขคำสั่งซื้อ {order.ref} · {order.date}
-                  </span>
-                  <small>{order.payment}</small>
-                </div>
-                <strong>{formatBaht(order.amount)}</strong>
-                <em>{order.status}</em>
-              </div>
-              <Link
-                className="webb-button webb-button-primary"
-                href="/webb/student"
-              >
-                เปิดสิทธิ์สอบ
-              </Link>
-            </section>
-          </div>
-        </main>
-      </PublicShell>
-    );
-  }
+  if (mode === "status") return <WebBMyPurchases />;
 
   if (mode === "rules")
     return (
@@ -382,6 +351,6 @@ export default function WebBFlow({
     );
 
   return (
-    <ExamStateScreen success={mode === "success"} productId={product.id} />
+    <ExamStateScreen success={mode === "success"} productId={product.id} interrupted={interrupted} />
   );
 }

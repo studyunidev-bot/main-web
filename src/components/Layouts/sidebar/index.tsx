@@ -129,6 +129,13 @@ export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
           items: [],
         },
         {
+          title: "อนุมัติสอบใหม่",
+          icon: webBDemoIcon,
+          url: "/webb/admin/approvals",
+          roles: ["DEMO"],
+          items: [],
+        },
+        {
           title: "ประวัติการเข้าสอบ",
           icon: webBDemoIcon,
           url: "/webb/admin/dashboard#attempts",

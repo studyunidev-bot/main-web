@@ -3,10 +3,14 @@
 import Link from "next/link";
 import Image from "next/image";
 import {
+  LuArrowLeft,
   LuArrowRight,
+  LuChevronDown,
   LuChevronRight,
+  LuChevronUp,
   LuHeadset,
   LuLogOut,
+  LuX,
 } from "react-icons/lu";
 import { useEffect, useState, type FormEvent } from "react";
 import { PublicFooter, WebBBrand } from "./PublicShell";
@@ -16,12 +20,15 @@ import { DEMO_ACCOUNT_KEY, readDemoAccount, readSocialSettings, safeWrite } from
 
 type StudentMode =
   | "student"
+  | "overview"
   | "profile"
+  | "personal"
   | "solutions"
   | "results"
   | "ranking"
   | "exam"
-  | "detail";
+  | "detail"
+  | "subresults";
 type StudentView =
   | "overview"
   | "exam"
@@ -38,7 +45,7 @@ const views: { id: StudentView; label: string }[] = [
   { id: "exam", label: "ห้องสอบ" },
   { id: "results", label: "ผลสอบ" },
   { id: "solutions", label: "เฉลย" },
-  { id: "profile", label: "โปรไฟล์ของฉัน" },
+  { id: "personal", label: "โปรไฟล์ของฉัน" },
 ];
 
 const homepageLinks = [
@@ -84,6 +91,8 @@ type ExamSkill = {
   score: string;
   correct: number;
   wrong: number;
+  correctText?: string;
+  wrongText?: string;
 };
 
 type ExamPartReport = {
@@ -109,10 +118,10 @@ const examPartReports: Record<string, ExamPartReport> = {
     correct: 36,
     wrong: 14,
     total: 60,
-    color: "#0878bd",
+    color: "#006ab5",
     skills: [
       { name: "Speaking Skill", total: 30, start: 1, score: "31.7/50", correct: 19, wrong: 11 },
-      { name: "Reading Skill", total: 30, start: 31, score: "29/50", correct: 17, wrong: 13 },
+      { name: "Reading Skill", total: 30, start: 1, score: "29/50", correct: 17, wrong: 13 },
     ],
   },
   tgat2: {
@@ -141,12 +150,12 @@ const examPartReports: Record<string, ExamPartReport> = {
     correct: 41,
     wrong: 19,
     total: 60,
-    color: "#416cff",
+    color: "#3b66ff",
     skills: [
-      { name: "การสร้างคุณค่าและนวัตกรรม", total: 15, start: 1, score: "15.42/25", correct: 9, wrong: 6 },
-      { name: "การแก้ไขปัญหาที่ซับซ้อน", total: 15, start: 16, score: "7.50/25", correct: 7, wrong: 8 },
-      { name: "การบริหารจัดการอารมณ์", total: 15, start: 31, score: "15/25", correct: 9, wrong: 6 },
-      { name: "การเป็นพลเมืองที่มีส่วนร่วมของสังคม", total: 15, start: 46, score: "16.67/25", correct: 10, wrong: 5 },
+      { name: "การสร้างคุณค่าและนวัตกรรม", total: 15, start: 1, score: "15.42/25", correct: 9.25, wrong: 9.58, correctText: "9.25", wrongText: "9.58" },
+      { name: "การแก้ไขปัญหาที่ซับซ้อน", total: 15, start: 16, score: "7.50/25", correct: 4.5, wrong: 10.5, correctText: "4.5", wrongText: "10.5" },
+      { name: "การบริหารจัดการอารมณ์", total: 15, start: 31, score: "15/25", correct: 9, wrong: 6, correctText: "9", wrongText: "6" },
+      { name: "การเป็นพลเมืองที่มีส่วนร่วมของสังคม", total: 15, start: 46, score: "16.67/25", correct: 10, wrong: 5, correctText: "10", wrongText: "5" },
     ],
   },
 };
@@ -172,10 +181,11 @@ const defaultStudent: StudentInfo = {
 };
 
 function modeToView(mode: StudentMode): StudentView {
-  if (mode === "student") return "overview";
+  if (mode === "student" || mode === "overview") return "overview";
   if (mode === "exam") return "exam";
   if (mode === "ranking") return "results";
-  if (mode === "profile") return "personal";
+  if (mode === "profile" || mode === "personal") return "personal";
+  if (mode === "subresults") return "subresults";
   return mode;
 }
 
@@ -231,7 +241,7 @@ function StudentHeader({
     <>
       <header className="wb-header">
         <div className="wb-container wb-header-inner">
-          <WebBBrand />
+          <WebBBrand onClick={() => onSelect("overview")} />
           <nav className="wb-desktop-nav" aria-label="เมนูหลัก">
             {homepageLinks.map((link) => (
               <Link key={link.href} href={link.href}>
@@ -240,7 +250,7 @@ function StudentHeader({
             ))}
           </nav>
           <div className="wb-header-actions wb-dashboard-desktop-user">
-            <Link className="wb-pill-button wb-pill-yellow" href="/webb/products">ซื้อข้อสอบเพิ่ม</Link>
+            <Link className="wb-pill-button wb-pill-yellow" href="/webb/products">สมัครสอบ</Link>
             <button
               type="button"
               onClick={onMenu}
@@ -525,16 +535,30 @@ function StudentOverview({
           </article>
         ))}
       </section>
-      <section className="wb-dashboard-promo">
-        <span className="wb-dashboard-promo-icon" aria-hidden="true">
-          🛍️
-        </span>
-        <div className="wb-dashboard-promo-copy">
-          <h2>แนะนำชุดข้อสอบเพิ่มเติมบน Shopee</h2>
-          <p>รวมแนวข้อสอบอัปเดตล่าสุด พร้อมเฉลยละเอียด สั่งซื้อได้ที่ร้านค้า</p>
+      <section className="wb-dashboard-promo flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 sm:gap-4 rounded-[18px] px-4 py-3.5 sm:px-6 sm:py-4 bg-gradient-to-r from-[#f04c23] via-[#f4643b] to-[#ff7b54] text-white shadow-[0_4px_20px_rgba(240,76,35,0.18)]">
+        <div className="flex items-center gap-3 sm:gap-3.5">
+          <span
+            className="wb-dashboard-promo-icon flex-none grid place-items-center w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white shadow-sm text-xl sm:text-2xl"
+            aria-hidden="true"
+          >
+            🛍️
+          </span>
+          <div className="wb-dashboard-promo-copy">
+            <h2 className="text-[15px] sm:text-[17px] font-bold text-white leading-snug">
+              แนะนำชุดข้อสอบเพิ่มเติม บน Shopee
+            </h2>
+            <p className="mt-0.5 text-[12px] sm:text-[13px] text-white/90 leading-tight">
+              รวมแนวข้อสอบอัปเดตล่าสุด พร้อมเฉลยละเอียด สั่งซื้อได้ที่ร้านค้า
+            </p>
+          </div>
         </div>
-        <a href="https://shopee.co.th/" target="_blank" rel="noreferrer">
-          ซื้อเลยที่ Shopee <LuArrowRight aria-hidden="true" />
+        <a
+          href="https://shopee.co.th/"
+          target="_blank"
+          rel="noreferrer"
+          className="self-stretch sm:self-auto flex-none inline-flex items-center justify-center gap-1.5 px-5 py-2 sm:px-6 sm:py-2.5 rounded-full bg-white text-[#f04c23] text-[13px] sm:text-sm font-bold shadow-sm hover:bg-white/95 hover:shadow transition-all whitespace-nowrap no-underline"
+        >
+          ซื้อเลยที่ Shopee <LuArrowRight className="w-4 h-4" aria-hidden="true" />
         </a>
       </section>
     </div>
@@ -542,64 +566,119 @@ function StudentOverview({
 }
 
 function ExamRoom({ productId }: { productId: string }) {
-  const product = getProduct(productId);
+  const [rulesOpen, setRulesOpen] = useState(true);
+  const examItems = [
+    {
+      set: "A",
+      title: "TGAT ความถนัดทั่วไป",
+      subtext:
+        "TGAT1 การสื่อสารภาษาอังกฤษ, TGAT2 การคิดอย่างมีเหตุผล, TGAT3 สมรรถนะการทำงาน",
+      duration: "180 นาที",
+      questions: "60 ข้อ",
+      status: "ยังไม่ได้สอบ",
+      actionLabel: "เริ่มสอบ",
+      productId: "tgat1",
+    },
+    {
+      set: "B",
+      title: "TGAT ความถนัดทั่วไป",
+      subtext: "TPAT1 ความถนัดแพทย์",
+      duration: "180 นาที",
+      questions: "60 ข้อ",
+      status: "ยังไม่ได้สอบ",
+      actionLabel: "เริ่มสอบ",
+      productId: "tpat1",
+    },
+    {
+      set: "C",
+      title: "TGAT ความถนัดทั่วไป",
+      subtext: "TPAT2 ความถนัดศิลป์",
+      duration: "180 นาที",
+      questions: "60 ข้อ",
+      status: "ยังไม่ได้สอบ",
+      actionLabel: "เริ่มสอบ",
+      productId: "tpat2",
+    },
+  ];
+
   return (
     <div className="wb-dashboard-view">
-      <section className="wb-dashboard-card wb-exam-rules">
-        <div>
-          <h2>⚠ เงื่อนไขสำคัญก่อนเข้าสอบ</h2>
-          <ol>
-            <li>เวลาจะเริ่มนับถอยหลังทันทีที่กด “เริ่มทำข้อสอบ”</li>
-            <li>ระบบบันทึกคำตอบอัตโนมัติ (Auto-save) ทุกครั้งที่เลือกคำตอบ</li>
-            <li>
-              หากหลุดออกจากระบบ สามารถเข้ามาทำต่อได้ แต่เวลายังคงเดินต่อเนื่อง
-            </li>
-            <li>
-              ระบบจะแจ้งเตือนเมื่อเหลือ 5 นาที และส่งคำตอบอัตโนมัติเมื่อหมดเวลา
-            </li>
-          </ol>
-        </div>
-        <div className="wb-exam-trial">
-          <h3>ยังไม่พร้อม? ลองก่อน!</h3>
-          <p>ทดลองหน้าจอทำข้อสอบและระบบจับเวลา ฟรี</p>
-          <Link href="/webb/rules?product=tgat1&type=trial&back=exam">
-            ทดลองระบบสอบ 
-          </Link>
-        </div>
-      </section>
+      {rulesOpen && (
+        <section className="wb-dashboard-card wb-exam-rules">
+          <button
+            type="button"
+            className="wb-exam-rules-close"
+            aria-label="ปิดกล่องเงื่อนไขสำคัญ"
+            onClick={() => setRulesOpen(false)}
+          >
+            <LuX aria-hidden="true" />
+          </button>
+          <div className="wb-exam-rules-content">
+            <h2>⚠️ เงื่อนไขสำคัญก่อนเข้าสอบ</h2>
+            <ol>
+              <li>
+                <span className="wb-exam-rule-num">1</span>
+                <span>เวลาจะเริ่มนับถอยหลังทันทีที่กด “เริ่มทำข้อสอบ”</span>
+              </li>
+              <li>
+                <span className="wb-exam-rule-num">2</span>
+                <span>ระบบบันทึกคำตอบอัตโนมัติ (Auto-save) ทุกครั้งที่เลือกคำตอบ</span>
+              </li>
+              <li>
+                <span className="wb-exam-rule-num">3</span>
+                <span>หากหลุดออกจากระบบ สามารถเข้ามาทำต่อได้ แต่เวลายังคงเดินต่อเนื่อง</span>
+              </li>
+              <li>
+                <span className="wb-exam-rule-num">4</span>
+                <span>ระบบจะแจ้งเตือนเมื่อเหลือ 5 นาที และส่งคำตอบอัตโนมัติเมื่อหมดเวลา</span>
+              </li>
+            </ol>
+          </div>
+          <div className="wb-exam-trial">
+            <h3>ยังไม่พร้อม? ลองก่อนได้!</h3>
+            <p>ทดลองหน้าจอทำข้อสอบและระบบจับเวลา ฟรี</p>
+            <Link href="/webb/rules?product=tgat1&type=trial&back=exam">
+              <span>ทดลองระบบสอบ</span>
+              <LuArrowRight aria-hidden="true" />
+            </Link>
+          </div>
+        </section>
+      )}
       <section className="wb-dashboard-card wb-exam-table">
-        <h2>▤ รายการสอบของคุณ</h2>
+        <h2>📋 รายการสอบของคุณ</h2>
         <div className="wb-exam-table-head">
           <span>วิชาที่สอบ</span>
-          <span>ชุดข้อสอบ</span>
-          <span>เวลาสอบ</span>
-          <span>จำนวนข้อ</span>
+          <span className="wb-col-center">ชุดข้อสอบ</span>
+          <span className="wb-col-center">เวลาสอบ</span>
+          <span className="wb-col-center">จำนวนข้อ</span>
           <span>สถานะ</span>
-          <span />
         </div>
-        {["A", "B", "C"].map((set, index) => (
-          <article key={set}>
-            <div>
-              <b>{product.name} ความถนัดทั่วไป</b>
-              <small>
-                {
-                  [
-                    "TGAT1 การสื่อสารภาษาอังกฤษ",
-                    "TGAT2 การคิดอย่างมีเหตุผล",
-                    "TGAT3 สมรรถนะการทำงาน",
-                  ][index]
-                }
-              </small>
+        {examItems.map((item) => (
+          <article key={item.set}>
+            <div className="wb-exam-subject-col">
+              <b>{item.title}</b>
+              <small>{item.subtext}</small>
             </div>
-            <span className="wb-mobile-table-label">{set}</span>
-            <span className="wb-mobile-table-label">180 นาที</span>
-            <span className="wb-mobile-table-label">60 ข้อ</span>
-            <em>ยังไม่ได้สอบ</em>
-            <Link
-              href={`/webb/rules?product=${product.id}&type=purchased&back=exam`}
-            >
-              เริ่มสอบ
-            </Link>
+            <span className="wb-mobile-table-label wb-exam-set-col wb-col-center">
+              <strong className="wb-mobile-label-tag">ชุดข้อสอบ</strong>
+              <b>{item.set}</b>
+            </span>
+            <span className="wb-mobile-table-label wb-exam-time-col wb-col-center">
+              <strong className="wb-mobile-label-tag">เวลาสอบ</strong>
+              <b>{item.duration}</b>
+            </span>
+            <span className="wb-mobile-table-label wb-exam-count-col wb-col-center">
+              <strong className="wb-mobile-label-tag">จำนวนข้อ</strong>
+              <b>{item.questions}</b>
+            </span>
+            <div className="wb-exam-status-col">
+              <em>{item.status}</em>
+              <Link
+                href={`/webb/rules?product=${item.productId}&type=purchased&back=exam`}
+              >
+                {item.actionLabel}
+              </Link>
+            </div>
           </article>
         ))}
       </section>
@@ -745,6 +824,267 @@ function ResultDetails({
   );
 }
 
+const TGAT1_SPEAKING_QUESTIONS = [
+  { no: 1, ans: "A", correct: true, score: "1.00" },
+  { no: 2, ans: "C", correct: true, score: "1.00" },
+  { no: 3, ans: "B", correct: true, score: "1.00" },
+  { no: 4, ans: "C", correct: true, score: "1.00" },
+  { no: 5, ans: "B", correct: true, score: "1.00" },
+  { no: 6, ans: "C", correct: false, score: "1.00" },
+  { no: 7, ans: "A", correct: true, score: "1.00" },
+  { no: 8, ans: "C", correct: false, score: "1.00" },
+  { no: 9, ans: "A", correct: true, score: "1.00" },
+  { no: 10, ans: "C", correct: true, score: "1.00" },
+  { no: 11, ans: "A", correct: true, score: "1.00" },
+  { no: 12, ans: "C", correct: true, score: "1.00" },
+  { no: 13, ans: "A", correct: true, score: "1.00" },
+  { no: 14, ans: "C", correct: false, score: "1.00" },
+  { no: 15, ans: "A", correct: true, score: "1.00" },
+  { no: 16, ans: "B", correct: false, score: "1.00" },
+  { no: 17, ans: "B", correct: false, score: "1.00" },
+  { no: 18, ans: "C", correct: false, score: "1.00" },
+  { no: 19, ans: "D", correct: false, score: "1.00" },
+  { no: 20, ans: "C", correct: true, score: "1.00" },
+  { no: 21, ans: "B", correct: false, score: "1.00" },
+  { no: 22, ans: "C", correct: false, score: "1.00" },
+  { no: 23, ans: "A", correct: true, score: "1.00" },
+  { no: 24, ans: "A", correct: true, score: "1.00" },
+  { no: 25, ans: "B", correct: true, score: "1.00" },
+  { no: 26, ans: "D", correct: false, score: "1.00" },
+  { no: 27, ans: "A", correct: false, score: "1.00" },
+  { no: 28, ans: "C", correct: false, score: "1.00" },
+  { no: 29, ans: "D", correct: true, score: "1.00" },
+  { no: 30, ans: "B", correct: true, score: "1.00" },
+];
+
+const TGAT1_READING_QUESTIONS = [
+  { no: 1, ans: "A", correct: true, score: "1.00" },
+  { no: 2, ans: "C", correct: true, score: "1.00" },
+  { no: 3, ans: "B", correct: true, score: "1.00" },
+  { no: 4, ans: "C", correct: true, score: "1.00" },
+  { no: 5, ans: "B", correct: true, score: "1.00" },
+  { no: 6, ans: "C", correct: false, score: "1.00" },
+  { no: 7, ans: "A", correct: true, score: "1.00" },
+  { no: 8, ans: "C", correct: false, score: "1.00" },
+  { no: 9, ans: "A", correct: true, score: "1.00" },
+  { no: 10, ans: "C", correct: false, score: "1.00" },
+  { no: 11, ans: "A", correct: false, score: "1.00" },
+  { no: 12, ans: "C", correct: false, score: "1.00" },
+  { no: 13, ans: "A", correct: true, score: "1.00" },
+  { no: 14, ans: "C", correct: false, score: "1.00" },
+  { no: 15, ans: "A", correct: true, score: "1.00" },
+  { no: 16, ans: "B", correct: false, score: "1.00" },
+  { no: 17, ans: "B", correct: false, score: "1.00" },
+  { no: 18, ans: "C", correct: false, score: "1.00" },
+  { no: 19, ans: "D", correct: false, score: "1.00" },
+  { no: 20, ans: "C", correct: true, score: "1.00" },
+  { no: 21, ans: "B", correct: false, score: "1.00" },
+  { no: 22, ans: "C", correct: false, score: "1.00" },
+  { no: 23, ans: "A", correct: true, score: "1.00" },
+  { no: 24, ans: "A", correct: false, score: "1.00" },
+  { no: 25, ans: "B", correct: true, score: "1.00" },
+  { no: 26, ans: "D", correct: false, score: "1.00" },
+  { no: 27, ans: "A", correct: false, score: "1.00" },
+  { no: 28, ans: "C", correct: false, score: "1.00" },
+  { no: 29, ans: "D", correct: false, score: "1.00" },
+  { no: 30, ans: "B", correct: false, score: "1.00" },
+];
+
+function SubResultCheckIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 18 18"
+      fill="none"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect width="18" height="18" rx="4" fill="#22c55e" />
+      <path
+        d="M5 9.2L7.6 11.8L13 6.4"
+        stroke="white"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SubResultCrossIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      className={className}
+      aria-hidden="true"
+    >
+      <path
+        d="M4 4L12 12M12 4L4 12"
+        stroke="#ef4444"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+type QuestionResult = {
+  no: string | number;
+  ans: string;
+  correct?: boolean;
+  score: string;
+  badge?: string;
+  note?: string;
+  isWrong?: boolean;
+};
+
+const TGAT3_SKILL1_QUESTIONS: QuestionResult[] = [
+  { no: 1, ans: "C", badge: "1", score: "0.00", isWrong: true },
+  { no: 2, ans: "2,3,4", badge: "1", score: "1.00", note: "หลายข้อ" },
+  { no: "3 -4", ans: "D", badge: "double-check", score: "2.00", note: "เชื่อมโยง" },
+  { no: 5, ans: "2,4", badge: "0.5", score: "0.5", note: "หลายข้อ" },
+  { no: 6, ans: "D", badge: "1", score: "0.00", isWrong: true },
+  { no: 6, ans: "1,2,4", badge: "1", score: "1.00", note: "หลายข้อ" },
+  { no: 7, ans: "1,2,4", badge: "1", score: "0.00", isWrong: true },
+  { no: "8-9", ans: "A/D", badge: "double-check", score: "2.00", note: "หลายข้อ" },
+  { no: 10, ans: "C", badge: "1", score: "0.75" },
+  { no: 11, ans: "2,3", badge: "1", score: "1.00", note: "หลายข้อ" },
+  { no: 12, ans: "2,3", badge: "0.75", score: "0.75", note: "หลายข้อ" },
+  { no: "13-14", ans: "D/C", badge: "cross", score: "0.00", note: "เชื่อมโยง", isWrong: true },
+  { no: 15, ans: "1,2", badge: "1", score: "1.00", note: "หลายข้อ" },
+];
+
+const TGAT3_SKILL2_QUESTIONS: QuestionResult[] = [
+  { no: 16, ans: "4", badge: "0.5", score: "0.50", note: "หลายข้อ" },
+  { no: 17, ans: "C", badge: "0", score: "0.00", isWrong: true },
+  { no: 18, ans: "A", badge: "0.25", score: "0.25" },
+  { no: 19, ans: "2,4", badge: "0", score: "0.00", isWrong: true },
+  { no: 20, ans: "D", badge: "1", score: "0.00", isWrong: true },
+  { no: 21, ans: "1,2,4", badge: "1", score: "1.00", note: "หลายข้อ" },
+  { no: 22, ans: "1,2,4", badge: "1", score: "0.00", isWrong: true },
+  { no: 23, ans: "A/D", badge: "double-check", score: "2.00", note: "หลายข้อ" },
+  { no: 24, ans: "C", badge: "1", score: "0.75" },
+  { no: 25, ans: "A", badge: "0", score: "0.00", isWrong: true },
+  { no: 26, ans: "B", badge: "0.25", score: "0.25" },
+  { no: 27, ans: "1,2,4", badge: "1", score: "1.00", note: "หลายข้อ" },
+  { no: 28, ans: "1", badge: "0.25", score: "0.25", note: "หลายข้อ" },
+  { no: 29, ans: "A", badge: "0.25", score: "0.25" },
+  { no: 30, ans: "C", badge: "0", score: "0.00", isWrong: true },
+];
+
+const TGAT3_SKILL3_QUESTIONS: QuestionResult[] = [
+  { no: 31, ans: "D", badge: "check", score: "1.00", correct: true },
+  { no: 32, ans: "C", badge: "check", score: "1.00", correct: true },
+  { no: 33, ans: "C", badge: "check", score: "1.00", correct: true },
+  { no: 34, ans: "D", badge: "check", score: "1.00", correct: true },
+  { no: 35, ans: "B", badge: "cross", score: "0.00", isWrong: true },
+  { no: 36, ans: "A", badge: "check", score: "1.00", correct: true },
+  { no: 37, ans: "B", badge: "cross", score: "0.00", isWrong: true },
+  { no: 38, ans: "B", badge: "cross", score: "0.00", isWrong: true },
+  { no: 39, ans: "A", badge: "cross", score: "0.00", isWrong: true },
+  { no: 40, ans: "C", badge: "check", score: "1.00", correct: true },
+  { no: 41, ans: "C", badge: "check", score: "1.00", correct: true },
+  { no: 42, ans: "D", badge: "check", score: "1.00", correct: true },
+  { no: 43, ans: "B", badge: "check", score: "1.00", correct: true },
+  { no: 44, ans: "A", badge: "cross", score: "0.00", isWrong: true },
+  { no: 45, ans: "A", badge: "cross", score: "0.00", isWrong: true },
+];
+
+const TGAT3_SKILL4_QUESTIONS: QuestionResult[] = [
+  { no: 46, ans: "D", badge: "check", score: "1.00", correct: true },
+  { no: 47, ans: "C", badge: "check", score: "1.00", correct: true },
+  { no: 48, ans: "C", badge: "check", score: "1.00", correct: true },
+  { no: 49, ans: "D", badge: "check", score: "1.00", correct: true },
+  { no: 50, ans: "B", badge: "cross", score: "0.00", isWrong: true },
+  { no: 51, ans: "A", badge: "check", score: "1.00", correct: true },
+  { no: 52, ans: "B", badge: "check", score: "1.00", correct: true },
+  { no: 53, ans: "B", badge: "cross", score: "0.00", isWrong: true },
+  { no: 54, ans: "A", badge: "cross", score: "0.00", isWrong: true },
+  { no: 55, ans: "C", badge: "check", score: "1.00", correct: true },
+  { no: 56, ans: "C", badge: "check", score: "1.00", correct: true },
+  { no: 57, ans: "D", badge: "check", score: "1.00", correct: true },
+  { no: 58, ans: "B", badge: "check", score: "1.00", correct: true },
+  { no: 59, ans: "A", badge: "cross", score: "0.00", isWrong: true },
+  { no: 60, ans: "A", badge: "cross", score: "0.00", isWrong: true },
+];
+
+function renderResultBadge(q: QuestionResult) {
+  if (q.badge === "double-check") {
+    return <span className="wb-badge-pill-doublecheck">✓✓</span>;
+  }
+  if (q.badge === "1") {
+    return <span className="wb-badge-circle wb-badge-circle-green">1</span>;
+  }
+  if (q.badge === "0.5") {
+    return <span className="wb-badge-circle wb-badge-circle-yellow">0.5</span>;
+  }
+  if (q.badge === "0.25") {
+    return <span className="wb-badge-circle wb-badge-circle-orange">0.25</span>;
+  }
+  if (q.badge === "0.75") {
+    return <span className="wb-badge-circle wb-badge-circle-green">0.75</span>;
+  }
+  if (q.badge === "0") {
+    return <span className="wb-badge-circle wb-badge-circle-red">0</span>;
+  }
+  if (q.badge === "cross" || q.isWrong) {
+    return <SubResultCrossIcon />;
+  }
+  if (q.badge === "check" || q.correct) {
+    return <SubResultCheckIcon />;
+  }
+  return q.correct ? <SubResultCheckIcon /> : <SubResultCrossIcon />;
+}
+
+function getSubResultQuestions(
+  partId: string,
+  skillName: string,
+  skillIndex: number,
+  skill: ExamSkill
+): QuestionResult[] {
+  const pid = partId.toLowerCase();
+  if (pid === "tgat1") {
+    if (skillName.toLowerCase().includes("speaking")) {
+      return TGAT1_SPEAKING_QUESTIONS;
+    }
+    if (skillName.toLowerCase().includes("reading")) {
+      return TGAT1_READING_QUESTIONS;
+    }
+  }
+
+  if (pid === "tgat3") {
+    if (skillIndex === 0 || skillName.includes("สร้างคุณค่า")) {
+      return TGAT3_SKILL1_QUESTIONS;
+    }
+    if (skillIndex === 1 || skillName.includes("แก้ไขปัญหา")) {
+      return TGAT3_SKILL2_QUESTIONS;
+    }
+    if (skillIndex === 2 || skillName.includes("บริหารจัดการอารมณ์")) {
+      return TGAT3_SKILL3_QUESTIONS;
+    }
+    if (skillIndex === 3 || skillName.includes("พลเมือง")) {
+      return TGAT3_SKILL4_QUESTIONS;
+    }
+  }
+
+  const answerChoices = ["A", "C", "B", "C", "B", "C", "A", "C", "A", "C", "D", "B", "A", "C", "D"];
+  return Array.from({ length: skill.total }, (_, index) => {
+    const correct = ((index * 13) % skill.total) < skill.correct;
+    const answer = answerChoices[(index + skillIndex * 3) % answerChoices.length];
+    return {
+      no: skill.start + index,
+      ans: answer,
+      correct,
+      score: correct ? "1.00" : "0.00",
+    };
+  });
+}
+
 function ExamPartDetails({
   partId,
   onBack,
@@ -753,97 +1093,265 @@ function ExamPartDetails({
   onBack: () => void;
 }) {
   const part = examPartReports[partId] ?? examPartReports.tgat1;
-  const answerChoices = ["A", "C", "B", "C", "B", "C", "A", "C", "A", "C"];
+  const [openSkills, setOpenSkills] = useState<Record<string, boolean>>({
+    "Speaking Skill": true,
+    "Reading Skill": false,
+    "ความสามารถทางภาษา": true,
+    "การสร้างคุณค่าและนวัตกรรม": true,
+  });
+
+  const toggleSkill = (name: string) => {
+    setOpenSkills((prev) => ({
+      ...prev,
+      [name]: !(prev[name] ?? false),
+    }));
+  };
+
+  const sortedSkills = [...part.skills].sort((a, b) => {
+    const aVal = parseFloat(a.score.split("/")[0]);
+    const aMax = parseFloat(a.score.split("/")[1] || "50");
+    const bVal = parseFloat(b.score.split("/")[0]);
+    const bMax = parseFloat(b.score.split("/")[1] || "50");
+    return bVal / bMax - aVal / aMax;
+  });
 
   return (
-    <div className={`wb-dashboard-view wb-detail-view wb-part-report wb-part-${part.id.toLowerCase()}`}>
-      <div className="wb-detail-back">
-        <button type="button" onClick={onBack}>กลับไปวิเคราะห์รวม</button>
-        <button type="button" onClick={() => window.print()}>
-          ↓ ดาวน์โหลดใบวิเคราะห์ (PDF)
+    <div className={`wb-dashboard-view wb-detail-view wb-subresults-page wb-part-${part.id.toLowerCase()}`}>
+      <div className="wb-subresults-top">
+        <button
+          type="button"
+          className="wb-subresults-back-btn"
+          onClick={onBack}
+        >
+          <LuArrowLeft size={20} />
+          <span>กลับใบวิเคราะห์รวม</span>
         </button>
       </div>
-      <header className="wb-part-report-header" style={{ background: part.color }}>
-        <div>
-          <small>{part.label}</small>
-          <h1>{part.title} ({part.englishTitle})</h1>
+
+      <header className="wb-subresults-header" style={{ background: part.color }}>
+        <div className="wb-subresults-header-info">
+          <span className="wb-subresults-pill">{part.label}</span>
+          <h1 className="wb-subresults-title">
+            {part.title} ({part.englishTitle})
+          </h1>
+          <div className="wb-subresults-meta-mobile">
+            · ถูก {part.correct} · ผิด {part.wrong} · {part.total} ข้อ
+          </div>
         </div>
-        <div className="wb-part-report-total">
-          <strong>{part.score}<small>/100</small></strong>
-          <span>ถูก {part.correct} · ผิด {part.wrong} · {part.total} ข้อ</span>
+        <div className="wb-subresults-header-score">
+          <div className="wb-subresults-score-num">
+            <strong>{part.score}</strong>
+            <span>/100</span>
+          </div>
+          <div className="wb-subresults-meta-desktop">
+            · ถูก {part.correct} · ผิด {part.wrong} · {part.total} ข้อ
+          </div>
         </div>
       </header>
 
-      <div className={`wb-part-skill-grid is-${part.skills.length}-skills`}>
-        {part.skills.map((skill, skillIndex) => (
-          <details className="wb-part-skill" key={skill.name} open={skillIndex === 0}>
-            <summary>
-              <span>
-                <b>{skill.name}</b>
-                <small>
-                  {skill.total} ข้อ · {part.id === "TGAT1" ? "50" : part.id === "TGAT3" ? "25" : "20"} คะแนน
-                </small>
-                <span className="wb-part-skill-meta">
-                  <i>☑ ถูก {skill.correct}</i><i>× ผิด {skill.wrong}</i>
-                </span>
-              </span>
-              <strong>{skill.score}</strong>
-            </summary>
-            <div className="wb-part-skill-content">
-              <div className="wb-part-progress"><i style={{ width: `${Math.min(100, (skill.correct / skill.total) * 100)}%`, background: part.color }} /></div>
-              <table>
-                <thead><tr><th>ข้อ</th><th>คำตอบ</th><th>ผล</th><th>คะแนน</th></tr></thead>
-                <tbody>
-                  {Array.from({ length: skill.total }, (_, index) => {
-                    const correct = ((index * 13) % skill.total) < skill.correct;
-                    const answer = answerChoices[(index + skillIndex * 3) % answerChoices.length];
-                    return (
-                      <tr key={index}>
-                        <td>{skill.start + index}</td>
-                        <td>{answer}</td>
-                        <td className={correct ? "is-correct" : "is-wrong"}>{correct ? "☑" : "×"}</td>
-                        <td className={correct ? "is-correct" : "is-wrong"}>{correct ? "1.00" : "0.00"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+      <div className={`wb-subresults-grid is-${part.skills.length}-skills`}>
+        {part.skills.map((skill, skillIndex) => {
+          const isOpen = openSkills[skill.name] ?? (skillIndex === 0);
+          const questions = getSubResultQuestions(
+            part.id,
+            skill.name,
+            skillIndex,
+            skill
+          );
+
+          return (
+            <div
+              className={`wb-subresults-card ${isOpen ? "is-open" : "is-collapsed"}`}
+              key={skill.name}
+            >
+              <div
+                className="wb-subresults-card-header"
+                onClick={() => toggleSkill(skill.name)}
+                role="button"
+                tabIndex={0}
+              >
+                {/* แถวบน: หัวข้อ */}
+                <div className="wb-subresults-card-title-row">
+                  <h3 className="wb-subresults-card-name" title={skill.name}>
+                    {skill.name}
+                  </h3>
+                  <div className="wb-subresults-card-meta-right">
+                    <span className="wb-subresults-count-text wb-count-desktop-2skills">
+                      {skill.total} ข้อ · {part.id === "TGAT1" ? "50" : part.id === "TGAT3" ? "25" : "20"} คะแนน
+                    </span>
+                    <span className="wb-subresults-chevron">
+                      {isOpen ? <LuChevronUp size={20} /> : <LuChevronDown size={20} />}
+                    </span>
+                  </div>
+                </div>
+
+                {/* แถวล่าง: คะแนน และจำนวนข้อ */}
+                <div className="wb-subresults-count-row">
+                  <span className="wb-subresults-count-text">
+                    {skill.total} ข้อ · {part.id === "TGAT1" ? "50" : part.id === "TGAT3" ? "25" : "20"} คะแนน
+                  </span>
+                </div>
+
+                {/* แถวสรุปผลและคะแนน */}
+                <div className="wb-subresults-card-sub-row">
+                  <div className="wb-subresults-skill-badges">
+                    <span className="wb-subresults-badge-correct">
+                      <SubResultCheckIcon />
+                      <span>ถูก {skill.correctText ?? skill.correct}</span>
+                    </span>
+                    <span className="wb-subresults-dot">·</span>
+                    <span className="wb-subresults-badge-wrong">
+                      <SubResultCrossIcon />
+                      <span>ผิด {skill.wrongText ?? skill.wrong}</span>
+                    </span>
+                  </div>
+                  <div className="wb-subresults-card-score">
+                    <strong>{skill.score.split("/")[0]}</strong>
+                    <span>/{skill.score.split("/")[1] || (part.id === "TGAT1" ? "50" : part.id === "TGAT3" ? "25" : "20")}</span>
+                  </div>
+                </div>
+
+                <div className="wb-subresults-progress-bar">
+                  <div
+                    className="wb-subresults-progress-fill"
+                    style={{
+                      width: `${Math.min(100, (skill.correct / skill.total) * 100)}%`,
+                      background: `linear-gradient(90deg, ${part.color} 0%, #38bdf8 100%)`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className={`wb-subresults-table-wrap ${isOpen ? "is-open" : "is-collapsed"}`}>
+                <table className="wb-subresults-table">
+                  <thead>
+                    <tr>
+                      <th>ข้อ</th>
+                      <th>คำตอบ</th>
+                      <th>ผล</th>
+                      <th>คะแนน</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {questions.map((q, qIndex) => {
+                      const isZero = q.isWrong || q.score === "0.00" || q.score === "0";
+                      const isAmber = q.score === "0.5" || q.score === "0.50" || q.score === "0.25" || q.score === "0.75";
+                      return (
+                        <tr key={qIndex}>
+                          <td className="wb-col-no">{q.no}</td>
+                          <td className="wb-col-ans">{q.ans}</td>
+                          <td className="wb-col-result">
+                            {renderResultBadge(q)}
+                          </td>
+                          <td className={`wb-col-score ${isZero ? "is-wrong-score" : isAmber ? "is-amber-score" : "is-correct-score"}`}>
+                            <div className="wb-score-val">{q.score}</div>
+                            {q.note && <div className="wb-score-note">{q.note}</div>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </details>
-        ))}
+          );
+        })}
       </div>
 
-      <section className="wb-dashboard-card wb-part-radar">
-        <div>
+      <section className="wb-subresults-radar-section">
+        <div className="wb-subresults-radar-header">
           <h2>โปรไฟล์ความถนัดโดยรวม (Competency Radar)</h2>
           <p>เทียบสัดส่วน % ของคะแนนแต่ละพาร์ทย่อย</p>
         </div>
-        <div className="wb-part-radar-layout">
-          <div className="wb-part-radar-chart" aria-label={`กราฟความถนัด ${part.title}`}>
-            <svg viewBox="0 0 440 250" role="img" aria-hidden="true">
-              <g className="wb-radar-grid">
-                <polygon points="220,32 346,125 220,218 94,125" />
-                <polygon points="220,60 308,125 220,190 132,125" />
-                <polygon points="220,88 270,125 220,162 170,125" />
-                <line x1="220" y1="32" x2="220" y2="218" />
-                <line x1="94" y1="125" x2="346" y2="125" />
-              </g>
-              <polygon className="wb-radar-area" points={part.skills.length === 2 ? "220,70 220,175" : "220,76 290,125 220,183 145,125"} style={{ stroke: part.color, fill: `${part.color}22` }} />
-              {(part.skills.length === 2 ? [[220, 70], [220, 175]] : [[220, 76], [290, 125], [220, 183], [145, 125]]).map(([x, y], index) => (
-                <circle key={index} cx={x} cy={y} r="5" style={{ fill: part.color }} />
-              ))}
-              <text x="220" y="21" textAnchor="middle">{part.skills[0].name}</text>
-              <text x="220" y="243" textAnchor="middle">{part.skills[part.skills.length - 1].name}</text>
-            </svg>
-          </div>
-          <div className="wb-part-radar-summary">
-            <h3>เรียงจากพาร์ทที่ทำได้ดีที่สุด → ควรพัฒนา</h3>
-            {part.skills.map((skill, index) => (
-              <div key={skill.name}>
-                <b>{index + 1}. {skill.name}<span>{skill.score}</span></b>
-                <i><em style={{ width: `${Math.min(100, (skill.correct / skill.total) * 100)}%`, background: part.color }} /></i>
+
+        <div className="wb-subresults-radar-layout">
+          <div className="wb-subresults-radar-chart-box">
+            {part.skills.length === 2 ? (
+              <div className="wb-subresults-vertical-axis">
+                <div className="wb-axis-point-top">
+                  <span className="wb-axis-label">{part.skills[0].name}</span>
+                  <strong className="wb-axis-val">{part.skills[0].score.split("/")[0]}</strong>
+                </div>
+                <div className="wb-axis-line-container">
+                  <svg width="24" height="110" viewBox="0 0 24 110" fill="none">
+                    <line x1="12" y1="12" x2="12" y2="98" stroke={part.color} strokeWidth="2.5" />
+                    <circle cx="12" cy="12" r="5" fill={part.color} />
+                    <circle cx="12" cy="98" r="5" fill={part.color} />
+                  </svg>
+                </div>
+                <div className="wb-axis-point-bottom">
+                  <span className="wb-axis-label">{part.skills[1].name}</span>
+                  <strong className="wb-axis-val">{part.skills[1].score.split("/")[0]}</strong>
+                </div>
               </div>
-            ))}
+            ) : (
+              <div className="wb-subresults-radar-svg-wrap">
+                <svg viewBox="0 0 460 280" role="img" aria-hidden="true">
+                  <g className="wb-radar-grid">
+                    <polygon points="230,40 350,135 230,230 110,135" />
+                    <polygon points="230,70 310,135 230,200 150,135" />
+                    <polygon points="230,100 270,135 230,170 190,135" />
+                    <line x1="230" y1="40" x2="230" y2="230" />
+                    <line x1="110" y1="135" x2="350" y2="135" />
+                  </g>
+                  <polygon
+                    className="wb-radar-area"
+                    points="230,75 295,135 230,192 148,135"
+                    style={{ stroke: part.color, fill: `${part.color}20` }}
+                  />
+                  {[[230, 75], [295, 135], [230, 192], [148, 135]].map(([x, y], index) => (
+                    <circle key={index} cx={x} cy={y} r="5" style={{ fill: part.color }} />
+                  ))}
+                  <text x="230" y="18" textAnchor="middle" fontWeight="600">{part.skills[0]?.name}</text>
+                  <text x="230" y="32" textAnchor="middle" fontWeight="700" fill="#0f172a">{part.skills[0]?.score.split("/")[0]}</text>
+
+                  <text x="360" y="130" textAnchor="start" fontWeight="600">{part.skills[1]?.name}</text>
+                  <text x="360" y="145" textAnchor="start" fontWeight="700" fill="#0f172a">{part.skills[1]?.score.split("/")[0]}</text>
+
+                  <text x="230" y="252" textAnchor="middle" fontWeight="600">{part.skills[2]?.name}</text>
+                  <text x="230" y="266" textAnchor="middle" fontWeight="700" fill="#0f172a">{part.skills[2]?.score.split("/")[0]}</text>
+
+                  <text x="100" y="130" textAnchor="end" fontWeight="600">{part.skills[3]?.name}</text>
+                  <text x="100" y="145" textAnchor="end" fontWeight="700" fill="#0f172a">{part.skills[3]?.score.split("/")[0]}</text>
+                </svg>
+              </div>
+            )}
+          </div>
+
+          <div className="wb-subresults-ranking-box">
+            <h3 className="wb-subresults-ranking-title">
+              เรียงจากพาร์ทที่ทำได้ดีที่สุด → ควรพัฒนา
+            </h3>
+            <div className="wb-subresults-ranking-list">
+              {sortedSkills.map((skill, index) => {
+                const scoreNum = parseFloat(skill.score.split("/")[0]);
+                const maxNum = parseFloat(skill.score.split("/")[1] || "50");
+                const pct = Math.min(100, Math.max(0, (scoreNum / maxNum) * 100));
+
+                return (
+                  <div key={skill.name} className="wb-subresults-ranking-item">
+                    <div className="wb-subresults-ranking-item-head">
+                      <span className="wb-subresults-ranking-item-name">
+                        {index + 1}. {skill.name}
+                      </span>
+                      <span className="wb-subresults-ranking-item-score">
+                        <strong>{skill.score.split("/")[0]}</strong>
+                        <span className="wb-subresults-ranking-max">/{maxNum}</span>
+                      </span>
+                    </div>
+                    <div className="wb-subresults-ranking-bar">
+                      <div
+                        className="wb-subresults-ranking-bar-fill"
+                        style={{
+                          width: `${pct}%`,
+                          background: `linear-gradient(90deg, #0369a1 0%, #38bdf8 100%)`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </section>
@@ -1136,7 +1644,7 @@ function StudentProfile({
   }
 
   return (
-    <div className="wb-personal-profile">
+    <div className="wb-dashboard-view wb-personal-profile">
       <form className="wb-dashboard-card wb-profile-form" onSubmit={savePersonal}>
         <button
           type="button"
@@ -1241,16 +1749,26 @@ function StudentProfile({
   );
 }
 
-export default function WebBStudentArea({ mode }: { mode: StudentMode }) {
+export default function WebBStudentArea({
+  mode,
+  initialPart,
+}: {
+  mode: StudentMode;
+  initialPart?: string;
+}) {
   const [activeView, setActiveView] = useState<StudentView>(modeToView(mode));
   const [student, setStudent] = useState(defaultStudent);
   const [productId, setProductId] = useState("tgat-full");
-  const [selectedPart, setSelectedPart] = useState("tgat1");
+  const [selectedPart, setSelectedPart] = useState(initialPart ?? "tgat1");
   const [notice, setNotice] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(mode === "ranking");
   const [rankingReturnView, setRankingReturnView] =
     useState<StudentView>("results");
+
+  useEffect(() => {
+    setActiveView(modeToView(mode));
+  }, [mode]);
 
   useEffect(() => {
     setStudent(readStudent());
@@ -1266,7 +1784,7 @@ export default function WebBStudentArea({ mode }: { mode: StudentMode }) {
     if (queryView === "ranking") {
       setActiveView("results");
       setRankingOpen(true);
-    } else if (queryView === "profile") {
+    } else if (queryView === "profile" || queryView === "personal") {
       setActiveView("personal");
     } else if (
       queryView &&
@@ -1281,9 +1799,10 @@ export default function WebBStudentArea({ mode }: { mode: StudentMode }) {
       ].includes(queryView)
     ) {
       setActiveView(queryView);
-      setSelectedPart(
-        new URLSearchParams(window.location.search).get("part") ?? "tgat1",
-      );
+      const queryPart = new URLSearchParams(window.location.search).get("part");
+      if (queryPart) {
+        setSelectedPart(queryPart);
+      }
     }
   }, []);
 
@@ -1309,16 +1828,13 @@ export default function WebBStudentArea({ mode }: { mode: StudentMode }) {
     );
   }
 
-  const activeTab =
-    activeView === "detail" || activeView === "subresults"
-      ? "results"
-      : activeView === "personal"
-        ? "profile"
-      : activeView;
+  const isDetailView = activeView === "detail" || activeView === "subresults";
+
+  const activeTab = isDetailView ? "results" : activeView;
 
   return (
     <div
-      className={`webb-site wb-shell wb-dashboard${activeView === "detail" || activeView === "subresults" ? " is-detail-view" : ""}`}
+      className={`webb-site wb-shell wb-dashboard${isDetailView ? " is-detail-view" : ""}`}
     >
       <StudentHeader
         student={student}
@@ -1342,23 +1858,25 @@ export default function WebBStudentArea({ mode }: { mode: StudentMode }) {
           </button>
         </div>
       </div>
-      <main className="wb-dashboard-container wb-dashboard-layout">
+      <main className="wb-dashboard-container wb-dashboard-layout ">
         <StudentSidebar student={student} onSelect={selectView} />
-        <section className="wb-dashboard-main">
-          <nav className="wb-dashboard-tabs" aria-label="ส่วนผู้เข้าสอบ">
-            {views.map((view) => (
-              <button
-                type="button"
-                key={view.id}
-                className={activeTab === view.id ? "is-active" : ""}
-                aria-current={activeTab === view.id ? "page" : undefined}
-                onClick={() => selectView(view.id === "profile" ? "personal" : view.id)}
-              >
-                {view.label}
-              </button>
-            ))}
-          </nav>
-          <StudentBanner />
+        <section className="wb-dashboard-main ">
+          {!isDetailView && (
+            <nav className="wb-dashboard-tabs " aria-label="ส่วนผู้เข้าสอบ">
+              {views.map((view) => (
+                <button
+                  type="button"
+                  key={view.id}
+                  className={activeTab === view.id ? "is-active" : ""}
+                  aria-current={activeTab === view.id ? "page" : undefined}
+                  onClick={() => selectView(view.id)}
+                >
+                  {view.label}
+                </button>
+              ))}
+            </nav>
+          )}
+          {!isDetailView && <StudentBanner />}
           {activeView === "overview" ? (
             <StudentOverview productId={productId} onSelect={selectView} />
           ) : activeView === "exam" ? (
@@ -1370,7 +1888,7 @@ export default function WebBStudentArea({ mode }: { mode: StudentMode }) {
               partId={selectedPart}
               onBack={() => selectView("detail")}
             />
-          ) : activeView === "detail" || activeView === "profile" ? (
+          ) : activeView === "detail" ? (
             <ResultDetails
               student={student}
               onSelect={selectView}

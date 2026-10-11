@@ -9,10 +9,12 @@ const config: Config = {
   ...baseConfig,
   content: [
     "./src/app/gatpat/**/*.{js,jsx,tsx}",
+    "./src/app/webb/**/*.{js,jsx,tsx}",
     "./src/app/[lang]/**/*.{js,jsx,tsx}",
     "./src/app/auth/**/*.{js,jsx,tsx}",
     "./src/components/site/**/*.{js,jsx,tsx}",
     "./src/components/shop/**/*.{js,jsx,tsx}",
+    "./src/components/webb/**/*.{js,jsx,tsx}",
     "./src/components/logo.tsx",
     "./src/features/**/*.{js,jsx,tsx}",
     "./src/lib/**/*.{js,jsx,tsx}",

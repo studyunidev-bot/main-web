@@ -13,12 +13,29 @@ const mainLinks = [
   { label: "ขั้นตอนการสมัคร", href: "/webb#steps" },
 ];
 
-export function WebBBrand() {
+export function WebBBrand({ onClick }: { onClick?: () => void } = {}) {
+  const pathname = usePathname();
+  const [loggedIn, setLoggedIn] = useState(false);
+  useEffect(() => {
+    const checkLogin = () => setLoggedIn(window.localStorage.getItem(DEMO_AUTH_KEY) === "true");
+    checkLogin();
+    window.addEventListener("storage", checkLogin);
+    window.addEventListener("webb-demo-auth-updated", checkLogin);
+    return () => {
+      window.removeEventListener("storage", checkLogin);
+      window.removeEventListener("webb-demo-auth-updated", checkLogin);
+    };
+  }, []);
+
+  const isStudentArea = pathname?.startsWith("/webb/student");
+  const isAuthenticated = loggedIn || isStudentArea;
+
   return (
     <Link
       className="wb-brand"
-      href="/webb"
+      href={isAuthenticated ? "/webb/student?view=overview" : "/webb"}
       aria-label="เรียนต่อมหาลัย TCAS Mock Exam หน้าแรก"
+      onClick={onClick}
     >
       <span className="wb-brand-symbol" aria-hidden="true">
         <span className="wb-brand-person wb-brand-yellow">
@@ -168,8 +185,15 @@ export function PublicShell({ children }: { children: ReactNode }) {
   }, [socialOpen]);
 
   function SignupAction({ mobile = false }: { mobile?: boolean }) {
-    const href = studentLoggedIn ? "/webb/products" : registered ? "/webb/login" : "/webb/register";
-    return <Link className="wb-pill-button wb-pill-yellow" href={href} onClick={() => mobile && setMenuOpen(false)}>เลือกซื้อข้อสอบ</Link>;
+    if (studentLoggedIn) {
+      return <Link className="wb-pill-button wb-pill-yellow" href="/webb/products" onClick={() => mobile && setMenuOpen(false)}>เลือกซื้อข้อสอบ</Link>;
+    }
+    return (
+      <>
+        <Link className="wb-pill-button wb-pill-outline" href="/webb/login" onClick={() => mobile && setMenuOpen(false)}>เข้าห้องสอบ</Link>
+        <Link className="wb-pill-button wb-pill-yellow" href="/webb/register" onClick={() => mobile && setMenuOpen(false)}>สมัครสอบ</Link>
+      </>
+    );
   }
 
   function AccountAction({ mobile = false }: { mobile?: boolean }) {
@@ -289,7 +313,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
           </a>)}
         </div>
         <button className="wb-social-float" type="button" aria-label={socialOpen ? "ปิดช่องทาง Social" : "เปิดช่องทาง Social"} aria-expanded={socialOpen} aria-controls="wb-social-float-menu" onClick={() => setSocialOpen((open) => !open)}>
-          <span className="wb-social-float-symbol" aria-hidden="true">◎</span><span>ติดตามเรา</span><b aria-hidden="true">{socialOpen ? "×" : "+"}</b>
+          <b aria-hidden="true">+</b>
         </button>
       </div>}
       {helpOpen && <div className="wb-contact-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setHelpOpen(false); }}>

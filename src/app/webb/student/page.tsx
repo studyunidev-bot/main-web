@@ -3,8 +3,24 @@ export const metadata = { title: "ภาพรวมผู้เรียน · 
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; part?: string }>;
 }) {
-  const { view } = await searchParams;
-  return <WebBStudentArea mode={view === "profile" ? "profile" : "student"} />;
+  const { view, part } = await searchParams;
+  const validModes = [
+    "student",
+    "overview",
+    "profile",
+    "personal",
+    "solutions",
+    "results",
+    "ranking",
+    "exam",
+    "detail",
+    "subresults",
+  ];
+  const mode =
+    view && validModes.includes(view)
+      ? (view as any)
+      : "student";
+  return <WebBStudentArea mode={mode} initialPart={part} />;
 }

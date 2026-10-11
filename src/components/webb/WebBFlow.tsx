@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { LuCheck, LuRotateCcw } from "react-icons/lu";
 import WebBMyPurchases from "./WebBMyPurchases";
 import { getProduct } from "./data";
 import { currentPurchaseForProduct, examAnswersStorageKey, examResultStorageKey, setPurchaseExamStatus, updateAdminAttempt } from "./demo-store";
@@ -66,6 +67,22 @@ function ExamStateScreen({
             {interrupted ? "ติดต่อทีมช่วยเหลือ" : "ดูผลสอบ"}
           </Link>
         </div>
+        <div style={{ marginTop: 18, textAlign: "center" }}>
+          <Link
+            href={`/webb/rules?product=${productId}&type=trial&back=exam`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 13,
+              fontWeight: 600,
+              color: "#2563eb",
+              textDecoration: "underline",
+            }}
+          >
+            🔄 กลับไปหน้ากติกาเพื่อทดสอบสอบใหม่อีกครั้ง (Mockup)
+          </Link>
+        </div>
       </section>
     </main>
   );
@@ -85,6 +102,7 @@ function RulesScreen({
   const [warningOpen, setWarningOpen] = useState(false);
   const [hasEntitlement, setHasEntitlement] = useState(examType === "trial");
   const [attemptState, setAttemptState] = useState("");
+  const [resetNotice, setResetNotice] = useState<string | null>(null);
   const examHref = `/webb/exam?product=${product.id}&type=${examType}`;
   const backHref =
     returnTo === "home" ? "/webb" : `/webb/student?view=${returnTo}`;
@@ -92,13 +110,60 @@ function RulesScreen({
   const answerKey = examAnswersStorageKey(product.id, examType);
 
   useEffect(() => {
-    if (examType === "trial") return;
+    if (examType === "trial") {
+      setHasEntitlement(true);
+      try {
+        const saved = localStorage.getItem(resultKey);
+        setAttemptState(saved ? (JSON.parse(saved) as { status?: string }).status || "" : "");
+      } catch { setAttemptState(""); }
+      return;
+    }
     setHasEntitlement(!!currentPurchaseForProduct(product.id));
     try {
       const saved = localStorage.getItem(resultKey);
       setAttemptState(saved ? (JSON.parse(saved) as { status?: string }).status || "" : "");
     } catch { setAttemptState(""); }
   }, [examType, product.id, resultKey]);
+
+  function handleResetMockup() {
+    try {
+      localStorage.removeItem(resultKey);
+      localStorage.removeItem(answerKey);
+      localStorage.removeItem(examResultStorageKey(product.id, "trial"));
+      localStorage.removeItem(examAnswersStorageKey(product.id, "trial"));
+      localStorage.removeItem(examResultStorageKey(product.id, "purchased"));
+      localStorage.removeItem(examAnswersStorageKey(product.id, "purchased"));
+      localStorage.removeItem(`webb-demo-started:${product.id}:${examType}`);
+      localStorage.removeItem(`webb-demo-started:${product.id}:trial`);
+      localStorage.removeItem(`webb-demo-started:${product.id}:purchased`);
+
+      const toRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (
+          k &&
+          (k.startsWith(`webb-demo-result:${product.id}`) ||
+            k.startsWith(`webb-demo-answers:${product.id}`) ||
+            k.startsWith(`webb-demo-started:${product.id}`))
+        ) {
+          toRemove.push(k);
+        }
+      }
+      toRemove.forEach((k) => localStorage.removeItem(k));
+
+      try {
+        setPurchaseExamStatus(product.id, "available", false);
+      } catch {
+        /* ignore */
+      }
+
+      setAttemptState("");
+      setResetNotice("ล้างประวัติการสอบของวิชานี้เรียบร้อยแล้ว สามารถกด 'เริ่มทำข้อสอบ' ใหม่ได้ทันที");
+      setTimeout(() => setResetNotice(null), 4000);
+    } catch (err) {
+      console.error("Failed to reset mockup exam data:", err);
+    }
+  }
 
   useEffect(() => {
     if (!warningOpen) return;
@@ -216,6 +281,25 @@ function RulesScreen({
             {!hasEntitlement ? "ไม่มีสิทธิ์สอบชุดนี้" : attemptState === "interrupted" ? "รอผู้ดูแลอนุมัติสอบใหม่" : ["submitted", "timeout"].includes(attemptState) ? "สอบชุดนี้แล้ว" : attemptState === "in-progress" ? "มีรอบสอบที่กำลังดำเนินการ" : "เริ่มทำข้อสอบ"}
           </button>
         </div>
+
+        <div className="wb-rules-mockup-bar">
+          <button
+            type="button"
+            className="wb-rules-mockup-btn"
+            onClick={handleResetMockup}
+            title="ล้างข้อมูลการสอบทั้งหมดของวิชานี้ เพื่อให้สามารถเริ่มสอบใหม่ได้อีกครั้งสำหรับการทดสอบ Mockup"
+          >
+            <LuRotateCcw className="wb-mockup-icon" aria-hidden="true" />
+            <span>เคลียร์ค่าที่เคยสอบ (สำหรับทดสอบ Mockup เพื่อสอบใหม่)</span>
+          </button>
+          {resetNotice && (
+            <p className="wb-rules-mockup-notice" role="status">
+              <LuCheck className="wb-mockup-notice-icon" aria-hidden="true" />
+              <span>{resetNotice}</span>
+            </p>
+          )}
+        </div>
+
         {!hasEntitlement && examType === "purchased" && <p className="wb-exam-access-note">ยังไม่มีสิทธิ์ในชุดนี้ <Link href="/webb/products">เลือกซื้อข้อสอบ</Link></p>}
         {attemptState === "interrupted" && <p className="wb-exam-access-note">ระบบรีเซ็ตรอบสอบที่หลุดแล้ว กรุณาติดต่อผู้ดูแลเพื่อขอเปิดสิทธิ์สอบใหม่</p>}
         {["submitted", "timeout"].includes(attemptState) && <p className="wb-exam-access-note">ส่งข้อสอบแล้ว · กลับมาสอบซ้ำไม่ได้ แต่ดูวิดีโอเฉลยได้ตลอด</p>}

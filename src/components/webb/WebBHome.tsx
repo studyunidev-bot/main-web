@@ -330,7 +330,7 @@ export default function WebBHome() {
               className="wb-pill-button wb-pill-yellow "
               href="/webb/rules?product=tgat1&type=trial&back=home"
             >
-              ทดลองระบบสอบ 
+              ทดลองระบบสอบ
             </Link>
           </div>
         </section>
@@ -375,14 +375,14 @@ export default function WebBHome() {
                     className="wb-pill-button wb-pill-yellow"
                     href={subject.code === "A-Level" ? "/webb/a-level" : "/webb/tgat"}
                   >
-                    ดูรายละเอียด 
+                    ดูรายละเอียด
                   </Link>
                 ) : (
                   <span
                     className="wb-pill-button wb-pill-disabled"
                     aria-label={`${subject.code} ยังไม่เปิดสอบ`}
                   >
-                    ดูรายละเอียด 
+                    ดูรายละเอียด
                   </span>
                 )}
               </article>
@@ -451,10 +451,10 @@ export default function WebBHome() {
             เพิ่มความมั่นใจก่อนสนามจริง
           </p>
           <Link
-            className="wb-pill-button wb-pill-yellow wb-arrow-button"
+            className="wb-pill-button wb-pill-yellow "
             href="/webb/rules?product=tgat1&type=trial&back=home"
           >
-            ทดลองระบบสอบ 
+            ทดลองระบบสอบ
           </Link>
         </section>
       </main>

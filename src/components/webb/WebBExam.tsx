@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   LuArrowDown,
   LuArrowUp,
@@ -12,9 +13,10 @@ import {
 } from "react-icons/lu";
 import type { ExamProduct } from "./data";
 import { addDemoEmail, currentPurchaseForProduct, examAnswersStorageKey, examResultStorageKey, readDemoAccount, recordDemoRankingResult, setPurchaseExamStatus, updateAdminAttempt } from "./demo-store";
+import { MOCK_EXAM_PAGES, TOTAL_MOCK_QUESTIONS, TOTAL_MOCK_PAGES, getPageForQuestion } from "./mock-exam-questions";
 
-const TOTAL_QUESTIONS = 60;
-const initialAnswers: Record<number, string> = { 0: "0", 1: "1" };
+const TOTAL_QUESTIONS = TOTAL_MOCK_QUESTIONS;
+const initialAnswers: Record<number, string> = {};
 
 function ExamMark() {
   return (
@@ -44,65 +46,120 @@ function formatTime(seconds: number) {
     .join(":");
 }
 
-function MockExamPdf() {
+function MockExamPdf({
+  page,
+  onPageChange,
+  zoom,
+  onZoomChange,
+}: {
+  page: number;
+  onPageChange: (newPage: number) => void;
+  zoom: number;
+  onZoomChange: (delta: number) => void;
+}) {
+  const viewerRef = useRef<HTMLElement>(null);
+  const currentPageData =
+    MOCK_EXAM_PAGES.find((p) => p.pageNumber === page) || MOCK_EXAM_PAGES[0];
+
+  useEffect(() => {
+    viewerRef.current?.scrollTo({ top: 0, behavior: "instant" });
+  }, [page]);
+
   return (
-    <section className="wb-pdf-viewer" aria-label="เอกสารข้อสอบตัวอย่าง">
-      <div className="wb-pdf-toolbar" aria-hidden="true">
+    <section className="wb-pdf-viewer" ref={viewerRef} aria-label="เอกสารข้อสอบ">
+      <div className="wb-pdf-toolbar">
         <LuSearch />
-        <LuArrowUp />
-        <LuArrowDown />
+        <button
+          type="button"
+          title="หน้าก่อนหน้า"
+          aria-label="หน้าก่อนหน้า"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+        >
+          <LuArrowUp />
+        </button>
+        <button
+          type="button"
+          title="หน้าถัดไป"
+          aria-label="หน้าถัดไป"
+          disabled={page >= TOTAL_MOCK_PAGES}
+          onClick={() => onPageChange(page + 1)}
+        >
+          <LuArrowDown />
+        </button>
         <span className="wb-pdf-page-count">
-          3 <i>of</i> 5
+          {page} <i>of</i> {TOTAL_MOCK_PAGES}
         </span>
         <span className="wb-pdf-toolbar-spacer" />
-        <LuMinus />
-        <LuPlus />
-        <span>100%</span>
+        <button
+          type="button"
+          title="ลดขนาดตัวหนังสือ"
+          aria-label="ลดขนาดตัวหนังสือ"
+          disabled={zoom <= 80}
+          onClick={() => onZoomChange(-10)}
+        >
+          <LuMinus />
+        </button>
+        <button
+          type="button"
+          title="เพิ่มขนาดตัวหนังสือ"
+          aria-label="เพิ่มขนาดตัวหนังสือ"
+          disabled={zoom >= 140}
+          onClick={() => onZoomChange(10)}
+        >
+          <LuPlus />
+        </button>
+        <span
+          style={{ cursor: "pointer", userSelect: "none" }}
+          title="รีเซ็ตขนาด 100%"
+          onClick={() => onZoomChange(100 - zoom)}
+        >
+          {zoom}%
+        </span>
       </div>
-      <article className="wb-pdf-sheet">
-        <h2>In a common room (4-6)</h2>
-        <p>Seth　: Do you know (4) __________ in the theater?</p>
-        <p>Amber : (5) __________ What type of movies do you like?</p>
-        <p>
-          Seth　: Horror films. Others are just too boring and make me feel
-          sleepy. How about you?
-        </p>
-        <p>
-          Amber : (6) __________. I prefer reading books, for my imagination
-          will not be circumscribed.
-        </p>
-        <p className="wb-pdf-passage">
-          So many times have I been disappointed with the movies just because
-          they were not the same as how I imagined them while reading from the
-          books.
-        </p>
-        {[4, 5, 6].map((question) => (
-          <section className="wb-pdf-question" key={question}>
-            <b>{question}.</b>
+      <article
+        className="wb-pdf-sheet"
+        style={{
+          zoom: zoom / 100,
+        }}
+      >
+        <h2>{currentPageData.section}</h2>
+        {currentPageData.subSection && (
+          <p style={{ fontWeight: 600, color: "#444", marginBottom: 8 }}>
+            {currentPageData.subSection}
+          </p>
+        )}
+        {currentPageData.dialogue && (
+          <div style={{ marginBottom: 16 }}>
+            {currentPageData.dialogue.map((d, index) => (
+              <p key={index} style={{ marginBottom: 4 }}>
+                <b>{d.speaker}</b> : {d.text}
+              </p>
+            ))}
+          </div>
+        )}
+        {currentPageData.passage && (
+          <p className="wb-pdf-passage">{currentPageData.passage}</p>
+        )}
+
+        {currentPageData.questions.map((question) => (
+          <section className="wb-pdf-question" key={question.id}>
+            <b>{question.number}.</b>
             <div>
-              <span>1. what I like</span>
-              <span>2. which show is popular</span>
-              <span>3. if there’s anything good</span>
-              <span>4. how long that film has been</span>
-              <span>5. when the movie will be</span>
+              <p style={{ gridColumn: "1 / -1", marginBottom: 6 }}>
+                {question.prompt}
+              </p>
+              <div className="wb-pdf-choices">
+                {question.choices.map((choiceText, cIndex) => (
+                  <div key={cIndex} className="wb-pdf-choice-item">
+                    <span className="wb-choice-num">{cIndex + 1}.</span>
+                    <span>{choiceText}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </section>
         ))}
-        <h2>A person new in town (7-10)</h2>
-        <p>
-          Karen　: Excuse me. (7) __________. Could you tell me how to go to the
-          bus terminal?
-        </p>
-        <p>
-          Susan : Of course. Keep walking along the street and take the third
-          left. The terminal is a few meters away from that corner. You can’t
-          miss it.
-        </p>
-        <p>
-          Karen　: (8) __________. I have only been here for three days, and the
-          city is too big.
-        </p>
-        <p>Susan : I agree. (9) __________.</p>
       </article>
     </section>
   );
@@ -113,17 +170,43 @@ function AnswerPaper({
   onAnswer,
   expanded,
   onToggle,
-  activeQuestion,
-  onMove,
+  page,
+  totalPages,
+  onPageChange,
 }: {
   answers: Record<number, string>;
   onAnswer: (question: number, choice: number) => void;
   expanded: boolean;
   onToggle: () => void;
-  activeQuestion: number;
-  onMove: (direction: -1 | 1) => void;
+  page: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
 }) {
+  const [filter, setFilter] = useState<"all" | "answered" | "unanswered">("all");
   const answeredCount = Object.keys(answers).length;
+  const unansweredCount = TOTAL_QUESTIONS - answeredCount;
+  const gridScrollRef = useRef<HTMLDivElement>(null);
+
+  const filteredQuestions = useMemo(() => {
+    return Array.from({ length: TOTAL_QUESTIONS }, (_, i) => i).filter((q) => {
+      const isAnswered = answers[q] !== undefined;
+      if (filter === "answered") return isAnswered;
+      if (filter === "unanswered") return !isAnswered;
+      return true;
+    });
+  }, [filter, answers]);
+
+  useEffect(() => {
+    const pageData = MOCK_EXAM_PAGES.find((p) => p.pageNumber === page);
+    if (pageData && pageData.questions.length > 0) {
+      const firstQ = pageData.questions[0].number;
+      const targetRow = document.getElementById(`wb-answer-row-${firstQ}`);
+      if (targetRow && gridScrollRef.current) {
+        targetRow.scrollIntoView({ block: "start", behavior: "smooth" });
+      }
+    }
+  }, [page]);
+
   return (
     <aside
       className={`wb-answer-panel${expanded ? " is-expanded" : " is-collapsed"}`}
@@ -144,62 +227,111 @@ function AnswerPaper({
       </header>
       {expanded && (
         <>
-          <div className="wb-answer-legend">
-            <span>
+          <div className="wb-answer-legend" role="tablist" aria-label="กรองสถานะข้อสอบ">
+            <button
+              type="button"
+              className={`wb-legend-filter-btn ${filter === "all" ? "is-active" : ""}`}
+              onClick={() => setFilter("all")}
+            >
+              ทั้งหมด ({TOTAL_QUESTIONS})
+            </button>
+            <button
+              type="button"
+              className={`wb-legend-filter-btn ${filter === "answered" ? "is-active" : ""}`}
+              onClick={() => setFilter(filter === "answered" ? "all" : "answered")}
+            >
               <i className="is-answered" />
-              ตอบแล้ว
-            </span>
-            <span>
+              ตอบแล้ว ({answeredCount})
+            </button>
+            <button
+              type="button"
+              className={`wb-legend-filter-btn ${filter === "unanswered" ? "is-active" : ""}`}
+              onClick={() => setFilter(filter === "unanswered" ? "all" : "unanswered")}
+            >
               <i />
-              ยังไม่ตอบ
-            </span>
+              ยังไม่ตอบ ({unansweredCount})
+            </button>
           </div>
-          <div className="wb-answer-instruction">
-            <b>TGAT1 การสื่อสารภาษาอังกฤษ</b>
-            <small>4 ตัวเลือก (1–4) เลือกคำตอบที่ถูกต้อง</small>
-          </div>
-          <div className="wb-answer-grid-scroll">
-            <div className="wb-answer-grid">
-              {Array.from({ length: TOTAL_QUESTIONS }, (_, question) => (
-                <div
-                  className={`wb-answer-row${question === activeQuestion ? " is-active" : ""}`}
-                  key={question}
-                >
-                  <b>{question + 1}</b>
-                  {[0, 1, 2, 3].map((choice) => (
-                    <button
-                      key={choice}
-                      type="button"
-                      className={
-                        answers[question] === String(choice)
-                          ? "is-selected"
-                          : ""
-                      }
-                      aria-label={`ข้อ ${question + 1} ตัวเลือก ${choice + 1}`}
-                      aria-pressed={answers[question] === String(choice)}
-                      onClick={() => onAnswer(question, choice)}
-                    >
-                      {choice + 1}
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </div>
+          <div className="wb-answer-grid-scroll" ref={gridScrollRef}>
+            {filteredQuestions.length === 0 ? (
+              <div className="wb-filter-empty-message">
+                {filter === "unanswered" ? "ตอบครบทุกข้อแล้ว 🎉" : "ยังไม่มีข้อที่ตอบ"}
+              </div>
+            ) : (
+              <div className="wb-answer-grid">
+                {filteredQuestions.map((question, idx) => {
+                  const questionNumber = question + 1;
+                  const pageNum = getPageForQuestion(question);
+                  const isFirstOfPage =
+                    filter === "all" &&
+                    (idx === 0 ||
+                      getPageForQuestion(filteredQuestions[idx - 1]) !== pageNum);
+
+                  return (
+                    <div key={question} style={{ display: "contents" }}>
+                      {isFirstOfPage && (
+                        <div
+                          className={`wb-answer-page-divider ${pageNum === page ? "is-current-page" : ""}`}
+                          onClick={() => onPageChange(pageNum)}
+                          title={`เปิดดูข้อสอบหน้า ${pageNum}`}
+                        >
+                          <span>หน้า {pageNum}</span>
+                          <small>{pageNum === page ? "กำลังดูหน้านี้" : `คลิกเพื่อไปหน้า ${pageNum}`}</small>
+                        </div>
+                      )}
+                      <div
+                        className="wb-answer-row"
+                        id={`wb-answer-row-${questionNumber}`}
+                      >
+                        <b
+                          style={{ cursor: "pointer" }}
+                          title={`คลิกเพื่อเปิดหน้าที่มีข้อ ${questionNumber}`}
+                          onClick={() => onPageChange(pageNum)}
+                        >
+                          {questionNumber}
+                        </b>
+                        {[0, 1, 2, 3].map((choice) => (
+                          <button
+                            key={choice}
+                            type="button"
+                            className={
+                              answers[question] === String(choice)
+                                ? "is-selected"
+                                : ""
+                            }
+                            aria-label={`ข้อ ${questionNumber} ตัวเลือก ${choice + 1}`}
+                            aria-pressed={answers[question] === String(choice)}
+                            onClick={() => onAnswer(question, choice)}
+                          >
+                            {choice + 1}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
           <footer className="wb-answer-panel-actions">
             <button
               type="button"
-              onClick={() => onMove(-1)}
-              disabled={activeQuestion === 0}
+              onClick={() => onPageChange(page - 1)}
+              disabled={page <= 1}
+              aria-label="ย้อนกลับหน้า"
             >
               ย้อนกลับ
             </button>
+            <span className="wb-answer-page-badge">
+              หน้า {page}/{totalPages}
+            </span>
             <button
               type="button"
-              onClick={() => onMove(1)}
-              disabled={activeQuestion === TOTAL_QUESTIONS - 1}
+              onClick={() => onPageChange(page + 1)}
+              disabled={page >= totalPages}
+              aria-label="ถัดไปหน้า"
             >
-              ถัดไป 
+              ถัดไป
             </button>
           </footer>
         </>
@@ -228,8 +360,24 @@ export default function WebBExam({
   >("checking");
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [answerPaperExpanded, setAnswerPaperExpanded] = useState(true);
-  const [activeQuestion, setActiveQuestion] = useState(0);
+  const [page, setPage] = useState(1);
+  const [zoom, setZoom] = useState(100);
   const answeredCount = useMemo(() => Object.keys(answers).length, [answers]);
+
+  function handleAutoFill() {
+    const newAnswers: Record<number, string> = {};
+    for (let i = 0; i < TOTAL_QUESTIONS; i++) {
+      newAnswers[i] = String(Math.floor(Math.random() * 4));
+    }
+    setAnswers(newAnswers);
+  }
+
+  function handleClearAll() {
+    setAnswers({});
+    try {
+      localStorage.removeItem(answerStorageKey);
+    } catch {}
+  }
 
   useEffect(() => {
     const redirectIfCompleted = () => {
@@ -296,15 +444,25 @@ export default function WebBExam({
       const stored = localStorage.getItem(answerStorageKey);
       if (stored) {
         const parsed = JSON.parse(stored) as Record<string, string>;
-        setAnswers(
-          Object.fromEntries(
-            Object.entries(parsed).filter(
-              ([key]) => Number(key) < TOTAL_QUESTIONS,
+        // If the stored data was the old default mock { "0": "0", "1": "1" }, purge it
+        const isOldMockDefault =
+          Object.keys(parsed).length === 2 &&
+          parsed["0"] === "0" &&
+          parsed["1"] === "1";
+        if (isOldMockDefault) {
+          localStorage.removeItem(answerStorageKey);
+          setAnswers({});
+        } else {
+          setAnswers(
+            Object.fromEntries(
+              Object.entries(parsed).filter(
+                ([key]) => Number(key) < TOTAL_QUESTIONS,
+              ),
             ),
-          ),
-        );
+          );
+        }
       } else {
-        localStorage.setItem(answerStorageKey, JSON.stringify(initialAnswers));
+        setAnswers({});
       }
       const startedAtKey = `webb-demo-started:${product.id}:${examType}`;
       if (!localStorage.getItem(startedAtKey))
@@ -359,14 +517,19 @@ export default function WebBExam({
   ]);
 
   function chooseAnswer(question: number, choice: number) {
-    setActiveQuestion(question);
-    setAnswers((current) => ({ ...current, [question]: String(choice) }));
+    setAnswers((current) => {
+      const next = { ...current };
+      if (next[question] === String(choice)) {
+        delete next[question];
+      } else {
+        next[question] = String(choice);
+      }
+      return next;
+    });
   }
 
-  function moveQuestion(direction: -1 | 1) {
-    setActiveQuestion((current) =>
-      Math.min(TOTAL_QUESTIONS - 1, Math.max(0, current + direction)),
-    );
+  function handlePageChange(newPage: number) {
+    setPage(Math.min(TOTAL_MOCK_PAGES, Math.max(1, newPage)));
   }
 
   function submit() {
@@ -422,6 +585,41 @@ export default function WebBExam({
           ส่งคำตอบ
         </button>
       </header>
+
+      <div className="wb-exam-mockup-toolbar">
+        <div className="wb-exam-toolbar-inner">
+          <div className="wb-exam-info-badge">
+            <strong className="wb-exam-info-subject">TGAT1 การสื่อสารภาษาอังกฤษ</strong>
+            <span className="wb-exam-info-desc">4 ตัวเลือก (1–4) เลือกคำตอบที่ถูกต้อง</span>
+          </div>
+          <div className="wb-mockup-btn-group">
+            <button
+              type="button"
+              className="wb-mockup-action-btn"
+              onClick={handleClearAll}
+              title="ล้างคำตอบที่ตอบไว้ทั้งหมด"
+            >
+              ล้างคำตอบ
+            </button>
+            <button
+              type="button"
+              className="wb-mockup-action-btn"
+              onClick={() => setRemaining(10)}
+              title="ตั้งเวลาเหลือ 10 วินาที เพื่อดูหน้าจอเตือนและระบบส่งอัตโนมัติ"
+            >
+              ทดสอบหมดเวลา (10 วิ)
+            </button>
+            <Link
+              href={`/webb/rules?product=${product.id}&type=${examType}&back=exam`}
+              className="wb-mockup-action-btn wb-mockup-exit-btn"
+              title="กลับไปยังหน้ากติกาการสอบ"
+            >
+              ออกจากห้องสอบ
+            </Link>
+          </div>
+        </div>
+      </div>
+
       {remaining <= 300 && remaining > 0 && (
         <div className="wb-answer-warning" role="status">
           <b>
@@ -433,14 +631,22 @@ export default function WebBExam({
       )}
       <div className="wb-answer-container">
         <div className="wb-answer-layout">
-          <MockExamPdf />
+          <MockExamPdf
+            page={page}
+            onPageChange={handlePageChange}
+            zoom={zoom}
+            onZoomChange={(delta) =>
+              setZoom((z) => Math.min(140, Math.max(80, z + delta)))
+            }
+          />
           <AnswerPaper
             answers={answers}
             onAnswer={chooseAnswer}
             expanded={answerPaperExpanded}
             onToggle={() => setAnswerPaperExpanded((value) => !value)}
-            activeQuestion={activeQuestion}
-            onMove={moveQuestion}
+            page={page}
+            totalPages={TOTAL_MOCK_PAGES}
+            onPageChange={handlePageChange}
           />
         </div>
       </div>

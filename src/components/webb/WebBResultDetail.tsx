@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LuDownload } from "react-icons/lu";
 import { PublicShell } from "./PublicShell";
 
 const parts: Record<string, { title: string; name: string; score: number }> = {
@@ -84,10 +85,12 @@ export default function WebBResultDetail({ part }: { part: string }) {
                 <p>ข้อมูลตัวอย่าง · {result.title}</p>
               </div>
               <button
-                className="webb-button webb-button-outline"
+                type="button"
+                className="webb-button webb-button-outline wb-btn-download"
                 onClick={() => window.print()}
               >
-                พิมพ์ / บันทึก PDF
+                <LuDownload aria-hidden="true" />
+                <span>ดาวน์โหลด PDF</span>
               </button>
             </div>
             <div className="webb-table-scroll">

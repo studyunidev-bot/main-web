@@ -275,10 +275,14 @@ function RulesScreen({
           <button
             className="wb-rules-start"
             type="button"
-            disabled={!hasEntitlement || ["submitted", "timeout", "interrupted", "in-progress"].includes(attemptState)}
+            disabled={!hasEntitlement}
             onClick={() => setWarningOpen(true)}
           >
-            {!hasEntitlement ? "ไม่มีสิทธิ์สอบชุดนี้" : attemptState === "interrupted" ? "รอผู้ดูแลอนุมัติสอบใหม่" : ["submitted", "timeout"].includes(attemptState) ? "สอบชุดนี้แล้ว" : attemptState === "in-progress" ? "มีรอบสอบที่กำลังดำเนินการ" : "เริ่มทำข้อสอบ"}
+            {!hasEntitlement
+              ? "ไม่มีสิทธิ์สอบชุดนี้"
+              : attemptState === "submitted" || attemptState === "timeout"
+                ? "เริ่มทำข้อสอบ (สอบใหม่)"
+                : "เริ่มทำข้อสอบ"}
           </button>
         </div>
 
@@ -373,24 +377,21 @@ function RulesScreen({
                 className="wb-rules-start"
                 type="button"
                 onClick={() => {
+                  setWarningOpen(false);
                   try {
-                    const saved = localStorage.getItem(resultKey);
-                    const status = saved
-                      ? (JSON.parse(saved) as { status?: string }).status
-                      : undefined;
-                    if (status === "submitted" || status === "timeout") {
-                      window.location.replace(
-                        `/webb/${status === "submitted" ? "success" : "error"}?product=${product.id}&type=${examType}`,
-                      );
-                      return;
-                    }
-                    if (status === "interrupted" || status === "in-progress") return;
-                    if (status === "authorized") {
-                      localStorage.removeItem(answerKey);
-                    }
-                    localStorage.setItem(resultKey, JSON.stringify({ status: "in-progress", startedAt: Date.now() }));
+                    localStorage.removeItem(answerKey);
+                    localStorage.removeItem(resultKey);
+                    localStorage.setItem(
+                      resultKey,
+                      JSON.stringify({ status: "in-progress", startedAt: Date.now() }),
+                    );
                     if (examType === "purchased") {
-                      setPurchaseExamStatus(product.id, "in-progress", true, currentPurchaseForProduct(product.id)?.ref);
+                      setPurchaseExamStatus(
+                        product.id,
+                        "in-progress",
+                        true,
+                        currentPurchaseForProduct(product.id)?.ref,
+                      );
                       updateAdminAttempt(product.id, "กำลังสอบ");
                     }
                   } catch {

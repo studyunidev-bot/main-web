@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { FaFacebookF, FaInstagram, FaLine, FaTiktok, FaYoutube } from "react-icons/fa6";
+import { LuMapPin, LuMessageCircle, LuPhone, LuX } from "react-icons/lu";
 import { DEMO_AUTH_KEY, defaultSocialSettings, readDemoAccount, readSocialSettings, type SocialSettings } from "./demo-store";
 
 const mainLinks = [
@@ -143,6 +144,58 @@ export function PublicShell({ children }: { children: ReactNode }) {
     { label: "TikTok", href: social.tiktokUrl, handle: "", icon: <FaTiktok /> },
     { label: "YouTube", href: social.youtubeUrl, handle: "", icon: <FaYoutube /> },
   ].filter((item) => item.href), [social]);
+
+  const showFloatingSocial =
+    Boolean(pathname?.startsWith("/webb")) &&
+    !pathname?.includes("/exam");
+
+  const floatingActions = useMemo(() => [
+    {
+      id: "line",
+      label: "LINE",
+      href: social.lineUrl || "https://line.me/",
+      icon: <FaLine aria-hidden="true" />,
+      bg: "#06c755",
+      isExternal: true,
+    },
+    {
+      id: "phone",
+      label: "โทร 02-235-2451",
+      href: "tel:022352451",
+      icon: <LuPhone aria-hidden="true" />,
+      bg: "#00b074",
+      isExternal: false,
+    },
+    {
+      id: "location",
+      label: "ที่อยู่สำนักงาน",
+      href: "#footer",
+      onClick: (e: React.MouseEvent) => {
+        e.preventDefault();
+        setSocialOpen(false);
+        setHelpOpen(true);
+      },
+      icon: <LuMapPin aria-hidden="true" />,
+      bg: "#ef4444",
+      isExternal: false,
+    },
+    {
+      id: "tiktok",
+      label: "TikTok",
+      href: social.tiktokUrl || "https://www.tiktok.com/",
+      icon: <FaTiktok aria-hidden="true" />,
+      bg: "#000000",
+      isExternal: true,
+    },
+    {
+      id: "youtube",
+      label: "YouTube",
+      href: social.youtubeUrl || "https://www.youtube.com/",
+      icon: <FaYoutube aria-hidden="true" />,
+      bg: "#ff0000",
+      isExternal: true,
+    },
+  ], [social]);
   useEffect(() => {
     const syncLogin = () => {
       const account = readDemoAccount();
@@ -186,7 +239,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
 
   function SignupAction({ mobile = false }: { mobile?: boolean }) {
     if (studentLoggedIn) {
-      return <Link className="wb-pill-button wb-pill-yellow" href="/webb/products" onClick={() => mobile && setMenuOpen(false)}>เลือกซื้อข้อสอบ</Link>;
+      return <Link className="wb-pill-button wb-pill-yellow" href="/webb/products" onClick={() => mobile && setMenuOpen(false)}>สมัครสอบ</Link>;
     }
     return (
       <>
@@ -224,13 +277,6 @@ export function PublicShell({ children }: { children: ReactNode }) {
             ))}
           </nav>
           <div className="wb-header-actions">
-            {studentLoggedIn ? (
-              <>
-                <Link className="wb-pill-button wb-pill-outline" href="/webb/status">
-                  รายการที่ซื้อแล้ว
-                </Link>
-              </>
-            ) : null}
             <SignupAction />
             <AccountAction />
           </div>
@@ -289,14 +335,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
                 ))}
               </div>
               <div className="wb-mobile-actions">
-                {studentLoggedIn ? (
-                  <>
-                    <AccountAction mobile />
-                    <Link className="wb-pill-button wb-pill-outline" href="/webb/status" onClick={() => setMenuOpen(false)}>
-                      รายการที่ซื้อแล้ว
-                    </Link>
-                  </>
-                ) : null}
+                {studentLoggedIn && <AccountAction mobile />}
                 <SignupAction mobile />
                 <button className="wb-header-help" type="button" onClick={() => { setMenuOpen(false); setHelpOpen(true); }}>ขอความช่วยเหลือ</button>
               </div>
@@ -306,16 +345,77 @@ export function PublicShell({ children }: { children: ReactNode }) {
       </header>
       {children}
       <PublicFooter />
-      {pathname === "/webb" && socialLinks.length > 0 && <div className={`wb-social-widget${socialOpen ? " is-open" : ""}`} ref={socialWidgetRef}>
-        <div className="wb-social-float-menu" id="wb-social-float-menu" role="group" aria-label="ช่องทางติดตาม" hidden={!socialOpen}>
-          {socialLinks.map((item, index) => <a key={item.label} href={item.href} aria-label={`ติดตามทาง ${item.label}${item.handle ? ` ${item.handle}` : ""}`} title={item.label} target="_blank" rel="noreferrer" onClick={() => setSocialOpen(false)} style={{ "--social-delay": `${index * 45}ms` } as CSSProperties & Record<"--social-delay", string>}>
-            <span>{item.label}{item.handle && <small>{item.handle}</small>}</span><i>{item.icon}</i>
-          </a>)}
+      {showFloatingSocial && (
+        <div className={`wb-social-widget${socialOpen ? " is-open" : ""}`} ref={socialWidgetRef}>
+          {socialOpen && (
+            <div
+              className="wb-social-float-menu"
+              id="wb-social-float-menu"
+              role="group"
+              aria-label="ช่องทาง Social & ติดต่อ"
+            >
+              {floatingActions.map((item, index) => {
+                const style = {
+                  "--item-index": index,
+                  backgroundColor: item.bg,
+                } as CSSProperties & Record<string, string | number>;
+
+                if (item.onClick) {
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="wb-social-float-btn"
+                      style={style}
+                      aria-label={item.label}
+                      title={item.label}
+                      onClick={item.onClick}
+                    >
+                      <span className="wb-social-tip">{item.label}</span>
+                      <i className="wb-social-icon" aria-hidden="true">
+                        {item.icon}
+                      </i>
+                    </button>
+                  );
+                }
+
+                return (
+                  <a
+                    key={item.id}
+                    href={item.href}
+                    className="wb-social-float-btn"
+                    style={style}
+                    aria-label={item.label}
+                    title={item.label}
+                    target={item.isExternal ? "_blank" : undefined}
+                    rel={item.isExternal ? "noreferrer" : undefined}
+                    onClick={() => setSocialOpen(false)}
+                  >
+                    <span className="wb-social-tip">{item.label}</span>
+                    <i className="wb-social-icon" aria-hidden="true">
+                      {item.icon}
+                    </i>
+                  </a>
+                );
+              })}
+            </div>
+          )}
+          <button
+            className={`wb-social-toggle${socialOpen ? " is-active" : ""}`}
+            type="button"
+            aria-label={socialOpen ? "ปิดเมนู Social" : "เปิดเมนู Social"}
+            aria-expanded={socialOpen}
+            aria-controls="wb-social-float-menu"
+            onClick={() => setSocialOpen((open) => !open)}
+          >
+            {socialOpen ? (
+              <LuX className="wb-toggle-icon is-close" aria-hidden="true" />
+            ) : (
+              <LuMessageCircle className="wb-toggle-icon is-open" aria-hidden="true" />
+            )}
+          </button>
         </div>
-        <button className="wb-social-float" type="button" aria-label={socialOpen ? "ปิดช่องทาง Social" : "เปิดช่องทาง Social"} aria-expanded={socialOpen} aria-controls="wb-social-float-menu" onClick={() => setSocialOpen((open) => !open)}>
-          <b aria-hidden="true">+</b>
-        </button>
-      </div>}
+      )}
       {helpOpen && <div className="wb-contact-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setHelpOpen(false); }}>
         <section className="wb-contact-dialog" role="dialog" aria-modal="true" aria-labelledby="wb-contact-title">
           <button type="button" className="wb-contact-close" aria-label="ปิด" onClick={() => setHelpOpen(false)}>×</button>

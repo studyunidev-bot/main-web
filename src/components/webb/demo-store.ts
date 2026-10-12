@@ -81,6 +81,8 @@ const productParts: Record<string, string[]> = {
   tgat3: ["tgat3"],
   tgat23: ["tgat2", "tgat3"],
   "tgat-full": ["tgat1", "tgat2", "tgat3"],
+  tpat1: ["tpat1"],
+  tpat2: ["tpat2"],
 };
 
 export function safeRead<T>(key: string, fallback: T): T {
@@ -135,7 +137,37 @@ export function readCurrentDemoPurchases() {
 }
 
 export function currentPurchaseForProduct(productId: string) {
-  return [...readDemoPurchases()].reverse().find((purchase) => purchase.productId === productId && purchaseBelongsToCurrentAccount(purchase)) || null;
+  const existing = [...readDemoPurchases()].reverse().find((purchase) => purchase.productId === productId && purchaseBelongsToCurrentAccount(purchase));
+  if (existing) return existing;
+
+  // In Mockup demo, grant entitlement for the student's enrolled courses/exams
+  const defaultMockProducts = ["tgat1", "tgat2", "tgat3", "tgat-full", "tpat1", "tpat2", "tgat23"];
+  if (defaultMockProducts.includes(productId)) {
+    const account = readDemoAccount() || {
+      username: "sss",
+      firstName: "สมชาย",
+      lastName: "สิริกุล",
+      email: "somchai@example.com",
+      phone: "082-2193-291",
+      province: "ขอนแก่น",
+      school: "โรงเรียนตัวอย่างวิทยา",
+      education: "ม.6",
+      citizenId: "1-6799-12345-34-1",
+    };
+    return {
+      ref: `TCAS-DEMO-${productId.toUpperCase()}`,
+      productId,
+      amount: 100,
+      baseAmount: 100,
+      payment: "QR PromptPay",
+      purchasedAt: "10 ก.ค. 2569",
+      receipt: `REC-DEMO-${productId.toUpperCase()}`,
+      profileSnapshot: account,
+      examStatus: "available" as const,
+      attempts: 0,
+    };
+  }
+  return null;
 }
 
 export function purchasedComponents(purchases: DemoPurchase[]) {

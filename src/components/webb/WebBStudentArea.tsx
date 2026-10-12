@@ -5,14 +5,28 @@ import Image from "next/image";
 import {
   LuArrowLeft,
   LuArrowRight,
+  LuCamera,
+  LuCheck,
   LuChevronDown,
   LuChevronRight,
   LuChevronUp,
+  LuClock,
+  LuDownload,
+  LuEye,
+  LuEyeOff,
+  LuFileText,
   LuHeadset,
   LuLogOut,
+  LuMapPin,
+  LuMaximize2,
+  LuPause,
+  LuPlay,
+  LuRotateCcw,
+  LuUpload,
+  LuVolume2,
   LuX,
 } from "react-icons/lu";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, useRef, type FormEvent } from "react";
 import { PublicFooter, WebBBrand } from "./PublicShell";
 import { getProduct } from "./data";
 import { WebBImage } from "./WebBImage";
@@ -45,7 +59,7 @@ const views: { id: StudentView; label: string }[] = [
   { id: "exam", label: "ห้องสอบ" },
   { id: "results", label: "ผลสอบ" },
   { id: "solutions", label: "เฉลย" },
-  { id: "personal", label: "โปรไฟล์ของฉัน" },
+  { id: "personal", label: "ข้อมูลผู้เข้าสอบ" },
 ];
 
 const homepageLinks = [
@@ -55,15 +69,48 @@ const homepageLinks = [
   { label: "ขั้นตอนการสมัคร", href: "/webb?student=1#steps" },
 ];
 
-function StudentAvatar({ large = false }: { large?: boolean }) {
+function StudentAvatar({
+  large = false,
+  withCamera = false,
+  avatarUrl,
+  onCameraClick,
+}: {
+  large?: boolean;
+  withCamera?: boolean;
+  avatarUrl?: string;
+  onCameraClick?: () => void;
+}) {
   return (
     <span
       className={`wb-dashboard-avatar wb-dashboard-avatar-photo${large ? " wb-dashboard-profile-avatar" : ""}`}
     >
-      <WebBImage
-        className="wb-dashboard-avatar-image"
-        alt="ภาพ Mockup นักเรียน"
-      />
+      {avatarUrl ? (
+        <img
+          src={avatarUrl}
+          alt="ภาพโปรไฟล์นักเรียน"
+          className="wb-dashboard-avatar-image"
+          style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
+        />
+      ) : (
+        <WebBImage
+          className="wb-dashboard-avatar-image"
+          alt="ภาพ Mockup นักเรียน"
+        />
+      )}
+      {withCamera && (
+        <button
+          type="button"
+          className="wb-avatar-camera-btn"
+          aria-label="เปลี่ยนรูปโปรไฟล์"
+          title="เปลี่ยนรูปโปรไฟล์"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCameraClick?.();
+          }}
+        >
+          <LuCamera aria-hidden="true" />
+        </button>
+      )}
     </span>
   );
 }
@@ -168,6 +215,7 @@ type StudentInfo = {
   school: string;
   province: string;
   citizenId: string;
+  avatarUrl?: string;
 };
 
 const defaultStudent: StudentInfo = {
@@ -177,8 +225,29 @@ const defaultStudent: StudentInfo = {
   grade: "ม.6",
   school: "โรงเรียนตัวอย่างวิทยา",
   province: "ขอนแก่น",
-  citizenId: "1-67xx-xxxxx-34-1",
+  citizenId: "1-67**-*****-34-1",
 };
+
+export function maskCitizenId(id?: string): string {
+  if (!id) return "1-67**-*****-34-1";
+  const raw = id.trim();
+  const withAsterisks = raw.replace(/[xX]/g, "*");
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length === 13) {
+    return `${digits[0]}-${digits.slice(1, 3)}**-*****-${digits.slice(10, 12)}-${digits[12]}`;
+  }
+  if (/^\d-\d{2}[*\d]{2}-[*\d]{5}-\d{2}-\d$/.test(withAsterisks)) {
+    return withAsterisks.replace(/^(\d-\d{2})[*\d]{2}-[*\d]{5}(-\d{2}-\d)$/, "$1**-*****$2");
+  }
+  if (withAsterisks.includes("-")) {
+    const parts = withAsterisks.split("-");
+    if (parts.length === 5) {
+      const p1 = parts[1].length >= 2 ? `${parts[1].slice(0, 2)}**` : `${parts[1]}**`;
+      return `${parts[0]}-${p1}-*****-${parts[3]}-${parts[4]}`;
+    }
+  }
+  return withAsterisks.length > 5 ? withAsterisks : "1-67**-*****-34-1";
+}
 
 function modeToView(mode: StudentMode): StudentView {
   if (mode === "student" || mode === "overview") return "overview";
@@ -192,6 +261,7 @@ function modeToView(mode: StudentMode): StudentView {
 function readStudent(): StudentInfo {
   try {
     const value = JSON.parse(localStorage.getItem("webb-demo-profile") ?? "{}");
+    const customAvatar = localStorage.getItem("webb-demo-avatar") || value.avatarUrl || "";
     return {
       ...defaultStudent,
       name:
@@ -204,6 +274,7 @@ function readStudent(): StudentInfo {
       school: value.school || defaultStudent.school,
       province: value.province || defaultStudent.province,
       citizenId: value.citizenId || defaultStudent.citizenId,
+      avatarUrl: customAvatar || undefined,
     };
   } catch {
     return defaultStudent;
@@ -258,9 +329,9 @@ function StudentHeader({
               aria-haspopup="menu"
               aria-label="เปิดเมนูบัญชีผู้เข้าสอบ"
             >
-              <StudentAvatar />
+              <StudentAvatar avatarUrl={student.avatarUrl} />
               <span>{student.name}</span>
-              <i>{menuOpen ? "⌃" : "⌄"}</i>
+              <i>{menuOpen ? <LuChevronUp aria-hidden="true" /> : <LuChevronDown aria-hidden="true" />}</i>
             </button>
             <nav
               className={`wb-dashboard-account-dropdown${menuOpen ? " is-open" : ""}`}
@@ -275,7 +346,7 @@ function StudentHeader({
                   onClose();
                 }}
               >
-                <StudentAvatar />
+                <StudentAvatar avatarUrl={student.avatarUrl} />
                 <span>
                   <b>{student.name}</b>
                   <small>
@@ -348,7 +419,18 @@ function StudentHeader({
               </Link>
             ))}
             <Link href="/webb/products" onClick={onClose}>ซื้อข้อสอบเพิ่ม</Link>
-            <Link href="/webb/status" onClick={onClose}>รายการที่ซื้อแล้ว</Link>
+            <Link
+              href="/webb/student?view=exam#exam-list"
+              onClick={() => {
+                onSelect("exam");
+                onClose();
+                setTimeout(() => {
+                  document.getElementById("exam-list")?.scrollIntoView({ behavior: "smooth" });
+                }, 100);
+              }}
+            >
+              รายการที่ซื้อแล้ว
+            </Link>
           </div>
           <button
             type="button"
@@ -358,14 +440,14 @@ function StudentHeader({
               onClose();
             }}
           >
-            <StudentAvatar />
+            <StudentAvatar avatarUrl={student.avatarUrl} />
             <span>
               <b>{student.name}</b>
               <small>
                 {student.grade} · {student.school}
               </small>
             </span>
-            <i>›</i>
+            <i><LuChevronRight aria-hidden="true" /></i>
           </button>
           <div className="wb-dashboard-menu-section is-secondary">
             <button type="button" onClick={() => { onClose(); setHelpOpen(true); }}>
@@ -412,21 +494,30 @@ function StudentHelpDialog({ onClose }: { onClose: () => void }) {
 function StudentSidebar({
   student,
   onSelect,
+  onOpenAvatarModal,
 }: {
   student: StudentInfo;
   onSelect: (view: StudentView) => void;
+  onOpenAvatarModal?: () => void;
 }) {
   return (
     <aside className="wb-dashboard-sidebar">
       <section className="wb-dashboard-profile-card">
-        <StudentAvatar large />
+        <StudentAvatar
+          large
+          withCamera
+          avatarUrl={student.avatarUrl}
+          onCameraClick={onOpenAvatarModal}
+        />
         <h2>{student.name}</h2>
         <p>
           {student.grade} · {student.school}
         </p>
-        <span className="wb-dashboard-location">⌖ {student.province}</span>
+        <span className="wb-dashboard-location">
+          <LuMapPin className="wb-location-icon" aria-hidden="true" /> {student.province}
+        </span>
         <button type="button" onClick={() => onSelect("personal")}>
-          โปรไฟล์ของฉัน
+          ข้อมูลผู้เข้าสอบ
         </button>
       </section>
       <section className="wb-dashboard-enroll-card">
@@ -443,6 +534,30 @@ function StudentSidebar({
         </button>
       </section>
     </aside>
+  );
+}
+
+function MobileEnrollCard({
+  onSelect,
+}: {
+  onSelect: (view: StudentView) => void;
+}) {
+  return (
+    <section className="wb-dashboard-card wb-mobile-enroll-card">
+      <h3>ข้อสอบชุดที่สมัครสอบ</h3>
+      <div className="wb-mobile-enroll-pills">
+        <button
+          type="button"
+          className="is-active"
+          onClick={() => onSelect("exam")}
+        >
+          TGAT ความถนัดทั่วไป
+        </button>
+        <button type="button" onClick={() => onSelect("exam")}>
+          TPAT ความถนัดทางวิชาชีพ
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -535,30 +650,27 @@ function StudentOverview({
           </article>
         ))}
       </section>
-      <section className="wb-dashboard-promo flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 sm:gap-4 rounded-[18px] px-4 py-3.5 sm:px-6 sm:py-4 bg-gradient-to-r from-[#f04c23] via-[#f4643b] to-[#ff7b54] text-white shadow-[0_4px_20px_rgba(240,76,35,0.18)]">
-        <div className="flex items-center gap-3 sm:gap-3.5">
+      <section className="wb-dashboard-promo">
+        <div className="wb-dashboard-promo-left">
           <span
-            className="wb-dashboard-promo-icon flex-none grid place-items-center w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white shadow-sm text-xl sm:text-2xl"
+            className="wb-dashboard-promo-icon"
             aria-hidden="true"
           >
             🛍️
           </span>
           <div className="wb-dashboard-promo-copy">
-            <h2 className="text-[15px] sm:text-[17px] font-bold text-white leading-snug">
-              แนะนำชุดข้อสอบเพิ่มเติม บน Shopee
-            </h2>
-            <p className="mt-0.5 text-[12px] sm:text-[13px] text-white/90 leading-tight">
-              รวมแนวข้อสอบอัปเดตล่าสุด พร้อมเฉลยละเอียด สั่งซื้อได้ที่ร้านค้า
-            </p>
+            <h2>แนะนำชุดข้อสอบเพิ่มเติม บน Shopee</h2>
+            <p>รวมแนวข้อสอบอัปเดตล่าสุด พร้อมเฉลยละเอียด สั่งซื้อได้ที่ร้านค้า</p>
           </div>
         </div>
         <a
           href="https://shopee.co.th/"
           target="_blank"
           rel="noreferrer"
-          className="self-stretch sm:self-auto flex-none inline-flex items-center justify-center gap-1.5 px-5 py-2 sm:px-6 sm:py-2.5 rounded-full bg-white text-[#f04c23] text-[13px] sm:text-sm font-bold shadow-sm hover:bg-white/95 hover:shadow transition-all whitespace-nowrap no-underline"
+          className="wb-dashboard-promo-btn"
         >
-          ซื้อเลยที่ Shopee <LuArrowRight className="w-4 h-4" aria-hidden="true" />
+          <span>ซื้อเลยที่ Shopee</span>
+          {/* <LuArrowRight aria-hidden="true" /> */}
         </a>
       </section>
     </div>
@@ -639,12 +751,11 @@ function ExamRoom({ productId }: { productId: string }) {
             <p>ทดลองหน้าจอทำข้อสอบและระบบจับเวลา ฟรี</p>
             <Link href="/webb/rules?product=tgat1&type=trial&back=exam">
               <span>ทดลองระบบสอบ</span>
-              <LuArrowRight aria-hidden="true" />
             </Link>
           </div>
         </section>
       )}
-      <section className="wb-dashboard-card wb-exam-table">
+      <section id="exam-list" className="wb-dashboard-card wb-exam-table">
         <h2>📋 รายการสอบของคุณ</h2>
         <div className="wb-exam-table-head">
           <span>วิชาที่สอบ</span>
@@ -708,12 +819,24 @@ function ExamResults({ onSelect }: { onSelect: (view: StudentView) => void }) {
           60.7<small>/100</small>
         </strong>
         <footer>
-          <button onClick={() => window.print()}>
-            ↓ ดาวน์โหลดใบวิเคราะห์ (PDF)
+          <button
+            type="button"
+            className="wb-btn-download wb-results-download-btn"
+            onClick={() => window.print()}
+          >
+            <LuDownload aria-hidden="true" />
+            <span>ดาวน์โหลดใบวิเคราะห์ (PDF)</span>
           </button>
-          <button onClick={() => onSelect("ranking")}>🏆 จัดคะแนนอันดับ</button>
-          <button className="is-primary" onClick={() => onSelect("detail")}>
-            ดูคะแนนสอบ →
+          <button type="button" onClick={() => onSelect("ranking")}>
+            🏆 จัดคะแนนอันดับ
+          </button>
+          <button
+            type="button"
+            className="is-primary"
+            onClick={() => onSelect("detail")}
+          >
+            <span>ดูคะแนนสอบ</span>
+            <LuArrowRight aria-hidden="true" />
           </button>
         </footer>
       </section>
@@ -733,9 +856,21 @@ function ResultDetails({
   return (
     <div className="wb-dashboard-view wb-detail-view">
       <div className="wb-detail-back">
-        <button onClick={() => onSelect("results")}>ผลสอบทั้งหมด</button>
-        <button onClick={() => window.print()}>
-          ↓ ดาวน์โหลดใบวิเคราะห์ (PDF)
+        <button
+          type="button"
+          className="wb-detail-back-btn"
+          onClick={() => onSelect("results")}
+        >
+          <LuArrowLeft aria-hidden="true" />
+          <span>ผลสอบทั้งหมด</span>
+        </button>
+        <button
+          type="button"
+          className="wb-btn-download wb-detail-download-btn"
+          onClick={() => window.print()}
+        >
+          <LuDownload aria-hidden="true" />
+          <span>ดาวน์โหลดใบวิเคราะห์ (PDF)</span>
         </button>
       </div>
       <section className="wb-detail-exam-head">
@@ -764,7 +899,7 @@ function ResultDetails({
             <dt>ชื่อ-นามสกุล</dt>
             <dd>{student.name}</dd>
             <dt>เลขบัตรประชาชน</dt>
-            <dd>{student.citizenId}</dd>
+            <dd>{maskCitizenId(student.citizenId)}</dd>
             <dt>วันที่สอบ</dt>
             <dd>15 ก.ค. 2569</dd>
             <dt>เวลาที่ใช้ทำข้อสอบ</dt>
@@ -775,7 +910,7 @@ function ResultDetails({
           <h2>
             อันดับของคุณ{" "}
             <button onClick={() => onSelect("ranking")}>
-              🏆 จัดคะแนนอันดับ →
+              🏆 จัดคะแนนอันดับ 
             </button>
           </h2>
           <div className="wb-detail-score">
@@ -815,7 +950,7 @@ function ResultDetails({
               style={{ background: part.color }}
               onClick={() => onOpenPart(part.id)}
             >
-              ดูรายละเอียดรายข้อ →
+              ดูรายละเอียดรายข้อ
             </button>
           </article>
         ))}
@@ -1464,7 +1599,7 @@ function Ranking({
         <div className="wb-ranking-score"><span>คะแนน</span><b>{ownScore === undefined ? "—" : `${ownScore.toFixed(1)}/100`}</b></div>
         <div className="wb-ranking-place">อันดับของคุณ <strong>{ownRank ?? "—"}</strong>/{candidates}<small>คำนวณจากผู้ส่งข้อสอบสำเร็จในชุดและเวอร์ชันเดียวกัน</small></div>
         <div className="wb-ranking-demo-cases" aria-label="กรณีตัวอย่างจำนวนผู้สอบ">
-          <b>ข้อมูล Ranking</b>
+          <b>ข้อมูล Ranking แต่ละเคส ให้ทดสอบกดเล่น</b>
           <button type="button" className={candidateMode === "actual" ? "is-active" : ""} onClick={() => setCandidateMode("actual")}>ผลสอบที่ส่งแล้ว · {actualRows.length} คน</button>
           <button type="button" className={candidateMode === "under" ? "is-active" : ""} onClick={() => setCandidateMode("under")}>ตัวอย่าง 96 คน · ยังไม่เกิน 100</button>
           <button type="button" className={candidateMode === "over" ? "is-active" : ""} onClick={() => setCandidateMode("over")}>ตัวอย่าง 124 คน · เกิน 100</button>
@@ -1489,6 +1624,13 @@ function StudentSolutions({
 }: {
   onAction: (message: string) => void;
 }) {
+  const [selectedSolution, setSelectedSolution] = useState<{
+    id: string;
+    name: string;
+    duration: string;
+    index: number;
+  } | null>(null);
+
   const solutions = [
     { id: "tgat1", name: "TGAT1 การสื่อสารภาษาอังกฤษ", duration: "32:10 นาที" },
     { id: "tgat2", name: "TGAT2 การคิดอย่างมีเหตุผล", duration: "28:45 นาที" },
@@ -1507,7 +1649,8 @@ function StudentSolutions({
               onAction("เปิดหน้าพิมพ์ไฟล์เฉลยตัวอย่างแล้ว");
             }}
           >
-            ↓ ดาวน์โหลด PDF
+            <LuDownload aria-hidden="true" />
+            <span>ดาวน์โหลด PDF</span>
           </button>
         </div>
         <p>อัปเดตเมื่อ: 15 ก.ค. 2568</p>
@@ -1526,11 +1669,14 @@ function StudentSolutions({
                 <td>
                   <button
                     type="button"
+                    className="wb-btn-primary wb-solutions-play-btn"
                     onClick={() =>
-                      onAction(`กำลังเปิดวิดีโอเฉลย ${part.id.toUpperCase()} (Demo)`)
+                      setSelectedSolution({ ...part, index: index + 1 })
                     }
                   >
-                    ดูวิดีโอเฉลย <span>▷</span>
+                    <span className="wb-solutions-btn-desktop">ดูวิดีโอเฉลย</span>
+                    <span className="wb-solutions-btn-mobile">ดู</span>
+                    <LuPlay className="wb-solutions-play-icon" aria-hidden="true" />
                   </button>
                 </td>
               </tr>
@@ -1538,6 +1684,405 @@ function StudentSolutions({
           </tbody>
         </table>
       </section>
+
+      {selectedSolution && (
+        <VideoSolutionModal
+          solution={selectedSolution}
+          onClose={() => setSelectedSolution(null)}
+          onDownloadPdf={() => {
+            window.print();
+            onAction("เปิดหน้าพิมพ์ไฟล์เฉลยตัวอย่างแล้ว");
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function VideoSolutionModal({
+  solution,
+  onClose,
+  onDownloadPdf,
+}: {
+  solution: { id: string; name: string; duration: string; index: number };
+  onClose: () => void;
+  onDownloadPdf: () => void;
+}) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState("1.0x");
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="wb-video-modal-overlay"
+      role="presentation"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="wb-video-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="wb-video-modal-title"
+      >
+        <div className="wb-video-modal-header">
+          <div className="wb-video-modal-title-group">
+            <span className="wb-video-badge">
+              ข้อที่ {solution.index} · {solution.duration}
+            </span>
+            <h3 id="wb-video-modal-title">วิดีโอเฉลย: {solution.name}</h3>
+          </div>
+          <button
+            type="button"
+            className="wb-video-modal-close"
+            aria-label="ปิดหน้าต่างวิดีโอ"
+            onClick={onClose}
+          >
+            <LuX aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="wb-video-modal-body">
+          {/* Mockup Video Screen */}
+          <div
+            className="wb-video-player-mockup"
+            onClick={() => setIsPlaying(!isPlaying)}
+          >
+            <div className="wb-video-screen-content">
+              <span className="wb-video-screen-watermark">
+                STUDY UNITH · วิดีโอเฉลยตัวอย่าง (Mockup Player)
+              </span>
+
+              <div className="wb-video-play-center">
+                <button
+                  type="button"
+                  className={`wb-video-big-play-btn ${isPlaying ? "is-playing" : ""}`}
+                  aria-label={isPlaying ? "หยุดวิดีโอ" : "เล่นวิดีโอ"}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsPlaying(!isPlaying);
+                  }}
+                >
+                  {isPlaying ? (
+                    <LuPause size={30} aria-hidden="true" />
+                  ) : (
+                    <LuPlay size={30} className="wb-video-play-icon-offset" aria-hidden="true" />
+                  )}
+                </button>
+                <p className="wb-video-play-hint">
+                  {isPlaying
+                    ? "กำลังเล่นวิดีโอเฉลยตัวอย่าง (คลิกเพื่อหยุด)"
+                    : "คลิกเพื่อดูวิดีโอเฉลยตัวอย่าง"}
+                </p>
+              </div>
+
+              <div className="wb-video-screen-info">
+                <span>TGAT 90 ความถนัดทั่วไป · ชุด A</span>
+                <b>ข้อ {solution.index}: {solution.name}</b>
+              </div>
+            </div>
+
+            {/* Video Player Bottom Controls Bar */}
+            <div
+              className="wb-video-controls"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="wb-video-progress-bar">
+                <div
+                  className="wb-video-progress-fill"
+                  style={{ width: isPlaying ? "48%" : "30%" }}
+                />
+                <div
+                  className="wb-video-progress-thumb"
+                  style={{ left: isPlaying ? "48%" : "30%" }}
+                />
+              </div>
+
+              <div className="wb-video-controls-row">
+                <div className="wb-video-controls-left">
+                  <button
+                    type="button"
+                    className="wb-video-ctrl-btn"
+                    onClick={() => setIsPlaying(!isPlaying)}
+                    aria-label={isPlaying ? "หยุด" : "เล่น"}
+                  >
+                    {isPlaying ? <LuPause size={17} /> : <LuPlay size={17} />}
+                  </button>
+                  <div className="wb-video-time">
+                    <span>{isPlaying ? "14:20" : "09:12"}</span>
+                    <i>/</i>
+                    <span>{solution.duration}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="wb-video-ctrl-btn"
+                    title="ระดับเสียง"
+                    aria-label="ระดับเสียง"
+                  >
+                    <LuVolume2 size={17} />
+                  </button>
+                </div>
+
+                <div className="wb-video-controls-right">
+                  <button
+                    type="button"
+                    className="wb-video-speed-btn"
+                    onClick={() => {
+                      const speeds = ["1.0x", "1.25x", "1.5x", "2.0x"];
+                      const next =
+                        speeds[(speeds.indexOf(playbackSpeed) + 1) % speeds.length];
+                      setPlaybackSpeed(next);
+                    }}
+                    title="ความเร็วในการเล่น"
+                  >
+                    {playbackSpeed}
+                  </button>
+                  <span className="wb-video-quality-tag">1080p HD</span>
+                  <button
+                    type="button"
+                    className="wb-video-ctrl-btn"
+                    title="เต็มจอ"
+                    aria-label="เต็มหน้าจอ"
+                  >
+                    <LuMaximize2 size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Description & Features under video */}
+          <div className="wb-video-meta-section">
+            <div className="wb-video-meta-desc">
+              <h4>สรุปประเด็นเฉลย</h4>
+              <p>
+                วิดีโอนี้อธิบายหลักการวิเคราะห์โจทย์ข้อนี้โดยละเอียด
+                พร้อมแนะแนวเทคนิคการตัดตัวเลือกที่ผิดอย่างรวดเร็วและการสังเกตจุดหลอกยอดนิยม
+              </p>
+            </div>
+            <div className="wb-video-meta-tags">
+              <span className="wb-video-tag">
+                <LuClock size={13} aria-hidden="true" />
+                ความยาว {solution.duration}
+              </span>
+              <span className="wb-video-tag">
+                <LuFileText size={13} aria-hidden="true" />
+                มีเฉลยแบบข้อความใน PDF
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="wb-video-modal-footer">
+          <button
+            type="button"
+            className="wb-video-footer-download"
+            onClick={onDownloadPdf}
+          >
+            <LuDownload size={15} aria-hidden="true" />
+            <span>ดาวน์โหลดเอกสารเฉลย (PDF)</span>
+          </button>
+          <button
+            type="button"
+            className="wb-video-footer-close"
+            onClick={onClose}
+          >
+            ปิดหน้าต่าง
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const AVATAR_PRESETS = [
+  {
+    id: "preset-1",
+    label: "นักเรียน 1",
+    url: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230284c7'/><circle cx='50' cy='38' r='20' fill='%23fde047'/><path d='M22 88c0-18 12-28 28-28s28 10 28 28' fill='%23ffffff'/><circle cx='43' cy='36' r='2.5' fill='%230f172a'/><circle cx='57' cy='36' r='2.5' fill='%230f172a'/><path d='M46 45q4 3 8 0' stroke='%230f172a' stroke-width='2' fill='none' stroke-linecap='round'/><path d='M30 28q20-15 40 0c-5-12-35-12-40 0z' fill='%231e293b'/></svg>",
+  },
+  {
+    id: "preset-2",
+    label: "นักเรียน 2",
+    url: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23f43f5e'/><circle cx='50' cy='38' r='20' fill='%23fed7aa'/><path d='M20 88c0-18 13-28 30-28s30 10 30 28' fill='%23ffffff'/><circle cx='43' cy='36' r='2.5' fill='%230f172a'/><circle cx='57' cy='36' r='2.5' fill='%230f172a'/><path d='M46 45q4 3 8 0' stroke='%230f172a' stroke-width='2' fill='none' stroke-linecap='round'/><path d='M25 36c0-15 15-22 25-22s25 7 25 22c0 8-3 15-7 18 3-10-4-16-18-16s-21 6-18 16c-4-3-7-10-7-18z' fill='%237c2d12'/></svg>",
+  },
+  {
+    id: "preset-3",
+    label: "นักเรียน 3",
+    url: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%2310b981'/><circle cx='50' cy='38' r='20' fill='%23ffedd5'/><path d='M22 88c0-18 12-28 28-28s28 10 28 28' fill='%23ffffff'/><rect x='36' y='32' width='12' height='9' rx='2' fill='none' stroke='%230f172a' stroke-width='2'/><rect x='52' y='32' width='12' height='9' rx='2' fill='none' stroke='%230f172a' stroke-width='2'/><line x1='48' y1='36' x2='52' y2='36' stroke='%230f172a' stroke-width='2'/><path d='M47 46q3 2 6 0' stroke='%230f172a' stroke-width='2' fill='none' stroke-linecap='round'/><path d='M30 26q20-12 40 0c-4-10-36-10-40 0z' fill='%23334155'/></svg>",
+  },
+  {
+    id: "preset-4",
+    label: "นักเรียน 4",
+    url: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%238b5cf6'/><circle cx='50' cy='38' r='20' fill='%23fef08a'/><path d='M22 88c0-18 12-28 28-28s28 10 28 28' fill='%23ffffff'/><circle cx='43' cy='36' r='2.5' fill='%230f172a'/><circle cx='57' cy='36' r='2.5' fill='%230f172a'/><path d='M46 45q4 3 8 0' stroke='%230f172a' stroke-width='2' fill='none' stroke-linecap='round'/><path d='M26 38a5 7 0 0 0 0 14h3v-14zm48 0v14h3a5 7 0 0 0 0-14z' fill='%23f59e0b'/><path d='M28 38a22 22 0 0 1 44 0' stroke='%23f59e0b' stroke-width='4' fill='none'/></svg>",
+  },
+];
+
+function AvatarEditModal({
+  currentAvatar,
+  isOpen,
+  onClose,
+  onSave,
+}: {
+  currentAvatar?: string;
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (url?: string) => void;
+}) {
+  const [selectedUrl, setSelectedUrl] = useState<string | undefined>(currentAvatar);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setSelectedUrl(currentAvatar);
+  }, [currentAvatar, isOpen]);
+
+  if (!isOpen) return null;
+
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (dataUrl) {
+        setSelectedUrl(dataUrl);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  return (
+    <div
+      className="wb-avatar-modal-overlay"
+      role="presentation"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="wb-avatar-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="wb-avatar-modal-title"
+      >
+        <div className="wb-avatar-modal-header">
+          <h3 id="wb-avatar-modal-title">แก้ไขรูปโปรไฟล์</h3>
+          <button
+            type="button"
+            className="wb-avatar-modal-close"
+            aria-label="ปิด"
+            onClick={onClose}
+          >
+            <LuX aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="wb-avatar-modal-body">
+          <div className="wb-avatar-modal-preview-section">
+            <div className="wb-avatar-modal-preview-circle">
+              {selectedUrl ? (
+                <img
+                  src={selectedUrl}
+                  alt="ตัวอย่างรูปโปรไฟล์"
+                  className="wb-avatar-modal-preview-img"
+                />
+              ) : (
+                <WebBImage
+                  className="wb-dashboard-avatar-image"
+                  alt="ภาพ Mockup นักเรียน"
+                />
+              )}
+            </div>
+            <span className="wb-avatar-modal-preview-text">
+              {selectedUrl ? "ตัวอย่างรูปภาพที่เลือก" : "รูปภาพเริ่มต้นของระบบ"}
+            </span>
+          </div>
+
+          <div className="wb-avatar-modal-upload-box">
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={handleFileChange}
+            />
+            <button
+              type="button"
+              className="wb-avatar-modal-file-btn"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <LuUpload className="wb-avatar-modal-icon" aria-hidden="true" />
+              <span>
+                <b>อัปโหลดรูปภาพใหม่จากอุปกรณ์</b>
+                <small>รองรับไฟล์ JPG, PNG, GIF, WebP (สูงสุด 5MB)</small>
+              </span>
+            </button>
+          </div>
+
+          <div className="wb-avatar-modal-presets">
+            <label className="wb-avatar-modal-presets-label">
+              หรือเลือกจากรูปตัวอย่าง Mockup:
+            </label>
+            <div className="wb-avatar-modal-preset-grid">
+              {AVATAR_PRESETS.map((preset) => {
+                const isSelected = selectedUrl === preset.url;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    className={`wb-avatar-preset-btn${isSelected ? " is-selected" : ""}`}
+                    onClick={() => setSelectedUrl(preset.url)}
+                    aria-label={`เลือก ${preset.label}`}
+                  >
+                    <img src={preset.url} alt={preset.label} />
+                    {isSelected && (
+                      <span className="wb-avatar-preset-check">
+                        <LuCheck aria-hidden="true" />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="wb-avatar-modal-footer">
+          {selectedUrl ? (
+            <button
+              type="button"
+              className="wb-avatar-modal-reset-btn"
+              onClick={() => setSelectedUrl(undefined)}
+            >
+              <LuRotateCcw aria-hidden="true" /> คืนค่ารูปเริ่มต้น
+            </button>
+          ) : <span />}
+          <div className="wb-avatar-modal-footer-actions">
+            <button
+              type="button"
+              className="wb-profile-cancel"
+              onClick={onClose}
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="button"
+              className="wb-profile-save"
+              onClick={() => onSave(selectedUrl)}
+            >
+              บันทึกแก้ไข
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1547,18 +2092,29 @@ function StudentProfile({
   onSave,
   onCancel,
   onPasswordSaved,
+  onOpenAvatarModal,
+  onResetAvatar,
 }: {
   student: StudentInfo;
   onSave: (student: StudentInfo) => void;
   onCancel: () => void;
   onPasswordSaved: () => void;
+  onOpenAvatarModal?: () => void;
+  onResetAvatar?: () => void;
 }) {
   const [personalOpen, setPersonalOpen] = useState(true);
   const [passwordOpen, setPasswordOpen] = useState(true);
+  const [citizenIdMasked, setCitizenIdMasked] = useState(true);
   const [visiblePassword, setVisiblePassword] = useState<Record<string, boolean>>({});
   const [passwordError, setPasswordError] = useState("");
   const [firstName, ...lastNameParts] = student.name.split(" ");
   const lastName = lastNameParts.join(" ");
+
+  function getDisplayCitizenId() {
+    const raw = student.citizenId || "1-6799-12345-34-1";
+    if (!citizenIdMasked) return raw;
+    return maskCitizenId(raw);
+  }
 
   function savePersonal(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1568,7 +2124,7 @@ function StudentProfile({
     const saved: StudentInfo = {
       ...student,
       name: [data.firstName, data.lastName].filter(Boolean).join(" "),
-      citizenId: String(data.citizenId),
+      citizenId: String(data.citizenId || student.citizenId),
       phone: String(data.phone),
       email: String(data.email),
       province: String(data.province),
@@ -1617,7 +2173,7 @@ function StudentProfile({
     return (
       <label className="wb-profile-password-field">
         {label}
-        <span>
+        <div className="wb-profile-input-wrapper">
           <input
             name={name}
             type={visible ? "text" : "password"}
@@ -1627,6 +2183,7 @@ function StudentProfile({
           />
           <button
             type="button"
+            className="wb-profile-input-toggle-btn"
             aria-label={visible ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
             onClick={() =>
               setVisiblePassword((current) => ({
@@ -1635,9 +2192,9 @@ function StudentProfile({
               }))
             }
           >
-            {visible ? "◉" : "◉̸"}
+            {visible ? <LuEye aria-hidden="true" /> : <LuEyeOff aria-hidden="true" />}
           </button>
-        </span>
+        </div>
         {note && <small>{note}</small>}
       </label>
     );
@@ -1652,19 +2209,87 @@ function StudentProfile({
           aria-expanded={personalOpen}
           onClick={() => setPersonalOpen((open) => !open)}
         >
-          <span>ข้อมูลส่วนตัว</span>
-          <i aria-hidden="true">{personalOpen ? "⌃" : "⌄"}</i>
+          <span className="wb-profile-heading-title">
+            <span className="wb-profile-heading-bar" />
+            ข้อมูลส่วนตัว
+          </span>
+          <span className="wb-profile-collapse-circle" aria-hidden="true">
+            {personalOpen ? <LuChevronUp /> : <LuChevronDown />}
+          </span>
         </button>
         {personalOpen && (
           <>
+            <div className="wb-profile-avatar-edit-card">
+              <div
+                className="wb-profile-avatar-preview-wrap"
+                onClick={onOpenAvatarModal}
+                title="คลิกเพื่อแก้ไขรูปโปรไฟล์"
+              >
+                <StudentAvatar
+                  large
+                  withCamera
+                  avatarUrl={student.avatarUrl}
+                  onCameraClick={onOpenAvatarModal}
+                />
+              </div>
+              <div className="wb-profile-avatar-info">
+                <div className="wb-profile-avatar-title-row">
+                  <b>รูปโปรไฟล์</b>
+                  {student.avatarUrl ? (
+                    <span className="wb-profile-avatar-badge is-custom">รูปภาพที่ตั้งค่าไว้</span>
+                  ) : (
+                    <span className="wb-profile-avatar-badge is-default">รูปเริ่มต้น Mockup</span>
+                  )}
+                </div>
+                <p>คลิกที่รูปหรือกดปุ่มเพื่ออัปโหลดรูปภาพใหม่ หรือเลือกรูปตัวอย่าง Mockup</p>
+                <div className="wb-profile-avatar-btn-group">
+                  <button
+                    type="button"
+                    className="wb-profile-avatar-upload-btn"
+                    onClick={onOpenAvatarModal}
+                  >
+                    <LuCamera aria-hidden="true" /> เปลี่ยนรูปโปรไฟล์
+                  </button>
+                  {student.avatarUrl && (
+                    <button
+                      type="button"
+                      className="wb-profile-avatar-reset-btn"
+                      onClick={onResetAvatar}
+                    >
+                      <LuRotateCcw aria-hidden="true" /> คืนค่ารูปเริ่มต้น
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="wb-profile-fields">
               <label>
                 ชื่อผู้ใช้งาน
-                <input value={readDemoAccount()?.username ?? student.name} readOnly />
+                <input
+                  value={readDemoAccount()?.username ?? student.name}
+                  readOnly
+                  className="wb-profile-input-readonly"
+                />
               </label>
               <label>
                 บัตรประชาชน
-                <input name="citizenId" defaultValue={student.citizenId} readOnly />
+                <div className="wb-profile-input-wrapper">
+                  <input
+                    name="citizenId"
+                    value={getDisplayCitizenId()}
+                    readOnly
+                    className="wb-profile-input-readonly"
+                  />
+                  <button
+                    type="button"
+                    className="wb-profile-input-toggle-btn"
+                    aria-label={citizenIdMasked ? "แสดงเลขบัตรประชาชน" : "ซ่อนเลขบัตรประชาชน"}
+                    onClick={() => setCitizenIdMasked((masked) => !masked)}
+                  >
+                    {citizenIdMasked ? <LuEyeOff aria-hidden="true" /> : <LuEye aria-hidden="true" />}
+                  </button>
+                </div>
               </label>
               <label>
                 ชื่อ
@@ -1680,69 +2305,98 @@ function StudentProfile({
               </label>
               <label>
                 อีเมล
-                <input name="email" type="email" defaultValue={student.email} required />
+                <input name="email" type="text" defaultValue={student.email?.split("@")[0] || "Somchai"} required />
               </label>
               <label>
                 จังหวัด
-                <select name="province" defaultValue={student.province}>
-                  {[student.province, "กรุงเทพมหานคร", "ขอนแก่น", "เชียงใหม่"].filter((value, index, all) => all.indexOf(value) === index).map((province) => (
-                    <option key={province}>{province}</option>
-                  ))}
-                </select>
+                <div className="wb-profile-select-wrapper">
+                  <select name="province" defaultValue={student.province}>
+                    {[student.province, "กรุงเทพมหานคร", "ขอนแก่น", "เชียงใหม่"]
+                      .filter((value, index, all) => all.indexOf(value) === index)
+                      .map((province) => (
+                        <option key={province}>{province}</option>
+                      ))}
+                  </select>
+                  <LuChevronDown className="wb-profile-select-chevron" aria-hidden="true" />
+                </div>
               </label>
               <label>
                 โรงเรียน
-                <select name="school" defaultValue={student.school}>
-                  <option>{student.school}</option>
-                  <option>โรงเรียนตัวอย่างวิทยา</option>
-                  <option>โรงเรียนเตรียมอุดมศึกษา</option>
-                </select>
+                <div className="wb-profile-select-wrapper">
+                  <select name="school" defaultValue={student.school}>
+                    <option>{student.school}</option>
+                    <option>โรงเรียนตัวอย่างวิทยา</option>
+                    <option>โรงเรียนเตรียมอุดมศึกษา</option>
+                  </select>
+                  <LuChevronDown className="wb-profile-select-chevron" aria-hidden="true" />
+                </div>
               </label>
               <label>
                 ระดับการศึกษา
-                <select name="education" defaultValue={student.grade}>
-                  {["ม.4", "ม.5", "ม.6", "เทียบเท่า"].map((grade) => (
-                    <option key={grade}>{grade}</option>
-                  ))}
-                </select>
+                <div className="wb-profile-select-wrapper">
+                  <select name="education" defaultValue={student.grade}>
+                    {["ม.4", "ม.5", "ม.6", "เทียบเท่า"].map((grade) => (
+                      <option key={grade}>{grade}</option>
+                    ))}
+                  </select>
+                  <LuChevronDown className="wb-profile-select-chevron" aria-hidden="true" />
+                </div>
               </label>
             </div>
             <div className="wb-profile-form-actions">
-              <button type="button" className="wb-profile-cancel" onClick={onCancel}>ยกเลิก</button>
-              <button type="submit" className="wb-profile-save">บันทึกแก้ไข</button>
+              <button type="button" className="wb-profile-cancel" onClick={onCancel}>
+                ยกเลิก
+              </button>
+              <button type="submit" className="wb-profile-save">
+                บันทึกแก้ไข
+              </button>
             </div>
           </>
         )}
       </form>
 
       <form className="wb-dashboard-card wb-profile-password" onSubmit={savePassword}>
-        <button
-          type="button"
-          className="wb-profile-section-heading"
-          aria-expanded={passwordOpen}
-          onClick={() => setPasswordOpen((open) => !open)}
-        >
-          <span>เปลี่ยนรหัสผ่าน</span>
-          <i aria-hidden="true">{passwordOpen ? "⌃" : "⌄"}</i>
-        </button>
+        <div className="wb-profile-password-header">
+          <div className="wb-profile-password-heading-group">
+            <h2 className="wb-profile-password-title">
+              <span className="wb-profile-heading-bar" />
+              เปลี่ยนรหัสผ่าน
+            </h2>
+            <p className="wb-profile-password-desc">
+              เพิ่มความปลอดภัยให้บัญชีของคุณด้วยการเปลี่ยนรหัสผ่านอยู่เสมอ
+            </p>
+          </div>
+          <button
+            type="button"
+            className="wb-profile-collapse-circle"
+            aria-label={passwordOpen ? "ย่อส่วนเปลี่ยนรหัสผ่าน" : "ขยายส่วนเปลี่ยนรหัสผ่าน"}
+            aria-expanded={passwordOpen}
+            onClick={() => setPasswordOpen((open) => !open)}
+          >
+            {passwordOpen ? <LuChevronUp aria-hidden="true" /> : <LuChevronDown aria-hidden="true" />}
+          </button>
+        </div>
         {passwordOpen && (
-          <>
-            <p>เพิ่มความปลอดภัยให้บัญชีของคุณด้วยการเปลี่ยนรหัสผ่านอยู่เสมอ</p>
+          <div className="wb-profile-password-body">
             <div className="wb-profile-password-fields">
               {passwordField("currentPassword", "รหัสผ่านปัจจุบัน")}
               {passwordField(
                 "newPassword",
                 "รหัสผ่านใหม่",
-                "รหัสผ่านใหม่ (อักขระ 8-20 ตัว รวมทั้งตัวเลขอย่างน้อย 1 ตัว, ตัวอักษร 1 ตัว และสัญลักษณ์พิเศษ 1 ตัว)",
+                "รหัสผ่านใหม่(อักขระ 8-20 ตัว รวมทั้งตัวเลขอย่างน้อย 1 ตัว, ตัวอักษร 1 ตัว และสัญลักษณ์พิเศษ 1 ตัว)",
               )}
               {passwordField("confirmPassword", "ยืนยันรหัสผ่าน")}
             </div>
             {passwordError && <p className="wb-profile-error" role="alert">{passwordError}</p>}
             <div className="wb-profile-form-actions">
-              <button type="button" className="wb-profile-cancel" onClick={onCancel}>ยกเลิก</button>
-              <button type="submit" className="wb-profile-save">บันทึกแก้ไข</button>
+              <button type="button" className="wb-profile-cancel" onClick={onCancel}>
+                ยกเลิก
+              </button>
+              <button type="submit" className="wb-profile-save">
+                บันทึกแก้ไข
+              </button>
             </div>
-          </>
+          </div>
         )}
       </form>
     </div>
@@ -1757,12 +2411,13 @@ export default function WebBStudentArea({
   initialPart?: string;
 }) {
   const [activeView, setActiveView] = useState<StudentView>(modeToView(mode));
-  const [student, setStudent] = useState(defaultStudent);
+  const [student, setStudent] = useState<StudentInfo>(defaultStudent);
   const [productId, setProductId] = useState("tgat-full");
   const [selectedPart, setSelectedPart] = useState(initialPart ?? "tgat1");
   const [notice, setNotice] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(mode === "ranking");
+  const [avatarModalOpen, setAvatarModalOpen] = useState(false);
   const [rankingReturnView, setRankingReturnView] =
     useState<StudentView>("results");
 
@@ -1804,7 +2459,30 @@ export default function WebBStudentArea({
         setSelectedPart(queryPart);
       }
     }
+    if (typeof window !== "undefined" && window.location.hash === "#exam-list") {
+      setTimeout(() => {
+        document.getElementById("exam-list")?.scrollIntoView({ behavior: "smooth" });
+      }, 200);
+    }
   }, []);
+
+  function handleSaveAvatar(newAvatarUrl?: string) {
+    if (newAvatarUrl) {
+      localStorage.setItem("webb-demo-avatar", newAvatarUrl);
+      setStudent((prev) => ({ ...prev, avatarUrl: newAvatarUrl }));
+    } else {
+      localStorage.removeItem("webb-demo-avatar");
+      setStudent((prev) => ({ ...prev, avatarUrl: undefined }));
+    }
+    setNotice("อัปเดตรูปโปรไฟล์เรียบร้อยแล้ว");
+    setAvatarModalOpen(false);
+  }
+
+  function handleResetAvatar() {
+    localStorage.removeItem("webb-demo-avatar");
+    setStudent((prev) => ({ ...prev, avatarUrl: undefined }));
+    setNotice("คืนค่ารูปโปรไฟล์เริ่มต้นแล้ว");
+  }
 
   function selectView(view: StudentView) {
     if (view === "ranking") {
@@ -1846,7 +2524,7 @@ export default function WebBStudentArea({
       <div className="wb-dashboard-profilebar">
         <div className="wb-dashboard-container">
           <button onClick={() => selectView("personal")}>
-            <StudentAvatar />
+            <StudentAvatar avatarUrl={student.avatarUrl} />
             <span>
               <b>{student.name}</b>
               <small>
@@ -1854,12 +2532,16 @@ export default function WebBStudentArea({
                 <br />⌖ {student.province}
               </small>
             </span>
-            <i>›</i>
+            <i><LuChevronRight aria-hidden="true" /></i>
           </button>
         </div>
       </div>
       <main className="wb-dashboard-container wb-dashboard-layout ">
-        <StudentSidebar student={student} onSelect={selectView} />
+        <StudentSidebar
+          student={student}
+          onSelect={selectView}
+          onOpenAvatarModal={() => setAvatarModalOpen(true)}
+        />
         <section className="wb-dashboard-main ">
           {!isDetailView && (
             <nav className="wb-dashboard-tabs " aria-label="ส่วนผู้เข้าสอบ">
@@ -1877,6 +2559,7 @@ export default function WebBStudentArea({
             </nav>
           )}
           {!isDetailView && <StudentBanner />}
+          {!isDetailView && <MobileEnrollCard onSelect={selectView} />}
           {activeView === "overview" ? (
             <StudentOverview productId={productId} onSelect={selectView} />
           ) : activeView === "exam" ? (
@@ -1903,6 +2586,8 @@ export default function WebBStudentArea({
               }}
               onCancel={() => selectView("overview")}
               onPasswordSaved={() => setNotice("บันทึกรหัสผ่านแล้ว (Demo)")}
+              onOpenAvatarModal={() => setAvatarModalOpen(true)}
+              onResetAvatar={handleResetAvatar}
             />
           ) : activeView === "solutions" ? (
             <StudentSolutions onAction={setNotice} />
@@ -1931,6 +2616,12 @@ export default function WebBStudentArea({
           }}
         />
       )}
+      <AvatarEditModal
+        isOpen={avatarModalOpen}
+        currentAvatar={student.avatarUrl}
+        onClose={() => setAvatarModalOpen(false)}
+        onSave={handleSaveAvatar}
+      />
     </div>
   );
 }

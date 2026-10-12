@@ -48,6 +48,22 @@ export const WEBB_PRODUCTS: ExamProduct[] = [
     price: 250,
     color: "#d99a35",
   },
+  {
+    id: "tpat1",
+    name: "TPAT1",
+    parts: "ความถนัดแพทย์",
+    description: "ฝึกครบทุกมิติ พร้อมเฉลยละเอียด",
+    price: 150,
+    color: "#3b82f6",
+  },
+  {
+    id: "tpat2",
+    name: "TPAT2",
+    parts: "ความถนัดศิลป์",
+    description: "ฝึกการออกแบบและความคิดสร้างสรรค์",
+    price: 150,
+    color: "#ec4899",
+  },
 ];
 
 export const WEBB_MOCK_IMAGE = "/images/webb/students-demo.png";

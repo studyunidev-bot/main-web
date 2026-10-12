@@ -349,9 +349,7 @@ export default function WebBExam({
 }) {
   const answerStorageKey = examAnswersStorageKey(product.id, examType);
   const resultKey = examResultStorageKey(product.id, examType);
-  const examDurationSeconds =
-    product.id === "tgat-full" && examType === "purchased" ? 10 : 180 * 60;
-  // const examDurationSeconds = 10;
+  const examDurationSeconds = 180 * 60;
   const [answers, setAnswers] =
     useState<Record<number, string>>(initialAnswers);
   const [remaining, setRemaining] = useState(examDurationSeconds);
@@ -391,13 +389,6 @@ export default function WebBExam({
         const status = saved
           ? (JSON.parse(saved) as { status?: string }).status
           : undefined;
-        if (status === "submitted" || status === "timeout") {
-          setAttemptStatus(status);
-          window.location.replace(
-            `/webb/${status === "submitted" ? "success" : "error"}?product=${product.id}&type=${examType}`,
-          );
-          return true;
-        }
         if (status === "interrupted") {
           setAttemptStatus("submitted");
           window.location.replace(`/webb/error?product=${product.id}&type=${examType}&reason=interrupted`);

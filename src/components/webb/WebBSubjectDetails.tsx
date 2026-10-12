@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { LuArrowLeft, LuArrowRight, LuAward, LuGraduationCap } from "react-icons/lu";
-import { PublicFooter, PublicShell } from "./PublicShell";
+import { PublicShell } from "./PublicShell";
 import { DEMO_AUTH_KEY } from "./demo-store";
 
 type SubjectKind = "tgat" | "a-level";
@@ -203,7 +203,6 @@ export default function WebBSubjectDetails({ kind }: { kind: SubjectKind }) {
           </section>
         </div>
       </main>
-      <PublicFooter />
     </PublicShell>
   );
 }

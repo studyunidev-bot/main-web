@@ -80,8 +80,8 @@ export function PublicFooter() {
     { label: "YouTube", href: social.youtubeUrl, icon: <FaYoutube /> },
   ].filter((item) => item.href);
   return (
-    <footer className="wb-footer " id="footer ">
-      <div className="wb-container ">
+    <footer className="wb-footer " id="footer">
+      <div className="wb-container " id="site-map">
         <div className="wb-footer-grid ">
           <div className="wb-footer-company">
             <WebBBrand />
@@ -120,10 +120,30 @@ export function PublicFooter() {
           </div>
         </div>
         <div className="wb-footer-bottom">
-          © 2569 บริษัท เรียนต่อมหาลัย จำกัด
+          <span>© 2569 บริษัท เรียนต่อมหาลัย จำกัด</span>
+          <FooterLegalLinks />
         </div>
       </div>
     </footer>
+  );
+}
+
+const legalLinks = [
+  { label: "นโยบายการใช้คุกกี้", href: "/webb/policies/cookies" },
+  { label: "แผนผังเว็บไซต์", href: "/webb/sitemap" },
+  { label: "นโยบายความเป็นส่วนตัว", href: "/webb/policies/privacy" },
+  { label: "ข้อตกลงและเงื่อนไขการใช้บริการ", href: "/webb/policies/terms" },
+];
+
+function FooterLegalLinks() {
+  return (
+    <nav className="wb-legal-nav" aria-label="นโยบายและข้อมูลเว็บไซต์">
+      {legalLinks.map((link) => (
+        <Link key={link.href} href={link.href}>
+          {link.label}
+        </Link>
+      ))}
+    </nav>
   );
 }
 

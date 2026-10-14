@@ -18,8 +18,12 @@ import {
   LuHeadset,
   LuLogOut,
   LuMapPin,
+  LuMaximize2,
+  LuPause,
+  LuPlay,
   LuRotateCcw,
   LuUpload,
+  LuVolume2,
   LuX,
 } from "react-icons/lu";
 import { useEffect, useState, useRef, type FormEvent } from "react";
@@ -1670,7 +1674,17 @@ function StudentSolutions({
 }: {
   onAction: (message: string) => void;
 }) {
+  const [selectedSolution, setSelectedSolution] = useState<{
+    id: string;
+    name: string;
+    duration: string;
+    index: number;
+    productName: string;
+    set: string;
+    pdf: string;
+  } | null>(null);
   const [eligiblePurchases, setEligiblePurchases] = useState<ReturnType<typeof readCurrentDemoPurchases>>([]);
+  const [openDownloadMenu, setOpenDownloadMenu] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1692,8 +1706,8 @@ function StudentSolutions({
       <section className="wb-dashboard-card wb-solutions-view">
         <div className="wb-solutions-head">
           <div>
-            <h2>เฉลยข้อสอบ PDF</h2>
-            <p>เปิดดูหรือดาวน์โหลดเฉลยของรายการที่ส่งข้อสอบแล้ว</p>
+            <h2>เฉลยข้อสอบ</h2>
+            <p>เลือกดูวิดีโอเฉลย หรือดาวน์โหลดเอกสารเฉลย PDF</p>
           </div>
         </div>
         {eligiblePurchases.length === 0 ? (
@@ -1701,23 +1715,167 @@ function StudentSolutions({
         ) : eligiblePurchases.map((purchase) => {
           const product = getProduct(purchase.productId);
           const plan = getExamPlan(purchase.productId, purchase.examSet || "A");
+          const downloadMenuId = `solution-download-${purchase.ref}`;
           return (
             <section className="wb-solution-purchase" key={purchase.ref}>
-              <header>
-                <div><b>{product.name} {product.parts} · ชุด {purchase.examSet || "A"}</b><small>เลขรายการ {purchase.ref}</small></div>
-                {plan.sections.length === 1 && <a href={plan.sections[0].solutionPdf} download onClick={() => onAction("กำลังดาวน์โหลดไฟล์เฉลย PDF")}>ดาวน์โหลดเฉลย PDF</a>}
+              <header className="wb-solutions-head">
+                <span className="wb-subject-chip">{product.name} {product.parts} · ชุด {purchase.examSet || "A"}</span>
+                <div className="wb-solutions-download-wrap">
+                  <button
+                    className="wb-solutions-download"
+                    type="button"
+                    aria-expanded={openDownloadMenu === downloadMenuId}
+                    aria-controls={downloadMenuId}
+                    onClick={() => {
+                      if (plan.sections.length === 1) {
+                        const link = document.createElement("a");
+                        link.href = plan.sections[0].solutionPdf;
+                        link.download = "";
+                        link.click();
+                        onAction("กำลังดาวน์โหลดไฟล์เฉลย PDF");
+                        return;
+                      }
+                      setOpenDownloadMenu((current) => current === downloadMenuId ? null : downloadMenuId);
+                    }}
+                  >
+                    <LuDownload aria-hidden="true" />
+                    <span>ดาวน์โหลด PDF</span>
+                  </button>
+                  {plan.sections.length > 1 && openDownloadMenu === downloadMenuId && (
+                    <div className="wb-solutions-download-menu" id={downloadMenuId}>
+                      {plan.sections.map((section) => (
+                        <a key={section.id} href={section.solutionPdf} download onClick={() => {
+                          onAction(`กำลังดาวน์โหลดเฉลย ${section.title}`);
+                          setOpenDownloadMenu(null);
+                        }}>{section.title}</a>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </header>
-              {plan.sections.map((section) => (
-                <details className="wb-solution-document" key={section.id} open>
-                  <summary>{section.title} · เฉลย PDF</summary>
-                  <div><a href={section.solutionPdf} target="_blank" rel="noreferrer">เปิดในแท็บใหม่</a><a href={section.solutionPdf} download onClick={() => onAction(`กำลังดาวน์โหลดเฉลย ${section.title}`)}>ดาวน์โหลด PDF</a></div>
-                  <iframe src={`${section.solutionPdf}#toolbar=1&navpanes=0&view=FitH`} title={`เฉลย ${section.title} ชุด 4`} loading="lazy" />
-                </details>
-              ))}
+              <p className="wb-solutions-purchase-ref">เลขรายการ {purchase.ref}</p>
+              <table className="wb-solutions-table">
+                <thead><tr><th>ข้อ</th><th>เนื้อหา</th><th aria-label="วิดีโอเฉลย" /></tr></thead>
+                <tbody>
+                  {plan.sections.map((section, index) => {
+                    const durations: Record<string, string> = { tgat1: "32:10 นาที", tgat2: "28:45 นาที", tgat3: "25:30 นาที" };
+                    return (
+                      <tr key={section.id}>
+                        <td>{index + 1}</td>
+                        <td><b>{section.title}</b><small>ความยาว {durations[section.id] || `${section.durationMinutes}:00 นาที`}</small></td>
+                        <td>
+                          <button
+                            type="button"
+                            className="wb-solutions-play-btn"
+                            onClick={() => setSelectedSolution({
+                              id: section.id,
+                              name: section.title,
+                              duration: durations[section.id] || `${section.durationMinutes}:00 นาที`,
+                              index: index + 1,
+                              productName: `${product.name} ${product.parts}`,
+                              set: purchase.examSet || "A",
+                              pdf: section.solutionPdf,
+                            })}
+                          >
+                            <span className="wb-solutions-btn-desktop">ดูวิดีโอเฉลย</span>
+                            <span className="wb-solutions-btn-mobile">ดู</span>
+                            <LuPlay className="wb-solutions-play-icon" aria-hidden="true" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </section>
           );
         })}
       </section>
+      {selectedSolution && (
+        <VideoSolutionModal
+          solution={selectedSolution}
+          onClose={() => setSelectedSolution(null)}
+          onDownloadPdf={() => onAction(`กำลังดาวน์โหลดเฉลย ${selectedSolution.name}`)}
+        />
+      )}
+    </div>
+  );
+}
+
+function VideoSolutionModal({
+  solution,
+  onClose,
+  onDownloadPdf,
+}: {
+  solution: { id: string; name: string; duration: string; index: number; productName: string; set: string; pdf: string };
+  onClose: () => void;
+  onDownloadPdf: () => void;
+}) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState("1.0x");
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="wb-video-modal-overlay" role="presentation" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose();
+    }}>
+      <div className="wb-video-modal" role="dialog" aria-modal="true" aria-labelledby="wb-video-modal-title">
+        <div className="wb-video-modal-header">
+          <div className="wb-video-modal-title-group">
+            <span className="wb-video-badge">เฉลยวิดีโอ · {solution.duration}</span>
+            <h3 id="wb-video-modal-title">{solution.name}</h3>
+          </div>
+          <button type="button" className="wb-video-modal-close" aria-label="ปิดหน้าต่างวิดีโอ" onClick={onClose}><LuX aria-hidden="true" /></button>
+        </div>
+        <div className="wb-video-modal-body">
+          <div className="wb-video-player-mockup" onClick={() => setIsPlaying((playing) => !playing)}>
+            <div className="wb-video-screen-content">
+              <span className="wb-video-screen-watermark">STUDY UNITH · วิดีโอเฉลย</span>
+              <div className="wb-video-play-center">
+                <button type="button" className={`wb-video-big-play-btn ${isPlaying ? "is-playing" : ""}`} aria-label={isPlaying ? "หยุดวิดีโอ" : "เล่นวิดีโอ"} onClick={(event) => {
+                  event.stopPropagation();
+                  setIsPlaying((playing) => !playing);
+                }}>{isPlaying ? <LuPause size={30} aria-hidden="true" /> : <LuPlay size={30} className="wb-video-play-icon-offset" aria-hidden="true" />}</button>
+                <p className="wb-video-play-hint">{isPlaying ? "กำลังเล่นวิดีโอเฉลยตัวอย่าง (คลิกเพื่อหยุด)" : "คลิกเพื่อดูวิดีโอเฉลยตัวอย่าง"}</p>
+              </div>
+              <div className="wb-video-screen-info"><span>{solution.productName} · ชุด {solution.set}</span><b>วิดีโอเฉลย: {solution.name}</b></div>
+            </div>
+            <div className="wb-video-controls" onClick={(event) => event.stopPropagation()}>
+              <div className="wb-video-progress-bar"><div className="wb-video-progress-fill" style={{ width: isPlaying ? "48%" : "30%" }} /><div className="wb-video-progress-thumb" style={{ left: isPlaying ? "48%" : "30%" }} /></div>
+              <div className="wb-video-controls-row">
+                <div className="wb-video-controls-left">
+                  <button type="button" className="wb-video-ctrl-btn" onClick={() => setIsPlaying((playing) => !playing)} aria-label={isPlaying ? "หยุด" : "เล่น"}>{isPlaying ? <LuPause size={17} /> : <LuPlay size={17} />}</button>
+                  <div className="wb-video-time"><span>{isPlaying ? "14:20" : "09:12"}</span><i>/</i><span>{solution.duration}</span></div>
+                  <button type="button" className="wb-video-ctrl-btn" title="ระดับเสียง" aria-label="ระดับเสียง"><LuVolume2 size={17} /></button>
+                </div>
+                <div className="wb-video-controls-right">
+                  <button type="button" className="wb-video-speed-btn" onClick={() => setPlaybackSpeed((current) => {
+                    const speeds = ["1.0x", "1.25x", "1.5x", "2.0x"];
+                    return speeds[(speeds.indexOf(current) + 1) % speeds.length];
+                  })} title="ความเร็วในการเล่น">{playbackSpeed}</button>
+                  <span className="wb-video-quality-tag">1080p HD</span>
+                  <button type="button" className="wb-video-ctrl-btn" title="เต็มจอ" aria-label="เต็มหน้าจอ"><LuMaximize2 size={16} /></button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="wb-video-meta-section">
+            <div className="wb-video-meta-desc"><h4>สรุปประเด็นเฉลย</h4><p>วิดีโอนี้อธิบายแนวคิดและวิธีวิเคราะห์โจทย์ของหัวข้อนี้ พร้อมเทคนิคการตัดตัวเลือก</p></div>
+            <div className="wb-video-meta-tags"><span className="wb-video-tag"><LuClock size={13} aria-hidden="true" />ความยาว {solution.duration}</span><span className="wb-video-tag"><LuFileText size={13} aria-hidden="true" />มีเอกสารเฉลย PDF</span></div>
+          </div>
+        </div>
+        <div className="wb-video-modal-footer">
+          <a className="wb-video-footer-download" href={solution.pdf} download onClick={onDownloadPdf}><LuDownload size={15} aria-hidden="true" /><span>ดาวน์โหลดเอกสารเฉลย (PDF)</span></a>
+          <button type="button" className="wb-video-footer-close" onClick={onClose}>ปิดหน้าต่าง</button>
+        </div>
+      </div>
     </div>
   );
 }

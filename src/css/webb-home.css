@@ -5337,6 +5337,44 @@
   justify-content: space-between;
   gap: 12px;
 }
+.wb-solution-purchase > header {
+  position: relative;
+  flex-wrap: wrap;
+}
+.wb-solutions-download-wrap {
+  position: relative;
+  margin-left: auto;
+}
+.wb-solutions-download-menu {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  min-width: 240px;
+  gap: 2px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 6px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.14);
+}
+.wb-solutions-download-menu a {
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.wb-solutions-download-menu a:hover {
+  background: #f8fafc;
+}
+.wb-solutions-purchase-ref {
+  margin: 8px 0 4px;
+  color: #64748b;
+  font-size: 12px;
+}
 .wb-solution-purchase > header small {
   display: block;
   margin-top: 5px;
@@ -5521,6 +5559,14 @@
     flex-direction: column;
     gap: 8px;
   }
+  .wb-solution-purchase > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .wb-solutions-download-wrap {
+    width: 100%;
+    margin-left: 0;
+  }
   .wb-solutions-head .wb-subject-chip {
     align-self: flex-start;
     min-height: 31px;
@@ -5529,6 +5575,11 @@
   .wb-solutions-download {
     width: 100%;
     min-height: 34px;
+  }
+  .wb-solutions-download-menu {
+    right: auto;
+    left: 0;
+    width: 100%;
   }
   .wb-solutions-view > p {
     margin: 6px 0 10px;

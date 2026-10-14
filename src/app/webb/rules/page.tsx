@@ -5,15 +5,19 @@ export default async function Page({
 }: {
   searchParams: Promise<{
     product?: string;
+    set?: string;
+    ref?: string;
     type?: string;
     back?: string;
   }>;
 }) {
-  const { product, type, back } = await searchParams;
+  const { product, set, ref, type, back } = await searchParams;
   return (
     <WebBFlow
       mode="rules"
       productId={product}
+      examSet={set || "A"}
+      purchaseRef={ref}
       examType={type === "trial" ? "trial" : "purchased"}
       returnTo={back === "home" || back === "exam" ? back : "overview"}
     />

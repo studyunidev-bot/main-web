@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { getProduct, formatBaht } from "./data";
 import { PublicShell } from "./PublicShell";
 import { DEMO_AUTH_KEY, readCurrentDemoPurchases, type DemoPurchase } from "./demo-store";
+import { getExamPlan } from "./exam-documents";
 
 export default function WebBMyPurchases() {
   const [purchases, setPurchases] = useState<DemoPurchase[]>([]);
@@ -33,12 +34,13 @@ export default function WebBMyPurchases() {
       const product = getProduct(purchase.productId);
       const submitted = purchase.examStatus === "submitted";
       const interrupted = purchase.examStatus === "interrupted";
+      const examAvailable = getExamPlan(product.id, purchase.examSet || "A").hasSuppliedExam;
       return <article className="webb-card wb-purchase-card" key={purchase.ref}>
         <div className="wb-purchase-heading"><div><span className="webb-kicker">{purchase.ref}</span><h2>{product.name}</h2><p>{product.parts}</p></div><strong>{formatBaht(purchase.amount)}</strong></div>
         <div className="wb-purchase-meta"><span>ซื้อเมื่อ <b>{purchase.purchasedAt}</b></span><span>ใบเสร็จ <b>{purchase.receipt}</b></span><span>ชำระผ่าน <b>{purchase.payment}</b></span></div>
         <details className="wb-purchase-snapshot"><summary>ข้อมูลผู้สมัครที่ใช้กับรายการนี้</summary><p>{purchase.profileSnapshot.firstName} {purchase.profileSnapshot.lastName} · {purchase.profileSnapshot.email} · {purchase.profileSnapshot.phone}</p><small>{purchase.profileSnapshot.school} · {purchase.profileSnapshot.province} · {purchase.profileSnapshot.education}</small></details>
-        <div className="wb-purchase-rights"><span className={submitted || interrupted ? "is-used" : ""}>{submitted ? "สิทธิ์สอบใช้แล้ว" : interrupted ? "รออนุมัติสอบใหม่" : "สิทธิ์สอบพร้อมใช้งาน"}</span><span>วิดีโอเฉลย: ดูได้ตลอด</span></div>
-        <div className="wb-purchase-actions">{submitted ? <><Link href={`/webb/solutions?product=${product.id}`}>ดูวิดีโอเฉลย →</Link><Link href={`/webb/results?product=${product.id}`}>ดูผลสอบ</Link></> : interrupted ? <span className="wb-purchase-wait">ติดต่อทีมช่วยเหลือเพื่อขอเปิดสอบใหม่</span> : <Link className="webb-button webb-button-primary" href={`/webb/rules?product=${product.id}&type=purchased&back=overview`}>เข้าสอบ</Link>}</div>
+        <div className="wb-purchase-rights"><span className={submitted || interrupted ? "is-used" : ""}>{submitted ? "สิทธิ์สอบใช้แล้ว" : interrupted ? "รออนุมัติสอบใหม่" : examAvailable ? "สิทธิ์สอบพร้อมใช้งาน" : "รอไฟล์ข้อสอบ"}</span><span>เฉลย PDF: เปิดหลังส่งข้อสอบ</span></div>
+        <div className="wb-purchase-actions">{submitted ? <><Link href={`/webb/solutions?product=${product.id}&set=${encodeURIComponent(purchase.examSet || "A")}&ref=${encodeURIComponent(purchase.ref)}`}>ดูเฉลย PDF →</Link><Link href={`/webb/results?product=${product.id}`}>ดูผลสอบ</Link></> : interrupted ? <span className="wb-purchase-wait">ติดต่อทีมช่วยเหลือเพื่อขอเปิดสอบใหม่</span> : examAvailable ? <Link className="webb-button webb-button-primary" href={`/webb/rules?product=${product.id}&set=${encodeURIComponent(purchase.examSet || "A")}&ref=${encodeURIComponent(purchase.ref)}&type=purchased&back=overview`}>เข้าสอบ</Link> : <span className="wb-purchase-wait">ไฟล์ข้อสอบชุดนี้ยังไม่พร้อม</span>}</div>
       </article>;
     })}</div>}
   </div></main></PublicShell>;

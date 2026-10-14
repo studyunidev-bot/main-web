@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState, useMemo } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import WebBPaymentSuccess from "./WebBPaymentSuccess";
+import { getExamPlan } from "./exam-documents";
 import {
   addDemoEmail,
   DEMO_AUTH_KEY,
@@ -17,21 +19,18 @@ import {
 export type WebBSubjectPurchaseFlowProps = {
   isExistingUser?: boolean;
   onBackToSignupStep?: () => void;
-};
-
-// Default owned sets for an existing enrolled student in Demo
-const DEFAULT_EXISTING_OWNED_SETS: Record<string, string[]> = {
-  tgat: ["A"],
-  tpat1: ["A"],
+  onProgressChange?: (percent: number) => void;
 };
 
 export default function WebBSubjectPurchaseFlow({
   isExistingUser = true,
   onBackToSignupStep,
+  onProgressChange,
 }: WebBSubjectPurchaseFlowProps) {
-  // Step 3 = Subject selection, Step 4 = Review, Step 5 = Success
-  const [subStep, setSubStep] = useState<3 | 4 | 5>(3);
+  // Step 3 = subject and set selection, 5 = review, 6 = success
+  const [subStep, setSubStep] = useState<3 | 5 | 6>(3);
   const [showPaymentQR, setShowPaymentQR] = useState(false);
+  const [expandedReviews, setExpandedReviews] = useState<string[]>([]);
   const [loggedIn, setLoggedIn] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<DemoPurchase | null>(null);
 
@@ -43,8 +42,9 @@ export default function WebBSubjectPurchaseFlow({
   });
 
   // Newly selected sets
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [selectedSets, setSelectedSets] = useState<Record<string, string[]>>({
-    tgat: isExistingUser ? [] : ["A"],
+    tgat: [],
     tpat1: [],
     tpat2: [],
     tpat3: [],
@@ -57,6 +57,7 @@ export default function WebBSubjectPurchaseFlow({
   });
 
   const [notice, setNotice] = useState("");
+  const checkoutRef = useMemo(() => `DO-${new Date().getFullYear() + 543}-${String(Date.now()).slice(-6)}`, []);
 
   useEffect(() => {
     const isAuth = localStorage.getItem(DEMO_AUTH_KEY) === "true";
@@ -85,13 +86,13 @@ export default function WebBSubjectPurchaseFlow({
       }
     }
 
-    const validSets = ["A", "B", "C", "D"];
+    const validSets = ["A"];
     const chosenSet = targetSet && validSets.includes(targetSet) ? targetSet : "A";
 
     if (isExistingUser) {
       // Build owned sets from purchases and localStorage
       const currentPurchases = readCurrentDemoPurchases();
-      const owned: Record<string, string[]> = { ...DEFAULT_EXISTING_OWNED_SETS };
+      const owned: Record<string, string[]> = {};
       const otherOwned: Record<string, boolean> = { alevel: false, netsat: false };
 
       try {
@@ -113,11 +114,12 @@ export default function WebBSubjectPurchaseFlow({
       // Also parse from currentPurchases product IDs if available
       currentPurchases.forEach((p) => {
         const id = p.productId.toLowerCase();
-        if (id.includes("tgat-b") || id.includes("tgat2")) {
-          owned.tgat = Array.from(new Set([...(owned.tgat || []), "B"]));
+        const examSet = p.examSet || "A";
+        if (["tgat", "tgat-full", "tgat1", "tgat2", "tgat3", "tgat23"].includes(id)) {
+          owned.tgat = Array.from(new Set([...(owned.tgat || []), examSet]));
         }
-        if (id.includes("tpat2")) {
-          owned.tpat2 = Array.from(new Set([...(owned.tpat2 || []), "A"]));
+        if (["tpat1", "tpat2", "tpat3", "tpat4"].includes(id)) {
+          owned[id] = Array.from(new Set([...(owned[id] || []), examSet]));
         }
         if (id.includes("alevel")) otherOwned.alevel = true;
         if (id.includes("netsat")) otherOwned.netsat = true;
@@ -135,7 +137,8 @@ export default function WebBSubjectPurchaseFlow({
 
     // Auto-select the target subject and set
     if (targetSubject) {
-      if (["tgat", "tpat1", "tpat2", "tpat3", "tpat4"].includes(targetSubject)) {
+      if (targetSubject === "tgat") {
+        setSelectedSubjects((prev) => prev.includes(targetSubject!) ? prev : [...prev, targetSubject!]);
         setSelectedSets((prev) => ({
           ...prev,
           [targetSubject]: [chosenSet],
@@ -150,16 +153,13 @@ export default function WebBSubjectPurchaseFlow({
   }, [isExistingUser]);
 
   const isSetOwned = (subjectId: string, set: string) => {
+    if (subjectId === "tgat" && set === "A") return false;
     if (!isExistingUser) return false;
     return (ownedSets[subjectId] || []).includes(set);
   };
 
-  const isOtherOwned = (id: string) => {
-    if (!isExistingUser) return false;
-    return !!ownedOther[id];
-  };
-
   const toggleSet = (subjectId: string, set: string) => {
+    if (subjectId !== "tgat" || !getExamPlan("tgat-full", set).hasSuppliedExam) return;
     if (isSetOwned(subjectId, set)) return; // Already owned, cannot re-select
     setNotice("");
     setSelectedSets((prev) => {
@@ -172,24 +172,13 @@ export default function WebBSubjectPurchaseFlow({
   };
 
   const toggleSubject = (subjectId: string) => {
+    if (subjectId !== "tgat") return;
     setNotice("");
-    setSelectedSets((prev) => {
-      const current = prev[subjectId] || [];
-      if (current.length > 0) {
-        return { ...prev, [subjectId]: [] };
-      } else {
-        // Pick first available set that is NOT owned
-        const allSets = ["A", "B", "C", "D"];
-        const availableSet = allSets.find((s) => !isSetOwned(subjectId, s)) || "A";
-        return { ...prev, [subjectId]: [availableSet] };
-      }
-    });
-  };
-
-  const toggleOther = (id: string) => {
-    if (isOtherOwned(id)) return;
-    setNotice("");
-    setOtherSelected((prev) => ({ ...prev, [id]: !prev[id] }));
+    const wasSelected = selectedSubjects.includes(subjectId);
+    setSelectedSubjects((prev) => wasSelected
+      ? prev.filter((id) => id !== subjectId)
+      : [...prev, subjectId]);
+    if (wasSelected) setSelectedSets((sets) => ({ ...sets, [subjectId]: [] }));
   };
 
   const tgatCount = selectedSets["tgat"]?.length || 0;
@@ -203,33 +192,23 @@ export default function WebBSubjectPurchaseFlow({
   const tpatTotalCount = tpat1Count + tpat2Count + tpat3Count + tpat4Count;
   const totalItems = tgatCount + tpatTotalCount + alevelCount + netsatCount;
   const totalPrice = totalItems * 179;
-  const selectedSubjectCount =
-    Object.keys(selectedSets).filter((k) => selectedSets[k].length > 0).length +
-    alevelCount +
-    netsatCount;
+  const selectedSubjectCount = selectedSubjects.length + alevelCount + netsatCount;
+  const selectedTpatSubjects = [
+    { id: "tpat1", title: "TPAT1 ความถนัดแพทย์" },
+    { id: "tpat2", title: "TPAT2 ความถนัดศิลปกรรมศาสตร์" },
+    { id: "tpat3", title: "TPAT3 ความถนัดด้านวิทยาศาสตร์ เทคโนโลยี และวิศวกรรมศาสตร์" },
+    { id: "tpat4", title: "TPAT4 ความถนัดทางสถาปัตยกรรมศาสตร์" },
+  ].map((subject) => ({ ...subject, sets: selectedSets[subject.id] || [] }))
+    .filter((subject) => subject.sets.length > 0);
 
-  function renderSetButtons(subjectId: string) {
-    return (
-      <div className="wb-pick-pills">
-        {["A", "B", "C", "D"].map((set) => {
-          const owned = isSetOwned(subjectId, set);
-          const isSelected = (selectedSets[subjectId] || []).includes(set);
-          return (
-            <button
-              type="button"
-              key={set}
-              disabled={owned}
-              title={owned ? "คุณมีสิทธิ์ในชุดนี้แล้ว ไม่สามารถซื้อซ้ำได้" : undefined}
-              className={`wb-pick-pill${isSelected ? " is-on" : ""}${owned ? " is-owned" : ""}`}
-              onClick={() => toggleSet(subjectId, set)}
-            >
-              ชุด {set}
-              {owned && <small> (มีสิทธิ์แล้ว)</small>}
-            </button>
-          );
-        })}
-      </div>
-    );
+  function isReviewExpanded(id: string) {
+    return expandedReviews.includes(id);
+  }
+
+  function toggleReview(id: string) {
+    setExpandedReviews((current) => current.includes(id)
+      ? current.filter((expandedId) => expandedId !== id)
+      : [...current, id]);
   }
 
   function pickCheck(on: boolean, disabled = false) {
@@ -244,44 +223,76 @@ export default function WebBSubjectPurchaseFlow({
     );
   }
 
-  function renderExamBlock(id: string, title: string, count: number, nested: boolean) {
+  function renderSetButtons(subjectId: string) {
     return (
-      <div className={nested ? `wb-pick-sub${count > 0 ? " is-on" : ""}` : undefined}>
-        <div className="wb-pick-head" role="checkbox" aria-checked={count > 0} tabIndex={0} onClick={() => toggleSubject(id)} onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleSubject(id); } }}>
-          {pickCheck(count > 0)}
-          <div className="wb-pick-head-text">
-            <strong>{title}</strong>
-            <span>⏱ 180 นาที &nbsp;📝 60 ข้อ</span>
-          </div>
-          <b className="wb-pick-price">{count > 0 ? `${count * 179} บาท` : "179 บาท/ชุด"}</b>
-        </div>
-        <hr className="wb-pick-divider" />
-        <p className="wb-pick-hint">เลือกชุดข้อสอบ <span>(เลือกมากกว่า 1 ชุดข้อสอบ)</span></p>
-        {renderSetButtons(id)}
+      <div className="wb-pick-pills">
+        {["A", "B", "C", "D"].map((set) => {
+          const available = subjectId === "tgat" && getExamPlan("tgat-full", set).hasSuppliedExam;
+          const owned = available && isSetOwned(subjectId, set);
+          const selected = (selectedSets[subjectId] || []).includes(set);
+          return (
+            <button
+              type="button"
+              key={set}
+              disabled={owned || !available}
+              title={owned ? "คุณมีสิทธิ์ในชุดนี้แล้ว ไม่สามารถซื้อซ้ำได้" : !available ? "ยังไม่มีไฟล์ข้อสอบชุดนี้" : undefined}
+              className={`wb-pick-pill${selected ? " is-on" : ""}${owned ? " is-owned" : ""}${!available ? " is-unavailable" : ""}`}
+              onClick={() => toggleSet(subjectId, set)}
+            >
+              ชุด {set}{owned && <small> (มีสิทธิ์แล้ว)</small>}{!available && <small> (ยังไม่เปิดให้บริการ)</small>}
+            </button>
+          );
+        })}
       </div>
     );
   }
 
-  function renderSimpleRow(id: string, title: string, count: number) {
-    return (
-      <div className={`wb-pick-sub is-row${count > 0 ? " is-on" : ""}`} role="checkbox" aria-checked={count > 0} tabIndex={0} onClick={() => toggleSubject(id)} onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleSubject(id); } }}>
-        {pickCheck(count > 0)}
-        <div className="wb-pick-head-text">
-          <strong>{title}</strong>
-          <span>⏱ 180 นาที &nbsp;📝 60 ข้อ</span>
+  function renderExamBlock(id: string, title: string, nested = false) {
+    const available = id === "tgat" && getExamPlan("tgat-full", "A").hasSuppliedExam;
+    const selected = available && selectedSubjects.includes(id);
+    const sets = selectedSets[id] || [];
+    const block = (
+      <>
+        <div
+          className={`wb-pick-head${!available ? " is-unavailable" : ""}`}
+          role={available ? "checkbox" : undefined}
+          aria-checked={selected}
+          aria-disabled={!available}
+          tabIndex={available ? 0 : -1}
+          onClick={() => available && toggleSubject(id)}
+          onKeyDown={(event) => {
+            if (!available) return;
+            if (event.key === " " || event.key === "Enter") {
+              event.preventDefault();
+              toggleSubject(id);
+            }
+          }}
+        >
+          {pickCheck(selected)}
+          <div className="wb-pick-head-text">
+            <strong>{title}</strong>
+            <span>{available ? "⏱ 180 นาที · 📝 200 ข้อ" : "ยังไม่เปิดให้บริการ"}</span>
+          </div>
+          <b className="wb-pick-price">{available ? (sets.length > 0 ? `${sets.length * 179} บาท` : "179 บาท/ชุด") : ""}</b>
         </div>
-        <b className="wb-pick-price">{count > 0 ? "179 บาท" : "179 บาท/ชุด"}</b>
-      </div>
+        {selected && (
+          <>
+            <hr className="wb-pick-divider" />
+            <p className="wb-pick-hint">เลือกชุดข้อสอบ <span>(มีไฟล์พร้อมสอบเฉพาะชุด A)</span></p>
+            {renderSetButtons(id)}
+          </>
+        )}
+      </>
     );
+    return nested ? <div className={`wb-pick-sub${selected ? " is-on" : ""}`}>{block}</div> : block;
   }
 
   function renderDetail(rows: { key: string; label: string }[]) {
+    if (rows.length === 0) return null;
     return (
       <div className="wb-pick-detail">
         <strong>รายละเอียดข้อสอบ</strong>
-        {rows.map((r) => (
-          <div key={r.key}><span>{r.label}</span><span>179 บาท</span></div>
-        ))}
+        {rows.map((row) => <div key={row.key}><span>{row.label}</span><span>179 บาท</span></div>)}
       </div>
     );
   }
@@ -303,7 +314,7 @@ export default function WebBSubjectPurchaseFlow({
     };
 
     const now = new Date();
-    const ref = `DO-${now.getFullYear() + 543}-${String(Date.now()).slice(-6)}`;
+    const ref = checkoutRef;
     const purchasedAt = now.toLocaleString("th-TH", { timeZone: "Asia/Bangkok" });
 
     // Store newly purchased sets into localStorage so they appear as owned
@@ -322,41 +333,52 @@ export default function WebBSubjectPurchaseFlow({
       /* ignore */
     }
 
-    const purchaseRow: DemoPurchase = {
-      ref,
-      productId: "tgat-full",
-      amount: totalPrice,
-      baseAmount: totalPrice,
-      payment: "QR PromptPay · Demo",
-      purchasedAt,
-      purchasedAtIso: now.toISOString(),
-      receipt: `RC-${ref}`,
-      profileSnapshot: {
-        username: account.username,
-        citizenId: account.citizenId,
-        firstName: account.firstName,
-        lastName: account.lastName,
-        phone: account.phone,
-        email: account.email,
-        province: account.province,
-        school: account.school,
-        education: account.education,
-      },
-      examStatus: "available",
-      attempts: 0,
+    const profileSnapshot = {
+      username: account.username,
+      citizenId: account.citizenId,
+      firstName: account.firstName,
+      lastName: account.lastName,
+      phone: account.phone,
+      email: account.email,
+      province: account.province,
+      school: account.school,
+      education: account.education,
     };
-
-    const allPurchases = [...readDemoPurchases(), purchaseRow];
+    const productIds: Record<string, string> = { tgat: "tgat-full", tpat1: "tpat1", tpat2: "tpat2", tpat3: "tpat3", tpat4: "tpat4" };
+    const selectedEntries = Object.entries(selectedSets).flatMap(([subjectId, sets]) =>
+      subjectId === "tgat"
+        ? sets.filter((examSet) => getExamPlan("tgat-full", examSet).hasSuppliedExam).map((examSet) => ({ subjectId, examSet, productId: productIds[subjectId] }))
+        : [],
+    );
+    const purchaseRows: DemoPurchase[] = selectedEntries.map((item) => {
+      const itemRef = `${ref}-${item.productId}-${item.examSet}`;
+      return {
+        ref: itemRef,
+        productId: item.productId,
+        examSet: item.examSet,
+        amount: 179,
+        baseAmount: 179,
+        payment: "QR Demo · ไม่ใช่การชำระเงินจริง",
+        purchasedAt,
+        purchasedAtIso: now.toISOString(),
+        receipt: `RC-${itemRef}`,
+        profileSnapshot,
+        examStatus: "available",
+        attempts: 0,
+      };
+    });
+    const purchaseRow = { ...purchaseRows[0], ref, amount: totalPrice, baseAmount: totalPrice };
+    const allPurchases = [...readDemoPurchases(), ...purchaseRows];
     safeWrite(DEMO_PURCHASES_KEY, allPurchases);
     localStorage.setItem(
       "webb-demo-order",
       JSON.stringify({
         ref,
-        product: "tgat-full",
+        product: selectedEntries[0]?.productId || "tgat-full",
         amount: totalPrice,
         payment: purchaseRow.payment,
         date: purchasedAt,
-        status: "ชำระเงินสำเร็จ (Demo)",
+        status: "ทำรายการจำลองสำเร็จ · ยังไม่มีการชำระเงินจริง",
       })
     );
     addDemoEmail(
@@ -370,12 +392,24 @@ export default function WebBSubjectPurchaseFlow({
     }
 
     setCompletedOrder(purchaseRow);
-    setSubStep(5);
+    setSubStep(6);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  // STEP 5: Success Screen
-  if (subStep === 5 && completedOrder) {
+  function downloadDemoQr() {
+    const svg = document.getElementById("webb-demo-order-qr");
+    if (!svg) return;
+    const blob = new Blob([svg.outerHTML], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${checkoutRef}-demo-qr.svg`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // STEP 6: Success Screen
+  if (subStep === 6 && completedOrder) {
     return (
       <div style={{ maxWidth: "560px", margin: "20px auto 40px", padding: "0 16px" }}>
         <WebBPaymentSuccess
@@ -410,42 +444,32 @@ export default function WebBSubjectPurchaseFlow({
             </svg>
           </div>
           <h1 className="wb-pick-title">{isExistingUser ? "เลือกซื้อข้อสอบเพิ่ม" : "เลือกวิชาที่ต้องการสอบ"}</h1>
-          <p className="wb-pick-lead">เลือกได้มากกว่า 1 วิชา · เลือกแล้ว {selectedSubjectCount} วิชา</p>
+          <p className="wb-pick-lead">เลือกชุดข้อสอบที่เปิดจำหน่าย · เลือกแล้ว {selectedSubjectCount} วิชา</p>
 
           <div className="wb-pick-list">
-            <section className={`wb-pick-card${tgatCount > 0 ? " is-on" : ""}`}>
-              {renderExamBlock("tgat", "TGAT ความถนัดทั่วไป", tgatCount, false)}
-              {tgatCount > 0 && renderDetail(selectedSets["tgat"].map((s) => ({ key: `tgat-${s}`, label: `TGAT ความถนัดทั่วไป ชุด ${s}` })))}
+            <section className={`wb-pick-card${selectedSubjects.includes("tgat") ? " is-on" : ""}`}>
+              {renderExamBlock("tgat", "TGAT ความถนัดทั่วไป")}
+              {renderDetail(selectedSets.tgat.map((set) => ({ key: `tgat-${set}`, label: `TGAT ความถนัดทั่วไป ชุด ${set}` })))}
             </section>
 
-            <section className={`wb-pick-card${tpatTotalCount > 0 ? " is-on" : ""}`}>
-              <div className="wb-pick-head" role="checkbox" aria-checked={tpatTotalCount > 0} tabIndex={0} onClick={() => toggleSubject("tpat1")}>
-                {pickCheck(tpatTotalCount > 0)}
+            <section className={`wb-pick-card${tpatTotalCount > 0 || selectedSubjects.some((id) => id.startsWith("tpat")) ? " is-on" : ""}`}>
+              <div className="wb-pick-head" aria-hidden="true">
+                {pickCheck(selectedSubjects.some((id) => id.startsWith("tpat")))}
                 <div className="wb-pick-head-text"><strong>TPAT ความถนัดทางวิชาชีพ</strong></div>
               </div>
-              {renderExamBlock("tpat1", "TPAT1 ความถนัดแพทย์", tpat1Count, true)}
-              {renderExamBlock("tpat2", "TPAT2 ความถนัดศิลปกรรมศาสตร์", tpat2Count, true)}
-              {renderSimpleRow("tpat3", "TPAT3 ความถนัดศิลปกรรมศาสตร์", tpat3Count)}
-              {renderSimpleRow("tpat4", "TPAT4 ความถนัดเทคโนโลยีและวิศวกรรมศาสตร์", tpat4Count)}
-              {tpatTotalCount > 0 && renderDetail([
-                ...(selectedSets["tpat1"] || []).map((s) => ({ key: `tpat1-${s}`, label: `TPAT1 ความถนัดแพทย์ ชุด ${s}` })),
-                ...(selectedSets["tpat2"] || []).map((s) => ({ key: `tpat2-${s}`, label: `TPAT2 ความถนัดศิลปกรรมศาสตร์ ชุด ${s}` })),
-                ...(tpat3Count > 0 ? [{ key: "tpat3", label: "TPAT3 ความถนัดศิลปกรรมศาสตร์ ชุด A" }] : []),
-                ...(tpat4Count > 0 ? [{ key: "tpat4", label: "TPAT4 ความถนัดเทคโนโลยีและวิศวกรรมศาสตร์ ชุด A" }] : []),
+              {renderExamBlock("tpat1", "TPAT1 ความถนัดแพทย์", true)}
+              {renderExamBlock("tpat2", "TPAT2 ความถนัดศิลปกรรมศาสตร์", true)}
+              {renderExamBlock("tpat3", "TPAT3 ความถนัดด้านวิทยาศาสตร์ เทคโนโลยี และวิศวกรรมศาสตร์", true)}
+              {renderExamBlock("tpat4", "TPAT4 ความถนัดทางสถาปัตยกรรมศาสตร์", true)}
+              {renderDetail([
+                ...selectedSets.tpat1.map((set) => ({ key: `tpat1-${set}`, label: `TPAT1 ความถนัดแพทย์ ชุด ${set}` })),
+                ...selectedSets.tpat2.map((set) => ({ key: `tpat2-${set}`, label: `TPAT2 ความถนัดศิลปกรรมศาสตร์ ชุด ${set}` })),
+                ...selectedSets.tpat3.map((set) => ({ key: `tpat3-${set}`, label: `TPAT3 ความถนัดด้านวิทยาศาสตร์ เทคโนโลยี และวิศวกรรมศาสตร์ ชุด ${set}` })),
+                ...selectedSets.tpat4.map((set) => ({ key: `tpat4-${set}`, label: `TPAT4 ความถนัดทางสถาปัตยกรรมศาสตร์ ชุด ${set}` })),
               ])}
             </section>
-
-            {/* A-Level / NETSAT: ไม่มีสินค้า — แสดงแต่กดไม่ได้ */}
-            <div className="wb-pick-other is-disabled" aria-disabled="true">
-              {pickCheck(false, true)}
-              <strong>A-Level ความรู้ทางวิชาการ</strong>
-              <em>ยังไม่เปิดจำหน่าย</em>
-            </div>
-            <div className="wb-pick-other is-disabled" aria-disabled="true">
-              {pickCheck(false, true)}
-              <strong>NETSAT</strong>
-              <em>ยังไม่เปิดจำหน่าย</em>
-            </div>
+            <div className="wb-pick-other is-disabled" aria-disabled="true">{pickCheck(false, true)}<strong>A-Level ความรู้ทางวิชาการ</strong><em>ยังไม่เปิดจำหน่าย</em></div>
+            <div className="wb-pick-other is-disabled" aria-disabled="true">{pickCheck(false, true)}<strong>NETSAT</strong><em>ยังไม่เปิดจำหน่าย</em></div>
           </div>
 
           {notice && <p className="wb-pick-notice" role="alert">{notice}</p>}
@@ -466,10 +490,13 @@ export default function WebBSubjectPurchaseFlow({
               className="wb-pick-next"
               onClick={() => {
                 if (totalItems > 0) {
-                  setSubStep(4);
+                  const firstReviewRow = tgatCount > 0 ? "tgat" : selectedTpatSubjects[0]?.id;
+                  setExpandedReviews(firstReviewRow ? [firstReviewRow] : []);
+                  setSubStep(5);
+                  onProgressChange?.(100);
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 } else {
-                  setNotice("กรุณาเลือกวิชาที่ต้องการสอบอย่างน้อย 1 ชุด");
+                  setNotice("กรุณาเลือกวิชาและชุดข้อสอบอย่างน้อย 1 ชุด");
                 }
               }}
             >
@@ -479,8 +506,8 @@ export default function WebBSubjectPurchaseFlow({
         </div>
       )}
 
-      {/* STEP 4: Review */}
-      {subStep === 4 && (
+      {/* STEP 5: Review */}
+      {subStep === 5 && (
         <div className="wb-registration-step-extra">
           <div style={{ textAlign: "center", marginBottom: 20 }}>
             <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ display: "inline-block" }}>
@@ -524,43 +551,41 @@ export default function WebBSubjectPurchaseFlow({
                     <span style={{ fontSize: "15px", fontWeight: 700 }}>{tgatCount * 179} บาท</span>
                   </div>
                   <div style={{ fontSize: "12px", color: "#666", marginBottom: "8px" }}>⏱ 180 นาที 📝 60 ข้อ</div>
-                  <div style={{ background: "#f8f9fa", padding: "12px", borderRadius: "10px", fontSize: "12px", color: "#444" }}>
+                  <button type="button" className="wb-review-detail-toggle" aria-expanded={isReviewExpanded("tgat")} onClick={() => toggleReview("tgat")}>
+                    <span>รายละเอียดข้อสอบ</span><span aria-hidden="true">{isReviewExpanded("tgat") ? "⌃" : "⌄"}</span>
+                  </button>
+                  {isReviewExpanded("tgat") && <div className="wb-review-detail-panel">
                     {selectedSets["tgat"].map((set) => (
-                      <div key={set} style={{ fontWeight: 600, marginBottom: "4px", color: "#111" }}>
-                        ชุดข้อสอบ {set}
+                      <div key={set} style={{ marginBottom: "10px", color: "#111" }}>
+                        <strong style={{ display: "block", marginBottom: "4px" }}>ชุดข้อสอบ {set}</strong>
+                        <span style={{ display: "block" }}>TGAT1 การสื่อสารภาษาอังกฤษ</span>
+                        <span style={{ display: "block" }}>TGAT2 การคิดอย่างมีเหตุผล</span>
+                        <span style={{ display: "block" }}>TGAT3 สมรรถนะการทำงาน</span>
                       </div>
                     ))}
-                  </div>
+                  </div>}
                 </div>
               )}
 
-              {tpatTotalCount > 0 && (
-                <div className="wb-review-line" style={{ marginBottom: "20px" }}>
+              {selectedTpatSubjects.map((subject) => (
+                <div className="wb-review-line" style={{ marginBottom: "20px" }} key={subject.id}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                    <strong style={{ fontSize: "15px" }}>TPAT ความถนัดทางวิชาชีพ</strong>
-                    <span style={{ fontSize: "15px", fontWeight: 700 }}>{tpatTotalCount * 179} บาท</span>
+                    <strong style={{ fontSize: "15px" }}>{subject.title}</strong>
+                    <span style={{ fontSize: "15px", fontWeight: 700 }}>{subject.sets.length * 179} บาท</span>
                   </div>
                   <div style={{ fontSize: "12px", color: "#666", marginBottom: "8px" }}>⏱ 180 นาที 📝 60 ข้อ</div>
-                  <div style={{ background: "#f8f9fa", padding: "12px", borderRadius: "10px", fontSize: "12px", color: "#444" }}>
-                    {(selectedSets["tpat1"] || []).map((set) => (
-                      <div key={`tpat1-${set}`} style={{ fontWeight: 600, marginBottom: "4px", color: "#111" }}>
-                        TPAT1 แพทย์ ชุด {set}
+                  <button type="button" className="wb-review-detail-toggle" aria-expanded={isReviewExpanded(subject.id)} onClick={() => toggleReview(subject.id)}>
+                    <span>รายละเอียดข้อสอบ</span><span aria-hidden="true">{isReviewExpanded(subject.id) ? "⌃" : "⌄"}</span>
+                  </button>
+                  {isReviewExpanded(subject.id) && <div className="wb-review-detail-panel">
+                    {subject.sets.map((set) => (
+                      <div key={`${subject.id}-${set}`} style={{ marginBottom: "4px", color: "#111", fontWeight: 600 }}>
+                        {subject.title} · ชุด {set}
                       </div>
                     ))}
-                    {(selectedSets["tpat2"] || []).map((set) => (
-                      <div key={`tpat2-${set}`} style={{ fontWeight: 600, marginBottom: "4px", color: "#111" }}>
-                        TPAT2 ศิลปกรรม ชุด {set}
-                      </div>
-                    ))}
-                    {tpat3Count > 0 && (
-                      <div style={{ fontWeight: 600, marginBottom: "4px", color: "#111" }}>TPAT3 วิทยาศาสตร์ ชุด A</div>
-                    )}
-                    {tpat4Count > 0 && (
-                      <div style={{ fontWeight: 600, marginBottom: "4px", color: "#111" }}>TPAT4 สถาปัตย์ ชุด A</div>
-                    )}
-                  </div>
+                  </div>}
                 </div>
-              )}
+              ))}
 
               {otherSelected.alevel && (
                 <div className="wb-review-line" style={{ marginBottom: "16px", display: "flex", justifyContent: "space-between" }}>
@@ -595,14 +620,17 @@ export default function WebBSubjectPurchaseFlow({
           </div>
 
           <p style={{ textAlign: "center", fontSize: "12px", color: "#666", marginTop: "24px" }}>
-            🔒 ข้อมูลของคุณถูกจัดเก็บอย่างปลอดภัย · ชำระผ่าน QR PromptPay
+            🔒 ข้อมูลของคุณถูกจัดเก็บอย่างปลอดภัย · QR ด้านถัดไปเป็นตัวอย่างในระบบ Demo
           </p>
 
           <div className="wb-registration-actions" style={{ display: "flex", gap: "16px", marginTop: "24px" }}>
             <button
               type="button"
               className="wb-registration-back"
-              onClick={() => setSubStep(3)}
+              onClick={() => {
+                setSubStep(3);
+                onProgressChange?.(75);
+              }}
               style={{
                 flex: 1,
                 padding: "14px",
@@ -632,7 +660,7 @@ export default function WebBSubjectPurchaseFlow({
                 cursor: "pointer",
               }}
             >
-              ชำระเงิน {totalPrice} บาท →
+              เปิด QR ตัวอย่าง {totalPrice} บาท →
             </button>
           </div>
 
@@ -649,7 +677,7 @@ export default function WebBSubjectPurchaseFlow({
               }}
               onClick={handleCompletePayment}
             >
-              จำลองการชำระเงินสำเร็จ (ข้ามหน้าสแกน QR)
+              จำลองการสั่งซื้อสำเร็จ (ไม่ชำระเงินจริง)
             </button>
           </div>
         </div>
@@ -721,7 +749,7 @@ export default function WebBSubjectPurchaseFlow({
             <div style={{ padding: "24px 20px 20px", textAlign: "center" }}>
               <h2 style={{ margin: "0 0 4px", fontSize: "18px", fontWeight: 800 }}>สแกน QR เพื่อชำระเงิน</h2>
               <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#666" }}>
-                ชำระเงินผ่านแอปพลิเคชันได้ทุกธนาคาร<br />ดูวิธีชำระเงินด้านล่าง
+                QR นี้ใช้ทดสอบการแสดงผลเท่านั้น<br />ไม่สามารถใช้จ่ายเงินจริงได้
               </p>
 
               <div style={{ border: "1px solid #e0e0e0", borderRadius: "16px", overflow: "hidden" }}>
@@ -752,8 +780,8 @@ export default function WebBSubjectPurchaseFlow({
                     </svg>
                   </div>
                   <div style={{ textAlign: "left", lineHeight: 1.1 }}>
-                    <div style={{ fontSize: "13px", fontWeight: 800 }}>THAI QR</div>
-                    <div style={{ fontSize: "10px", letterSpacing: "1px" }}>PAYMENT</div>
+                    <div style={{ fontSize: "13px", fontWeight: 800 }}>DEMO QR</div>
+                    <div style={{ fontSize: "10px", letterSpacing: "1px" }}>ORDER INFO</div>
                   </div>
                 </div>
 
@@ -770,7 +798,7 @@ export default function WebBSubjectPurchaseFlow({
                       marginBottom: "14px",
                     }}
                   >
-                    ชำระภายใน 59:24 นาที
+                    Demo เท่านั้น · สแกนแล้วไม่ตัดเงินจริง
                   </div>
 
                   <div
@@ -784,32 +812,27 @@ export default function WebBSubjectPurchaseFlow({
                       borderRadius: "8px",
                     }}
                   >
-                    <svg viewBox="0 0 100 100" width="100%" height="100%">
-                      <rect x="10" y="10" width="30" height="30" fill="none" stroke="#000" strokeWidth="4" />
-                      <rect x="60" y="10" width="30" height="30" fill="none" stroke="#000" strokeWidth="4" />
-                      <rect x="10" y="60" width="30" height="30" fill="none" stroke="#000" strokeWidth="4" />
-                      <rect x="18" y="18" width="14" height="14" fill="#000" />
-                      <rect x="68" y="18" width="14" height="14" fill="#000" />
-                      <rect x="18" y="68" width="14" height="14" fill="#000" />
-                      <rect x="55" y="55" width="35" height="35" fill="#000" rx="4" />
-                      <rect x="50" y="10" width="6" height="6" fill="#000" />
-                      <rect x="50" y="20" width="6" height="6" fill="#000" />
-                      <rect x="10" y="45" width="6" height="6" fill="#000" />
-                      <rect x="25" y="45" width="15" height="6" fill="#000" />
-                    </svg>
+                    <QRCodeSVG
+                      id="webb-demo-order-qr"
+                      value={`STUDYUNITH-DEMO|${checkoutRef}|${totalPrice}`}
+                      size={128}
+                      level="M"
+                      title={`QR ข้อมูลคำสั่งซื้อทดลอง ${checkoutRef} ยอด ${totalPrice} บาท ไม่ใช่ QR ชำระเงินจริง`}
+                    />
                   </div>
 
                   <div style={{ fontWeight: 800, fontSize: "14px", marginBottom: "2px" }}>
-                    บริษัทเรียนต่อมหาลัย จำกัด
+                    คำสั่งซื้อ {checkoutRef}
                   </div>
                   <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "8px" }}>
-                    รองรับทุกแอปธนาคาร · ยืนยันการชำระอัตโนมัติ
+                    QR นี้ใช้ตรวจสอบคำสั่งซื้อในโหมด Demo เท่านั้น
                   </div>
                   <div style={{ fontWeight: 800, fontSize: "16px", marginBottom: "14px", color: "#111" }}>
-                    ยอดที่ต้องชำระ {totalPrice} บาท
+                    ยอดตัวอย่าง {totalPrice} บาท
                   </div>
-                  <button
+                    <button
                     type="button"
+                      onClick={downloadDemoQr}
                     style={{
                       width: "100%",
                       padding: "10px",
@@ -821,7 +844,7 @@ export default function WebBSubjectPurchaseFlow({
                       cursor: "pointer",
                     }}
                   >
-                    ดาวน์โหลด QR Code
+                    ดาวน์โหลด QR ตัวอย่าง
                   </button>
                 </div>
               </div>
@@ -837,9 +860,9 @@ export default function WebBSubjectPurchaseFlow({
               >
                 <div style={{ fontSize: "12px", fontWeight: 800, marginBottom: "6px" }}>วิธีชำระเงินง่ายๆ</div>
                 <ol style={{ margin: 0, paddingLeft: "18px", fontSize: "11px", color: "#555", lineHeight: 1.6 }}>
-                  <li>เปิดแอปธนาคาร แล้วเลือกสแกน QR</li>
-                  <li>ตรวจสอบยอดเงินให้ตรง แล้วกดชำระ</li>
-                  <li>ยืนยันการชำระเงิน</li>
+                  <li>ใช้กล้องอ่าน QR เพื่อดูรหัสคำสั่งซื้อ</li>
+                  <li>ระบบนี้ไม่เชื่อมต่อธนาคารและไม่รับชำระเงินจริง</li>
+                  <li>กดยืนยันด้านล่างเพื่อจำลองการสั่งซื้อ</li>
                 </ol>
               </div>
 
@@ -858,7 +881,7 @@ export default function WebBSubjectPurchaseFlow({
                 }}
                 onClick={handleCompletePayment}
               >
-                จำลองการชำระเงินสำเร็จ
+                จำลองการสั่งซื้อสำเร็จ
               </button>
             </div>
           </section>

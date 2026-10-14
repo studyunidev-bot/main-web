@@ -22,6 +22,7 @@ export default function WebBPaymentSuccess({
   homeHref = "/webb",
   examHref = "/webb/student?view=exam#exam-list",
 }: WebBPaymentSuccessProps) {
+  const isDemoOrder = paymentMethod.toLowerCase().includes("demo");
   const displayRef = orderRef.startsWith("#") ? orderRef : `#${orderRef}`;
   const displayDate =
     paidDate ||
@@ -139,7 +140,7 @@ export default function WebBPaymentSuccess({
 
       <h1 className="wb-payment-success-title">ชำระเงินสำเร็จ</h1>
       <p className="wb-payment-success-sub">
-        การสมัครสอบเสร็จสมบูรณ์แล้ว คุณสามารถเข้าสู่ห้องสอบได้ทันที
+        {isDemoOrder ? "บันทึกรายการทดลองแล้ว ไม่มีการชำระเงินจริงหรือเชื่อมต่อธนาคาร" : "การสมัครสอบเสร็จสมบูรณ์แล้ว คุณสามารถเข้าสู่ห้องสอบได้ทันที"}
       </p>
 
       <p className="wb-payment-success-ref">
@@ -149,7 +150,7 @@ export default function WebBPaymentSuccess({
       {/* Summary Box */}
       <div className="wb-payment-success-summary">
         <div className="wb-payment-summary-row">
-          <span className="wb-summary-label">วันที่ชำระ</span>
+          <span className="wb-summary-label">{isDemoOrder ? "วันที่ทำรายการ" : "วันที่ชำระ"}</span>
           <span className="wb-summary-value">{displayDate}</span>
         </div>
         <div className="wb-payment-summary-row">
@@ -162,7 +163,7 @@ export default function WebBPaymentSuccess({
         </div>
         <div className="wb-payment-summary-divider" />
         <div className="wb-payment-summary-row wb-payment-summary-total">
-          <span className="wb-summary-label">ยอดชำระ</span>
+          <span className="wb-summary-label">{isDemoOrder ? "ยอดตัวอย่าง" : "ยอดชำระ"}</span>
           <span className="wb-summary-value wb-total-amount">
             {formatBaht(totalAmount)}
           </span>

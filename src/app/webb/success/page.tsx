@@ -3,8 +3,8 @@ export const metadata = { title: "ส่งคำตอบเรียบร้�
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ product?: string }>;
+  searchParams: Promise<{ product?: string; set?: string; ref?: string; type?: string }>;
 }) {
-  const { product } = await searchParams;
-  return <WebBFlow mode="success" productId={product} />;
+  const { product, set, ref, type } = await searchParams;
+  return <WebBFlow mode="success" productId={product} examSet={set} purchaseRef={ref} examType={type === "trial" ? "trial" : "purchased"} />;
 }

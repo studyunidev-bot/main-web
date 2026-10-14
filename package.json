@@ -36,6 +36,7 @@
     "nextjs-toploader": "^3.7.15",
     "pg": "^8.23.1",
     "postcss": "^8",
+    "qrcode.react": "^4.2.0",
     "quill": "^2.0.3",
     "react": "19.1.0",
     "react-dom": "19.1.0",

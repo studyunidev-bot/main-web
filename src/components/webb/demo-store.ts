@@ -16,6 +16,7 @@ export type DemoStudentProfile = {
 export type DemoPurchase = {
   ref: string;
   productId: string;
+  examSet?: string;
   amount: number;
   baseAmount: number;
   payment: string;
@@ -83,6 +84,8 @@ const productParts: Record<string, string[]> = {
   "tgat-full": ["tgat1", "tgat2", "tgat3"],
   tpat1: ["tpat1"],
   tpat2: ["tpat2"],
+  tpat3: ["tpat3"],
+  tpat4: ["tpat4"],
 };
 
 export function safeRead<T>(key: string, fallback: T): T {
@@ -141,7 +144,7 @@ export function currentPurchaseForProduct(productId: string) {
   if (existing) return existing;
 
   // In Mockup demo, grant entitlement for the student's enrolled courses/exams
-  const defaultMockProducts = ["tgat1", "tgat2", "tgat3", "tgat-full", "tpat1", "tpat2", "tgat23"];
+  const defaultMockProducts = ["tgat1", "tgat2", "tgat3", "tgat-full", "tpat1", "tpat2", "tpat3", "tpat4", "tgat23"];
   if (defaultMockProducts.includes(productId)) {
     const account = readDemoAccount() || {
       username: "sss",
@@ -170,6 +173,27 @@ export function currentPurchaseForProduct(productId: string) {
   return null;
 }
 
+export function currentPurchaseForExam(productId: string, examSet?: string) {
+  if (examSet) {
+    const match = [...readDemoPurchases()].reverse().find((purchase) =>
+      purchase.productId === productId && purchase.examSet === examSet && purchaseBelongsToCurrentAccount(purchase),
+    );
+    if (match) return match;
+    const legacyMatch = [...readDemoPurchases()].reverse().find((purchase) =>
+      purchase.productId === productId && !purchase.examSet && purchaseBelongsToCurrentAccount(purchase),
+    );
+    if (legacyMatch) return legacyMatch;
+    const mockEntitlement = currentPurchaseForProduct(productId);
+    return mockEntitlement && !mockEntitlement.examSet ? mockEntitlement : null;
+  }
+  return currentPurchaseForProduct(productId);
+}
+
+export function currentPurchaseForRef(ref?: string) {
+  if (!ref) return null;
+  return readDemoPurchases().find((purchase) => purchase.ref === ref && purchaseBelongsToCurrentAccount(purchase)) || null;
+}
+
 export function purchasedComponents(purchases: DemoPurchase[]) {
   return new Set(purchases.flatMap((purchase) => productParts[purchase.productId] || [purchase.productId]));
 }
@@ -191,18 +215,18 @@ export function productsOverlap(left: string, right: string) {
   return [...productComponents(right)].some((part) => leftParts.has(part));
 }
 
-export function examResultStorageKey(productId: string, examType: "purchased" | "trial", username?: string) {
-  if (examType === "trial") return `webb-demo-result:${productId}:trial`;
+export function examResultStorageKey(productId: string, examType: "purchased" | "trial", username?: string, examSet?: string) {
+  if (examType === "trial") return `webb-demo-result:${productId}:trial${examSet ? `:${examSet}` : ""}`;
   const account = readDemoAccount();
   const identity = username || account?.username || account?.email || "guest";
-  return `webb-demo-result:${productId}:purchased:${encodeURIComponent(identity.toLowerCase())}`;
+  return `webb-demo-result:${productId}:purchased:${encodeURIComponent(identity.toLowerCase())}${examSet ? `:${examSet}` : ""}`;
 }
 
-export function examAnswersStorageKey(productId: string, examType: "purchased" | "trial", username?: string) {
-  if (examType === "trial") return `webb-demo-answers:${productId}:trial`;
+export function examAnswersStorageKey(productId: string, examType: "purchased" | "trial", username?: string, examSet?: string) {
+  if (examType === "trial") return `webb-demo-answers:${productId}:trial${examSet ? `:${examSet}` : ""}`;
   const account = readDemoAccount();
   const identity = username || account?.username || account?.email || "guest";
-  return `webb-demo-answers:${productId}:purchased:${encodeURIComponent(identity.toLowerCase())}`;
+  return `webb-demo-answers:${productId}:purchased:${encodeURIComponent(identity.toLowerCase())}${examSet ? `:${examSet}` : ""}`;
 }
 
 export function productAvailability() {

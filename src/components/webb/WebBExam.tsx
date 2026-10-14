@@ -12,7 +12,8 @@ import {
   LuSearch,
 } from "react-icons/lu";
 import type { ExamProduct } from "./data";
-import { addDemoEmail, currentPurchaseForProduct, examAnswersStorageKey, examResultStorageKey, readDemoAccount, recordDemoRankingResult, setPurchaseExamStatus, updateAdminAttempt } from "./demo-store";
+import { getExamPlan, getExamQuestionDetails, type ExamPlan } from "./exam-documents";
+import { addDemoEmail, currentPurchaseForExam, currentPurchaseForRef, examAnswersStorageKey, examResultStorageKey, readDemoAccount, recordDemoRankingResult, setPurchaseExamStatus, updateAdminAttempt } from "./demo-store";
 import { MOCK_EXAM_PAGES, TOTAL_MOCK_QUESTIONS, TOTAL_MOCK_PAGES, getPageForQuestion } from "./mock-exam-questions";
 
 const TOTAL_QUESTIONS = TOTAL_MOCK_QUESTIONS;
@@ -166,6 +167,9 @@ function MockExamPdf({
 }
 
 function AnswerPaper({
+  questionCount,
+  examPlan,
+  pdfBacked,
   answers,
   onAnswer,
   expanded,
@@ -173,7 +177,14 @@ function AnswerPaper({
   page,
   totalPages,
   onPageChange,
+  questionOffset = 0,
+  activeSectionIndex = 0,
+  sectionCount = 1,
+  onSectionChange,
 }: {
+  questionCount: number;
+  examPlan: ExamPlan | null;
+  pdfBacked: boolean;
   answers: Record<number, string>;
   onAnswer: (question: number, choice: number) => void;
   expanded: boolean;
@@ -181,22 +192,32 @@ function AnswerPaper({
   page: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  questionOffset?: number;
+  activeSectionIndex?: number;
+  sectionCount?: number;
+  onSectionChange?: (index: number) => void;
 }) {
   const [filter, setFilter] = useState<"all" | "answered" | "unanswered">("all");
-  const answeredCount = Object.keys(answers).length;
-  const unansweredCount = TOTAL_QUESTIONS - answeredCount;
+  const answeredCount = Object.keys(answers).filter((question) => {
+    const index = Number(question);
+    return index >= questionOffset && index < questionOffset + questionCount;
+  }).length;
+  const unansweredCount = questionCount - answeredCount;
   const gridScrollRef = useRef<HTMLDivElement>(null);
 
   const filteredQuestions = useMemo(() => {
-    return Array.from({ length: TOTAL_QUESTIONS }, (_, i) => i).filter((q) => {
-      const isAnswered = answers[q] !== undefined;
-      if (filter === "answered") return isAnswered;
-      if (filter === "unanswered") return !isAnswered;
-      return true;
-    });
-  }, [filter, answers]);
+    return Array.from({ length: questionCount }, (_, i) => i)
+      .filter((q) => {
+        const isAnswered = answers[questionOffset + q] !== undefined;
+        if (filter === "answered") return isAnswered;
+        if (filter === "unanswered") return !isAnswered;
+        return true;
+      })
+      .slice(pdfBacked ? 0 : (page - 1) * 10, pdfBacked ? undefined : page * 10);
+  }, [filter, answers, questionCount, questionOffset, pdfBacked, page]);
 
   useEffect(() => {
+    if (pdfBacked) return;
     const pageData = MOCK_EXAM_PAGES.find((p) => p.pageNumber === page);
     if (pageData && pageData.questions.length > 0) {
       const firstQ = pageData.questions[0].number;
@@ -205,7 +226,7 @@ function AnswerPaper({
         targetRow.scrollIntoView({ block: "start", behavior: "smooth" });
       }
     }
-  }, [page]);
+  }, [page, pdfBacked]);
 
   return (
     <aside
@@ -214,7 +235,7 @@ function AnswerPaper({
       <header className="wb-answer-panel-header">
         <strong>กระดาษคำตอบ</strong>
         <span>
-          <em>{answeredCount}</em>/{TOTAL_QUESTIONS}
+          <em>{answeredCount}</em>/{questionCount}
         </span>
         <button
           type="button"
@@ -227,13 +248,18 @@ function AnswerPaper({
       </header>
       {expanded && (
         <>
-          <div className="wb-answer-legend" role="tablist" aria-label="กรองสถานะข้อสอบ">
+          {pdfBacked ? (
+            <div className="wb-answer-legend wb-answer-legend-static" aria-label="สถานะคำตอบ">
+              <span><i className="is-answered" />ตอบแล้ว</span>
+              <span><i />ยังไม่ตอบ</span>
+            </div>
+          ) : <div className="wb-answer-legend" role="tablist" aria-label="กรองสถานะข้อสอบ">
             <button
               type="button"
               className={`wb-legend-filter-btn ${filter === "all" ? "is-active" : ""}`}
               onClick={() => setFilter("all")}
             >
-              ทั้งหมด ({TOTAL_QUESTIONS})
+              ทั้งหมด ({questionCount})
             </button>
             <button
               type="button"
@@ -251,7 +277,15 @@ function AnswerPaper({
               <i />
               ยังไม่ตอบ ({unansweredCount})
             </button>
-          </div>
+          </div>}
+          {pdfBacked && examPlan && (
+            <div className="wb-answer-instruction">
+              <b>{examPlan.sections[activeSectionIndex]?.title}</b>
+              <small>
+                {examPlan.sections[activeSectionIndex]?.choiceCount} ตัวเลือก (1–{examPlan.sections[activeSectionIndex]?.choiceCount}) · เลือกคำตอบที่ถูกต้อง
+              </small>
+            </div>
+          )}
           <div className="wb-answer-grid-scroll" ref={gridScrollRef}>
             {filteredQuestions.length === 0 ? (
               <div className="wb-filter-empty-message">
@@ -260,16 +294,21 @@ function AnswerPaper({
             ) : (
               <div className="wb-answer-grid">
                 {filteredQuestions.map((question, idx) => {
-                  const questionNumber = question + 1;
-                  const pageNum = getPageForQuestion(question);
+                  const answerIndex = questionOffset + question;
+                  const questionDetails = examPlan
+                    ? getExamQuestionDetails(examPlan, answerIndex)
+                    : { questionNumber: answerIndex + 1, choiceCount: 4 };
+                  const questionNumber = pdfBacked ? question + 1 : questionDetails.questionNumber;
+                  const pageNum = pdfBacked ? null : getPageForQuestion(question);
                   const isFirstOfPage =
+                    !pdfBacked &&
                     filter === "all" &&
                     (idx === 0 ||
                       getPageForQuestion(filteredQuestions[idx - 1]) !== pageNum);
 
                   return (
-                    <div key={question} style={{ display: "contents" }}>
-                      {isFirstOfPage && (
+                    <div key={answerIndex} style={{ display: "contents" }}>
+                      {isFirstOfPage && pageNum !== null && (
                         <div
                           className={`wb-answer-page-divider ${pageNum === page ? "is-current-page" : ""}`}
                           onClick={() => onPageChange(pageNum)}
@@ -281,27 +320,28 @@ function AnswerPaper({
                       )}
                       <div
                         className="wb-answer-row"
+                        data-choice-count={questionDetails.choiceCount}
                         id={`wb-answer-row-${questionNumber}`}
                       >
                         <b
                           style={{ cursor: "pointer" }}
                           title={`คลิกเพื่อเปิดหน้าที่มีข้อ ${questionNumber}`}
-                          onClick={() => onPageChange(pageNum)}
+                          onClick={() => pageNum !== null && onPageChange(pageNum)}
                         >
                           {questionNumber}
                         </b>
-                        {[0, 1, 2, 3].map((choice) => (
+                        {Array.from({ length: questionDetails.choiceCount }, (_, choice) => choice).map((choice) => (
                           <button
                             key={choice}
                             type="button"
                             className={
-                              answers[question] === String(choice)
+                              answers[answerIndex] === String(choice)
                                 ? "is-selected"
                                 : ""
                             }
                             aria-label={`ข้อ ${questionNumber} ตัวเลือก ${choice + 1}`}
-                            aria-pressed={answers[question] === String(choice)}
-                            onClick={() => onAnswer(question, choice)}
+                            aria-pressed={answers[answerIndex] === String(choice)}
+                            onClick={() => onAnswer(answerIndex, choice)}
                           >
                             {choice + 1}
                           </button>
@@ -313,7 +353,24 @@ function AnswerPaper({
               </div>
             )}
           </div>
-          <footer className="wb-answer-panel-actions">
+          {pdfBacked ? <footer className="wb-answer-panel-actions">
+            <button
+              type="button"
+              onClick={() => onSectionChange?.(activeSectionIndex - 1)}
+              disabled={activeSectionIndex <= 0}
+              aria-label="ย้อนกลับ"
+            >
+              ย้อนกลับ
+            </button>
+            <button
+              type="button"
+              onClick={() => onSectionChange?.(activeSectionIndex + 1)}
+              disabled={activeSectionIndex >= sectionCount - 1}
+              aria-label="ถัดไป"
+            >
+              ถัดไป <span aria-hidden="true">→</span>
+            </button>
+          </footer> : <footer className="wb-answer-panel-actions">
             <button
               type="button"
               onClick={() => onPageChange(page - 1)}
@@ -333,39 +390,85 @@ function AnswerPaper({
             >
               ถัดไป
             </button>
-          </footer>
+          </footer>}
         </>
       )}
     </aside>
   );
 }
 
+function PurchasedExamDocuments({
+  plan,
+  activeSectionIndex = 0,
+}: {
+  plan: ExamPlan;
+  activeSectionIndex?: number;
+}) {
+  if (!plan.hasSuppliedExam || plan.sections.length === 0) {
+    return (
+      <section className="wb-purchased-exam-unavailable" role="status">
+        <h2>ยังไม่มีไฟล์ข้อสอบสำหรับรายการนี้</h2>
+        <p>ไฟล์ที่เตรียมไว้ตอนนี้ครอบคลุม TGAT1, TGAT2 และ TGAT3 ชุด A เท่านั้น</p>
+        <Link href="/webb/student?view=exam">กลับรายการสอบของคุณ</Link>
+      </section>
+    );
+  }
+
+  const section = plan.sections[activeSectionIndex] || plan.sections[0];
+
+  return (
+    <div className="wb-purchased-exam-documents">
+      <section className="wb-purchased-exam-document" key={section.id}>
+        <iframe
+          src={`${section.examPdf}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+          title={`ข้อสอบ ${section.title} ชุด 4`}
+          loading="lazy"
+        />
+      </section>
+    </div>
+  );
+}
+
 export default function WebBExam({
   product,
   examType = "purchased",
+  examSet = "A",
+  purchaseRef,
 }: {
   product: ExamProduct;
   examType?: "purchased" | "trial";
+  examSet?: string;
+  purchaseRef?: string;
 }) {
-  const answerStorageKey = examAnswersStorageKey(product.id, examType);
-  const resultKey = examResultStorageKey(product.id, examType);
-  const examDurationSeconds = 180 * 60;
+  const answerStorageKey = examAnswersStorageKey(product.id, examType, undefined, examSet);
+  const resultKey = examResultStorageKey(product.id, examType, undefined, examSet);
+  const startedAtKey = `webb-demo-started:${product.id}:${examType}:${examSet}`;
+  const selectedPurchase = currentPurchaseForRef(purchaseRef) || currentPurchaseForExam(product.id, examSet);
+  const examPlan = getExamPlan(product.id, examSet);
+  const pdfBacked = examType === "purchased";
+  const questionCount = pdfBacked ? examPlan.questionCount : TOTAL_QUESTIONS;
+  const examDurationSeconds = (examType === "trial" ? 180 : examPlan.durationMinutes) * 60;
   const [answers, setAnswers] =
     useState<Record<number, string>>(initialAnswers);
   const [remaining, setRemaining] = useState(examDurationSeconds);
+  const [deadlineAt, setDeadlineAt] = useState<number | null>(null);
   const [attemptStatus, setAttemptStatus] = useState<
-    "checking" | "ready" | "submitted" | "timeout"
+    "checking" | "ready" | "submitted" | "timeout" | "unsupported"
   >("checking");
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [answerPaperExpanded, setAnswerPaperExpanded] = useState(true);
   const [page, setPage] = useState(1);
+  const [activeSectionIndex, setActiveSectionIndex] = useState(0);
   const [zoom, setZoom] = useState(100);
   const answeredCount = useMemo(() => Object.keys(answers).length, [answers]);
+  const activeExamSection = pdfBacked
+    ? examPlan.sections[activeSectionIndex] || examPlan.sections[0]
+    : null;
 
   function handleAutoFill() {
     const newAnswers: Record<number, string> = {};
-    for (let i = 0; i < TOTAL_QUESTIONS; i++) {
-      newAnswers[i] = String(Math.floor(Math.random() * 4));
+    for (let i = 0; i < questionCount; i++) {
+      newAnswers[i] = String(Math.floor(Math.random() * getExamQuestionDetails(examPlan, i).choiceCount));
     }
     setAnswers(newAnswers);
   }
@@ -377,28 +480,55 @@ export default function WebBExam({
     } catch {}
   }
 
+  function testExamExpiry() {
+    const nextDeadline = Date.now() + 5_000;
+    setDeadlineAt(nextDeadline);
+    setRemaining(5);
+    try {
+      const saved = localStorage.getItem(resultKey);
+      const attempt = saved ? JSON.parse(saved) as Record<string, unknown> : {};
+      localStorage.setItem(resultKey, JSON.stringify({
+        ...attempt,
+        status: "in-progress",
+        startedAt: attempt.startedAt || Date.now(),
+        deadlineAt: nextDeadline,
+      }));
+    } catch {
+      // The countdown still works for this page if browser storage is unavailable.
+    }
+  }
+
   useEffect(() => {
     const redirectIfCompleted = () => {
       try {
-        if (examType === "purchased" && !currentPurchaseForProduct(product.id)) {
+        if (examType === "purchased" && !selectedPurchase) {
           setAttemptStatus("submitted");
           window.location.replace("/webb/products");
           return true;
         }
-        const saved = localStorage.getItem(resultKey);
+        if (examType === "purchased" && !examPlan.hasSuppliedExam) {
+          setAttemptStatus("unsupported");
+          return true;
+        }
+        let saved = localStorage.getItem(resultKey);
+        if (!saved) {
+          const legacyKey = examResultStorageKey(product.id, examType);
+          saved = localStorage.getItem(legacyKey);
+          if (saved) localStorage.setItem(resultKey, saved);
+        }
         const status = saved
           ? (JSON.parse(saved) as { status?: string }).status
-          : undefined;
+          : selectedPurchase?.examStatus;
         if (status === "interrupted") {
           setAttemptStatus("submitted");
-          window.location.replace(`/webb/error?product=${product.id}&type=${examType}&reason=interrupted`);
+          window.location.replace(`/webb/error?product=${product.id}&set=${encodeURIComponent(examSet)}&ref=${encodeURIComponent(purchaseRef || "")}&type=${examType}&reason=interrupted`);
           return true;
         }
         if (status === "authorized") {
           localStorage.removeItem(resultKey);
           localStorage.removeItem(answerStorageKey);
           localStorage.setItem(resultKey, JSON.stringify({ status: "in-progress", startedAt: Date.now() }));
-          setPurchaseExamStatus(product.id, "in-progress", true, currentPurchaseForProduct(product.id)?.ref);
+          setPurchaseExamStatus(product.id, "in-progress", true, selectedPurchase?.ref);
           updateAdminAttempt(product.id, "กำลังสอบ");
         }
       } catch {
@@ -411,28 +541,17 @@ export default function WebBExam({
     const onPageShow = () => redirectIfCompleted();
     window.addEventListener("pageshow", onPageShow);
     return () => window.removeEventListener("pageshow", onPageShow);
-  }, [resultKey, answerStorageKey, product.id, examType]);
+  }, [resultKey, answerStorageKey, product.id, examType, examSet, purchaseRef, examPlan.hasSuppliedExam]);
 
   useEffect(() => {
-    if (attemptStatus !== "ready" || examType !== "purchased") return;
-    const markInterrupted = () => {
-      try {
-        const saved = localStorage.getItem(resultKey);
-        const status = saved ? (JSON.parse(saved) as { status?: string }).status : undefined;
-        if (status === "submitted" || status === "timeout" || status === "authorized") return;
-        localStorage.setItem(resultKey, JSON.stringify({ status: "interrupted", interruptedAt: Date.now() }));
-        localStorage.removeItem(answerStorageKey);
-        setPurchaseExamStatus(product.id, "interrupted", false, currentPurchaseForProduct(product.id)?.ref);
-        updateAdminAttempt(product.id, "ผิดปกติ");
-      } catch { /* Keep the interruption visible when storage is available. */ }
-    };
-    window.addEventListener("pagehide", markInterrupted);
-    return () => window.removeEventListener("pagehide", markInterrupted);
-  }, [attemptStatus, examType, resultKey, answerStorageKey, product.id]);
-
-  useEffect(() => {
+    if (pdfBacked && !examPlan.hasSuppliedExam) return;
     try {
-      const stored = localStorage.getItem(answerStorageKey);
+      let stored = localStorage.getItem(answerStorageKey);
+      if (!stored) {
+        const legacyKey = examAnswersStorageKey(product.id, examType);
+        stored = localStorage.getItem(legacyKey);
+        if (stored) localStorage.setItem(answerStorageKey, stored);
+      }
       if (stored) {
         const parsed = JSON.parse(stored) as Record<string, string>;
         // If the stored data was the old default mock { "0": "0", "1": "1" }, purge it
@@ -447,7 +566,7 @@ export default function WebBExam({
           setAnswers(
             Object.fromEntries(
               Object.entries(parsed).filter(
-                ([key]) => Number(key) < TOTAL_QUESTIONS,
+                ([key]) => Number(key) < questionCount,
               ),
             ),
           );
@@ -455,13 +574,27 @@ export default function WebBExam({
       } else {
         setAnswers({});
       }
-      const startedAtKey = `webb-demo-started:${product.id}:${examType}`;
-      if (!localStorage.getItem(startedAtKey))
-        localStorage.setItem(startedAtKey, String(Date.now()));
+      const savedResult = localStorage.getItem(resultKey);
+      const savedAttempt = savedResult
+        ? (JSON.parse(savedResult) as { status?: string; startedAt?: number; deadlineAt?: number })
+        : null;
+      const startedAt = savedAttempt?.startedAt || Number(localStorage.getItem(startedAtKey)) || Date.now();
+      const nextDeadline = savedAttempt?.deadlineAt || startedAt + examDurationSeconds * 1000;
+      if (!localStorage.getItem(startedAtKey)) localStorage.setItem(startedAtKey, String(startedAt));
+      if (!savedAttempt || (savedAttempt.status === "in-progress" && !savedAttempt.deadlineAt)) {
+        localStorage.setItem(resultKey, JSON.stringify({
+          ...savedAttempt,
+          status: "in-progress",
+          startedAt,
+          deadlineAt: nextDeadline,
+        }));
+      }
+      setDeadlineAt(nextDeadline);
+      setRemaining(Math.max(0, Math.ceil((nextDeadline - Date.now()) / 1000)));
     } catch {
       /* Exam answers remain usable when browser storage is unavailable. */
     }
-  }, [answerStorageKey, product.id, examType]);
+  }, [answerStorageKey, resultKey, startedAtKey, product.id, examType, examSet, examDurationSeconds, pdfBacked, examPlan.hasSuppliedExam, questionCount]);
 
   useEffect(() => {
     try {
@@ -472,13 +605,13 @@ export default function WebBExam({
   }, [answers, answerStorageKey]);
 
   useEffect(() => {
-    if (attemptStatus !== "ready") return;
+    if (attemptStatus !== "ready" || deadlineAt === null) return;
     const timer = window.setInterval(
-      () => setRemaining((seconds) => Math.max(0, seconds - 1)),
+      () => setRemaining(Math.max(0, Math.ceil((deadlineAt - Date.now()) / 1000))),
       1000,
     );
     return () => window.clearInterval(timer);
-  }, [attemptStatus]);
+  }, [attemptStatus, deadlineAt]);
 
   useEffect(() => {
     if (remaining !== 0 || attemptStatus !== "ready") return;
@@ -487,15 +620,15 @@ export default function WebBExam({
       JSON.stringify({ answers, answeredCount, status: "timeout" }),
     );
     if (examType === "purchased") {
-      setPurchaseExamStatus(product.id, "submitted", false, currentPurchaseForProduct(product.id)?.ref);
-      updateAdminAttempt(product.id, "ส่งแล้ว", `${answeredCount}/${TOTAL_QUESTIONS}`);
+      setPurchaseExamStatus(product.id, "submitted", false, selectedPurchase?.ref);
+      updateAdminAttempt(product.id, "ส่งแล้ว", `${answeredCount}/${questionCount}`);
       recordDemoRankingResult(product.id, 60.7);
       const account = readDemoAccount();
       if (account?.email) addDemoEmail(account.email, `หมดเวลาสอบ ${product.name}`, `ระบบส่งคำตอบล่าสุดของคุณแล้ว · ดูผลสอบและวิดีโอเฉลยได้ในบัญชีผู้เรียน (อีเมลนี้เป็นการจำลอง)`);
     }
     setAttemptStatus("timeout");
     window.location.replace(
-      `/webb/error?product=${product.id}&type=${examType}`,
+      `/webb/error?product=${product.id}&set=${encodeURIComponent(examSet)}&ref=${encodeURIComponent(purchaseRef || "")}&type=${examType}`,
     );
   }, [
     remaining,
@@ -505,6 +638,7 @@ export default function WebBExam({
     examType,
     answers,
     answeredCount,
+    questionCount,
   ]);
 
   function chooseAnswer(question: number, choice: number) {
@@ -530,16 +664,20 @@ export default function WebBExam({
       JSON.stringify({ answers, answeredCount, status: "submitted" }),
     );
     if (examType === "purchased") {
-      setPurchaseExamStatus(product.id, "submitted", false, currentPurchaseForProduct(product.id)?.ref);
-      updateAdminAttempt(product.id, "ส่งแล้ว", `${answeredCount}/${TOTAL_QUESTIONS}`);
+      setPurchaseExamStatus(product.id, "submitted", false, selectedPurchase?.ref);
+      updateAdminAttempt(product.id, "ส่งแล้ว", `${answeredCount}/${questionCount}`);
       recordDemoRankingResult(product.id, 60.7);
       const account = readDemoAccount();
       if (account?.email) addDemoEmail(account.email, `ส่งข้อสอบ ${product.name} สำเร็จ`, `ระบบบันทึกคำตอบ ${answeredCount} ข้อแล้ว · ดูผลสอบและวิดีโอเฉลยได้ในบัญชีผู้เรียน (อีเมลนี้เป็นการจำลอง)`);
     }
     setAttemptStatus("submitted");
     window.location.replace(
-      `/webb/success?product=${product.id}&type=${examType}`,
+      `/webb/success?product=${product.id}&set=${encodeURIComponent(examSet)}&ref=${encodeURIComponent(purchaseRef || "")}&type=${examType}`,
     );
+  }
+
+  if (attemptStatus === "unsupported") {
+    return <main className="wb-answer-page"><PurchasedExamDocuments plan={examPlan} /></main>;
   }
 
   if (attemptStatus !== "ready") {
@@ -559,14 +697,18 @@ export default function WebBExam({
           <ExamMark />
           <div>
             <strong>
-              {product.id === "tgat-full" ? "TGAT" : product.name}{" "}
-              ความถนัดทั่วไป · ชุด A
+              {product.id === "tgat-full" ? "TGAT ความถนัดทั่วไป" : `${product.name} ${product.parts}`} · ชุด {examSet}
             </strong>
             <span>{readDemoAccount() ? `${readDemoAccount()?.firstName} ${readDemoAccount()?.lastName}` : "สมชาย ศิริกุล"}</span>
           </div>
         </div>
-        <div className="wb-answer-clock" aria-label="เวลาที่เหลือ">
-          {formatTime(remaining)}
+        <div className="wb-answer-time-tools">
+          <div className="wb-answer-clock" aria-label="เวลาที่เหลือ">
+            {formatTime(remaining)}
+          </div>
+          <button type="button" className="wb-answer-test-expiry" onClick={testExamExpiry}>
+            ทดสอบหมดเวลา (5 วิ)
+          </button>
         </div>
         <button
           type="button"
@@ -577,11 +719,13 @@ export default function WebBExam({
         </button>
       </header>
 
-      <div className="wb-exam-mockup-toolbar">
+      {!pdfBacked && <div className="wb-exam-mockup-toolbar">
         <div className="wb-exam-toolbar-inner">
           <div className="wb-exam-info-badge">
-            <strong className="wb-exam-info-subject">TGAT1 การสื่อสารภาษาอังกฤษ</strong>
-            <span className="wb-exam-info-desc">4 ตัวเลือก (1–4) เลือกคำตอบที่ถูกต้อง</span>
+            {/* <strong className="wb-exam-info-subject">
+              {product.id === "tgat-full" ? "TGAT1 · TGAT2 · TGAT3" : `${product.name} ${product.parts}`}
+            </strong> */}
+            <span className="text-xs">{examPlan.sections.some((section) => section.choiceCount === 5) ? "4–5 ตัวเลือก" : "4 ตัวเลือก"} · เลือกคำตอบที่ถูกต้อง</span>
           </div>
           <div className="wb-mockup-btn-group">
             <button
@@ -592,16 +736,8 @@ export default function WebBExam({
             >
               ล้างคำตอบ
             </button>
-            <button
-              type="button"
-              className="wb-mockup-action-btn"
-              onClick={() => setRemaining(10)}
-              title="ตั้งเวลาเหลือ 10 วินาที เพื่อดูหน้าจอเตือนและระบบส่งอัตโนมัติ"
-            >
-              ทดสอบหมดเวลา (10 วิ)
-            </button>
             <Link
-              href={`/webb/rules?product=${product.id}&type=${examType}&back=exam`}
+              href={`/webb/rules?product=${product.id}&set=${encodeURIComponent(examSet)}&ref=${encodeURIComponent(purchaseRef || "")}&type=${examType}&back=exam`}
               className="wb-mockup-action-btn wb-mockup-exit-btn"
               title="กลับไปยังหน้ากติกาการสอบ"
             >
@@ -609,7 +745,7 @@ export default function WebBExam({
             </Link>
           </div>
         </div>
-      </div>
+      </div>}
 
       {remaining <= 300 && remaining > 0 && (
         <div className="wb-answer-warning" role="status">
@@ -622,15 +758,23 @@ export default function WebBExam({
       )}
       <div className="wb-answer-container">
         <div className="wb-answer-layout">
-          <MockExamPdf
+          {pdfBacked ? <PurchasedExamDocuments
+            plan={examPlan}
+            activeSectionIndex={activeSectionIndex}
+          /> : <MockExamPdf
             page={page}
             onPageChange={handlePageChange}
             zoom={zoom}
-            onZoomChange={(delta) =>
-              setZoom((z) => Math.min(140, Math.max(80, z + delta)))
-            }
-          />
+            onZoomChange={(delta) => setZoom((z) => Math.min(140, Math.max(80, z + delta)))}
+          />}
           <AnswerPaper
+            questionCount={activeExamSection?.questionCount || questionCount}
+            examPlan={pdfBacked ? examPlan : null}
+            pdfBacked={pdfBacked}
+            questionOffset={activeExamSection?.answerIndexStart || 0}
+            activeSectionIndex={activeSectionIndex}
+            sectionCount={examPlan.sections.length}
+            onSectionChange={setActiveSectionIndex}
             answers={answers}
             onAnswer={chooseAnswer}
             expanded={answerPaperExpanded}

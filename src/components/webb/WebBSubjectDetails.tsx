@@ -57,13 +57,15 @@ export default function WebBSubjectDetails({ kind }: { kind: SubjectKind }) {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const setParam = params.get("set")?.toUpperCase();
-      if (setParam && ["A", "B", "C", "D"].includes(setParam)) {
-        setExamSet(setParam);
+      if (setParam && setParam !== "A") {
+        params.set("set", "A");
+        window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
       }
     }
   }, []);
 
   function handleSetChange(newSet: string) {
+    if (newSet !== "A") return;
     setExamSet(newSet);
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
@@ -123,6 +125,8 @@ export default function WebBSubjectDetails({ kind }: { kind: SubjectKind }) {
                 key={set}
                 type="button"
                 className={examSet === set ? "is-active" : ""}
+                disabled={set !== "A"}
+                title={set !== "A" ? "ยังไม่มีไฟล์ข้อสอบชุดนี้" : undefined}
                 onClick={() => handleSetChange(set)}
               >
                 ข้อสอบชุด {set}
@@ -133,7 +137,7 @@ export default function WebBSubjectDetails({ kind }: { kind: SubjectKind }) {
             เลือกชุดข้อสอบ
             <select value={examSet} onChange={(event) => handleSetChange(event.target.value)}>
               {["A", "B", "C", "D"].map((set) => (
-                <option key={set} value={set}>
+                <option key={set} value={set} disabled={set !== "A"}>
                   ชุดข้อสอบ {set}
                 </option>
               ))}

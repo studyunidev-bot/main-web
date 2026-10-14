@@ -18,19 +18,16 @@ import {
   LuHeadset,
   LuLogOut,
   LuMapPin,
-  LuMaximize2,
-  LuPause,
-  LuPlay,
   LuRotateCcw,
   LuUpload,
-  LuVolume2,
   LuX,
 } from "react-icons/lu";
 import { useEffect, useState, useRef, type FormEvent } from "react";
 import { PublicFooter, WebBBrand } from "./PublicShell";
 import { getProduct } from "./data";
 import { WebBImage } from "./WebBImage";
-import { DEMO_ACCOUNT_KEY, readDemoAccount, readSocialSettings, safeWrite } from "./demo-store";
+import { DEMO_ACCOUNT_KEY, examAnswersStorageKey, examResultStorageKey, readCurrentDemoPurchases, readDemoAccount, readSocialSettings, safeWrite, setPurchaseExamStatus } from "./demo-store";
+import { getExamPlan } from "./exam-documents";
 
 type StudentMode =
   | "student"
@@ -53,6 +50,24 @@ type StudentView =
   | "detail"
   | "subresults"
   | "personal";
+
+const educationOptions = [
+  "มัธยมศึกษาปีที่ 4",
+  "มัธยมศึกษาปีที่ 5",
+  "มัธยมศึกษาปีที่ 6",
+  "มัธยมศึกษาตอนต้น",
+  "เด็กซิ่ว",
+  "อื่นๆ (ผู้ปกครอง, คุณครู)",
+];
+
+function normalizeEducation(value: string) {
+  if (educationOptions.includes(value)) return value;
+  if (value.includes("6")) return educationOptions[2];
+  if (value.includes("5")) return educationOptions[1];
+  if (value.includes("4")) return educationOptions[0];
+  if (value.includes("ต้น")) return educationOptions[3];
+  return educationOptions[5];
+}
 
 const views: { id: StudentView; label: string }[] = [
   { id: "overview", label: "ภาพรวม" },
@@ -281,6 +296,76 @@ function readStudent(): StudentInfo {
   }
 }
 
+type EnrolledExam = {
+  subjectId: string;
+  productId: string;
+  title: string;
+  detail: string;
+  set: string;
+  duration: string;
+  questions: string;
+  status: "available" | "in-progress" | "submitted" | "interrupted";
+  purchaseRef?: string;
+};
+
+const examSubjects: Record<string, { productId: string; title: string; detail: string }> = {
+  tgat: { productId: "tgat-full", title: "TGAT ความถนัดทั่วไป", detail: "TGAT1 การสื่อสารภาษาอังกฤษ · TGAT2 การคิดอย่างมีเหตุผล · TGAT3 สมรรถนะการทำงาน" },
+  "tgat-full": { productId: "tgat-full", title: "TGAT ความถนัดทั่วไป", detail: "TGAT1 การสื่อสารภาษาอังกฤษ · TGAT2 การคิดอย่างมีเหตุผล · TGAT3 สมรรถนะการทำงาน" },
+  tgat1: { productId: "tgat1", title: "TGAT1 การสื่อสารภาษาอังกฤษ", detail: "การสื่อสารภาษาอังกฤษ" },
+  tgat2: { productId: "tgat2", title: "TGAT2 การคิดอย่างมีเหตุผล", detail: "การคิดอย่างมีเหตุผล" },
+  tgat3: { productId: "tgat3", title: "TGAT3 สมรรถนะการทำงาน", detail: "สมรรถนะการทำงาน" },
+  tgat23: { productId: "tgat23", title: "TGAT2 + TGAT3", detail: "การคิดอย่างมีเหตุผล · สมรรถนะการทำงาน" },
+  tpat1: { productId: "tpat1", title: "TPAT1 ความถนัดแพทย์", detail: "ความถนัดแพทย์" },
+  tpat2: { productId: "tpat2", title: "TPAT2 ความถนัดศิลปกรรมศาสตร์", detail: "ความถนัดทางศิลปกรรม" },
+  tpat3: { productId: "tpat3", title: "TPAT3 ความถนัดด้านวิทยาศาสตร์ เทคโนโลยี และวิศวกรรมศาสตร์", detail: "วิทยาศาสตร์ เทคโนโลยี และวิศวกรรมศาสตร์" },
+  tpat4: { productId: "tpat4", title: "TPAT4 ความถนัดทางสถาปัตยกรรมศาสตร์", detail: "ความถนัดทางสถาปัตยกรรมศาสตร์" },
+};
+
+function readEnrolledExams(): EnrolledExam[] {
+  try {
+    return readCurrentDemoPurchases().flatMap((purchase) => {
+      const subjectId = purchase.productId === "tgat" ? "tgat-full" : purchase.productId;
+      const config = examSubjects[subjectId];
+      if (!config) return [];
+      const set = purchase.examSet || "A";
+      const plan = getExamPlan(config.productId, set);
+      let savedAttempt = localStorage.getItem(examResultStorageKey(config.productId, "purchased", undefined, set));
+      if (!savedAttempt) {
+        const legacyKey = examResultStorageKey(config.productId, "purchased");
+        savedAttempt = localStorage.getItem(legacyKey);
+        if (savedAttempt) localStorage.setItem(examResultStorageKey(config.productId, "purchased", undefined, set), savedAttempt);
+      }
+      const savedStatus = savedAttempt ? (JSON.parse(savedAttempt) as { status?: EnrolledExam["status"] }).status : undefined;
+      return [{
+        subjectId,
+        ...config,
+        set,
+        duration: plan.hasSuppliedExam ? `${plan.durationMinutes} นาที` : "—",
+        questions: plan.hasSuppliedExam ? `${plan.questionCount} ข้อ` : "—",
+        status: savedStatus || purchase.examStatus || "available",
+        purchaseRef: purchase.ref,
+      }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function useEnrolledExams() {
+  const [items, setItems] = useState<EnrolledExam[]>([]);
+  useEffect(() => {
+    const refresh = () => setItems(readEnrolledExams());
+    refresh();
+    window.addEventListener("storage", refresh);
+    window.addEventListener("webb-demo-purchases-updated", refresh);
+    return () => {
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("webb-demo-purchases-updated", refresh);
+    };
+  }, []);
+  return items;
+}
+
 function StudentHeader({
   student,
   menuOpen,
@@ -500,6 +585,8 @@ function StudentSidebar({
   onSelect: (view: StudentView) => void;
   onOpenAvatarModal?: () => void;
 }) {
+  const enrolledExams = useEnrolledExams();
+  const enrolledSubjects = [...new Map(enrolledExams.map((item) => [item.subjectId, item])).values()];
   return (
     <aside className="wb-dashboard-sidebar">
       <section className="wb-dashboard-profile-card">
@@ -522,16 +609,7 @@ function StudentSidebar({
       </section>
       <section className="wb-dashboard-enroll-card">
         <h3>ข้อสอบชุดที่สมัครสอบ</h3>
-        <button
-          type="button"
-          className="is-active"
-          onClick={() => onSelect("exam")}
-        >
-          TGAT ความถนัดทั่วไป
-        </button>
-        <button type="button" onClick={() => onSelect("exam")}>
-          TPAT ความถนัดทางวิชาชีพ
-        </button>
+        {enrolledSubjects.length ? enrolledSubjects.map((item, index) => <button type="button" className={index === 0 ? "is-active" : ""} key={item.subjectId} onClick={() => onSelect("exam")}>{item.title}</button>) : <p>ยังไม่มีชุดข้อสอบที่สมัคร</p>}
       </section>
     </aside>
   );
@@ -542,20 +620,23 @@ function MobileEnrollCard({
 }: {
   onSelect: (view: StudentView) => void;
 }) {
+  const enrolledExams = useEnrolledExams();
+  const enrolledSubjects = [...new Map(enrolledExams.map((item) => [item.subjectId, item])).values()];
+  const [isOpen, setIsOpen] = useState(false);
   return (
     <section className="wb-dashboard-card wb-mobile-enroll-card">
-      <h3>ข้อสอบชุดที่สมัครสอบ</h3>
-      <div className="wb-mobile-enroll-pills">
-        <button
-          type="button"
-          className="is-active"
-          onClick={() => onSelect("exam")}
-        >
-          TGAT ความถนัดทั่วไป
-        </button>
-        <button type="button" onClick={() => onSelect("exam")}>
-          TPAT ความถนัดทางวิชาชีพ
-        </button>
+      <button
+        type="button"
+        className="wb-mobile-enroll-toggle"
+        aria-expanded={isOpen}
+        aria-controls="wb-mobile-enroll-pills"
+        onClick={() => setIsOpen((open) => !open)}
+      >
+        <span>ข้อสอบชุดที่สมัครสอบ</span>
+        {isOpen ? <LuChevronUp aria-hidden="true" /> : <LuChevronDown aria-hidden="true" />}
+      </button>
+      <div className="wb-mobile-enroll-pills" id="wb-mobile-enroll-pills" hidden={!isOpen}>
+        {enrolledSubjects.length ? enrolledSubjects.map((item, index) => <button type="button" className={index === 0 ? "is-active" : ""} key={item.subjectId} onClick={() => onSelect("exam")}>{item.title}</button>) : <p>ยังไม่มีชุดข้อสอบที่สมัคร</p>}
       </div>
     </section>
   );
@@ -577,40 +658,41 @@ function StudentBanner() {
 }
 
 function StudentOverview({
-  productId,
   onSelect,
 }: {
-  productId: string;
   onSelect: (view: StudentView) => void;
 }) {
-  const product = getProduct(productId);
+  const examItems = useEnrolledExams();
+  const completed = examItems.filter((item) => item.status === "submitted").length;
+  const upcoming = examItems.find((item) => item.status === "available" || item.status === "in-progress");
+  const enrolledSubjectCount = new Set(examItems.map((item) => item.subjectId)).size;
+  const history = examItems.filter((item) => item.status === "submitted");
   return (
     <div className="wb-dashboard-view wb-overview-view">
       <section className="wb-progress-card">
         <div className="wb-progress-ring">
-          <b>1/2</b>
+          <b>{completed}/{examItems.length}</b>
           <small>ชุดสอบ</small>
         </div>
         <div className="wb-progress-copy">
           <span>ภาพรวมความคืบหน้า</span>
-          <h2>สอบไปแล้ว 1 จาก 2 ที่สมัคร</h2>
+          <h2>สอบไปแล้ว {completed} จาก {examItems.length} ชุดที่สมัคร</h2>
           <p>
-            สมัครสอบทั้งหมด 2 รายวิชา (2 ชุดข้อสอบ) - เหลืออีก 1 ชุดยังไม่ได้สอบ
-            ทำให้ครบเพื่อดูภาพรวมคะแนนของตัวเอง
+            {examItems.length ? `สมัครสอบทั้งหมด ${enrolledSubjectCount} รายวิชา (${examItems.length} ชุดข้อสอบ) · เหลืออีก ${examItems.length - completed} ชุดที่ยังไม่เสร็จ` : "ยังไม่มีรายการสมัครสอบ เมื่อเลือกซื้อข้อสอบแล้ว รายการและความคืบหน้าจะแสดงที่นี่"}
           </p>
         </div>
         <div className="wb-progress-stats">
           <b>
-            2<small>รายวิชาที่สมัคร</small>
+            {enrolledSubjectCount}<small>รายวิชาที่สมัคร</small>
           </b>
           <b>
-            2<small>ชุดข้อสอบทั้งหมด</small>
+            {examItems.length}<small>ชุดข้อสอบทั้งหมด</small>
           </b>
           <b>
-            1<small>สอบเสร็จแล้ว</small>
+            {completed}<small>สอบเสร็จแล้ว</small>
           </b>
           <b>
-            1<small>รอเข้าสอบ</small>
+            {examItems.filter((item) => item.status === "available").length}<small>รอเข้าสอบ</small>
           </b>
         </div>
       </section>
@@ -618,37 +700,11 @@ function StudentOverview({
         <div className="wb-dashboard-card-heading">
           <h2>การสอบที่กำลังจะมาถึง</h2>
         </div>
-        <article className="wb-exam-mini-card">
-          <div>
-            <span className="wb-subject-chip">
-              TPAT ความถนัดทางวิชาชีพ · ชุด A
-            </span>
-            <p>⏱ 180 นาที · 📝 60 ข้อ</p>
-          </div>
-          <Link
-            href={`/webb/rules?product=${product.id}&type=purchased&back=overview`}
-          >
-            เริ่มสอบ
-          </Link>
-        </article>
+        {upcoming ? <article className="wb-exam-mini-card"><div><span className="wb-subject-chip">{upcoming.title} · ชุด {upcoming.set}</span><p>⏱ {upcoming.duration} · 📝 {upcoming.questions}</p></div>{getExamPlan(upcoming.productId, upcoming.set).hasSuppliedExam ? <Link href={`/webb/rules?product=${upcoming.productId}&set=${upcoming.set}&ref=${encodeURIComponent(upcoming.purchaseRef || "")}&type=purchased&back=overview`}>{upcoming.status === "in-progress" ? "ทำข้อสอบต่อ" : "เริ่มสอบ"}</Link> : <span className="wb-exam-unavailable-label">ไฟล์ข้อสอบยังไม่พร้อม</span>}</article> : <p className="wb-empty-state">{examItems.length ? "สมัครครบทุกชุดแล้ว" : "ยังไม่มีรายการสอบที่กำลังจะมาถึง"}</p>}
       </section>
       <section className="wb-dashboard-card wb-history-card">
         <h2>ประวัติการเข้าสอบ</h2>
-        {[
-          ["A-Level คณิตศาสตร์ประยุกต์ 1 · ชุด A", "19 ธ.ค. 68", 82],
-          ["ทดลองระบบ", "04 ธ.ค. 69", 78],
-        ].map(([title, date, score]) => (
-          <article key={String(title)}>
-            <div>
-              <b>{title}</b>
-              <span>· {date}</span>
-            </div>
-            <i>
-              <em style={{ width: `${score}%` }} />
-            </i>
-            <button onClick={() => onSelect("detail")}>ดูรายละเอียด</button>
-          </article>
-        ))}
+        {history.length ? history.map((item) => <article key={item.purchaseRef || `${item.subjectId}-${item.set}`}><div><b>{item.title} · ชุด {item.set}</b><span>· สอบเสร็จแล้ว</span></div><i><em style={{ width: "100%" }} /></i><button onClick={() => onSelect("results")}>ดูผลสอบ</button></article>) : <p className="wb-empty-state">ยังไม่มีประวัติการสอบที่เสร็จสมบูรณ์</p>}
       </section>
       <section className="wb-dashboard-promo">
         <div className="wb-dashboard-promo-left">
@@ -677,41 +733,24 @@ function StudentOverview({
   );
 }
 
-function ExamRoom({ productId }: { productId: string }) {
+function ExamRoom() {
   const [rulesOpen, setRulesOpen] = useState(true);
-  const examItems = [
-    {
-      set: "A",
-      title: "TGAT ความถนัดทั่วไป",
-      subtext:
-        "TGAT1 การสื่อสารภาษาอังกฤษ, TGAT2 การคิดอย่างมีเหตุผล, TGAT3 สมรรถนะการทำงาน",
-      duration: "180 นาที",
-      questions: "60 ข้อ",
-      status: "ยังไม่ได้สอบ",
-      actionLabel: "เริ่มสอบ",
-      productId: "tgat1",
-    },
-    {
-      set: "B",
-      title: "TGAT ความถนัดทั่วไป",
-      subtext: "TPAT1 ความถนัดแพทย์",
-      duration: "180 นาที",
-      questions: "60 ข้อ",
-      status: "ยังไม่ได้สอบ",
-      actionLabel: "เริ่มสอบ",
-      productId: "tpat1",
-    },
-    {
-      set: "C",
-      title: "TGAT ความถนัดทั่วไป",
-      subtext: "TPAT2 ความถนัดศิลป์",
-      duration: "180 นาที",
-      questions: "60 ข้อ",
-      status: "ยังไม่ได้สอบ",
-      actionLabel: "เริ่มสอบ",
-      productId: "tpat2",
-    },
-  ];
+  const examItems = useEnrolledExams();
+
+  function resetExam(item: EnrolledExam) {
+    if (!window.confirm(`รีเซ็ต ${item.title} ชุด ${item.set} เพื่อเริ่มสอบใหม่หรือไม่? คำตอบเดิมจะถูกลบ`)) return;
+    try {
+      localStorage.removeItem(examResultStorageKey(item.productId, "purchased", undefined, item.set));
+      localStorage.removeItem(examAnswersStorageKey(item.productId, "purchased", undefined, item.set));
+      localStorage.removeItem(`webb-demo-started:${item.productId}:purchased:${item.set}`);
+      localStorage.removeItem(examResultStorageKey(item.productId, "purchased"));
+      localStorage.removeItem(examAnswersStorageKey(item.productId, "purchased"));
+      localStorage.removeItem(`webb-demo-started:${item.productId}:purchased`);
+    } catch {
+      // The purchase status still allows the demo attempt to be reset if storage is unavailable.
+    }
+    setPurchaseExamStatus(item.productId, "available", false, item.purchaseRef);
+  }
 
   return (
     <div className="wb-dashboard-view">
@@ -764,11 +803,11 @@ function ExamRoom({ productId }: { productId: string }) {
           <span className="wb-col-center">จำนวนข้อ</span>
           <span>สถานะ</span>
         </div>
-        {examItems.map((item) => (
-          <article key={item.set}>
+        {examItems.length ? examItems.map((item) => (
+          <article key={item.purchaseRef || `${item.subjectId}-${item.set}`}>
             <div className="wb-exam-subject-col">
               <b>{item.title}</b>
-              <small>{item.subtext}</small>
+              <small>{item.detail}</small>
             </div>
             <span className="wb-mobile-table-label wb-exam-set-col wb-col-center">
               <strong className="wb-mobile-label-tag">ชุดข้อสอบ</strong>
@@ -783,15 +822,22 @@ function ExamRoom({ productId }: { productId: string }) {
               <b>{item.questions}</b>
             </span>
             <div className="wb-exam-status-col">
-              <em>{item.status}</em>
-              <Link
-                href={`/webb/rules?product=${item.productId}&type=purchased&back=exam`}
-              >
-                {item.actionLabel}
-              </Link>
+              <em>{item.status === "submitted" ? "สอบเสร็จแล้ว" : item.status === "in-progress" ? "กำลังสอบ" : item.status === "interrupted" ? "รอผู้ดูแลตรวจสอบ" : "ยังไม่ได้สอบ"}</em>
+              <div className="wb-exam-actions">
+                {item.status === "submitted" ? <Link href="/webb/results">ดูผลสอบ</Link> : getExamPlan(item.productId, item.set).hasSuppliedExam ? (
+                  <Link href={`/webb/rules?product=${item.productId}&set=${item.set}&ref=${encodeURIComponent(item.purchaseRef || "")}&type=purchased&back=exam`}>
+                    {item.status === "in-progress" ? "ทำข้อสอบต่อ" : "เริ่มสอบ"}
+                  </Link>
+                ) : <span className="wb-exam-unavailable-label">ไฟล์ข้อสอบยังไม่พร้อม</span>}
+                {getExamPlan(item.productId, item.set).hasSuppliedExam && (
+                  <button type="button" className="wb-exam-reset-btn" onClick={() => resetExam(item)}>
+                    <LuRotateCcw aria-hidden="true" /> รีเซ็ตสอบใหม่
+                  </button>
+                )}
+              </div>
             </div>
           </article>
-        ))}
+        )) : <p className="wb-empty-state text-center pt-5">ยังไม่มีชุดข้อสอบที่สมัคร เมื่อเลือกซื้อแล้วรายการสอบจะแสดงที่นี่</p>}
       </section>
     </div>
   );
@@ -1624,281 +1670,54 @@ function StudentSolutions({
 }: {
   onAction: (message: string) => void;
 }) {
-  const [selectedSolution, setSelectedSolution] = useState<{
-    id: string;
-    name: string;
-    duration: string;
-    index: number;
-  } | null>(null);
+  const [eligiblePurchases, setEligiblePurchases] = useState<ReturnType<typeof readCurrentDemoPurchases>>([]);
 
-  const solutions = [
-    { id: "tgat1", name: "TGAT1 การสื่อสารภาษาอังกฤษ", duration: "32:10 นาที" },
-    { id: "tgat2", name: "TGAT2 การคิดอย่างมีเหตุผล", duration: "28:45 นาที" },
-    { id: "tgat3", name: "TGAT3 สมรรถนะการทำงาน", duration: "25:30 นาที" },
-  ];
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const productId = params.get("product");
+    const examSet = params.get("set");
+    const purchaseRef = params.get("ref");
+    const submitted = readCurrentDemoPurchases().filter((purchase) => {
+      if (purchase.examStatus !== "submitted") return false;
+      if (purchaseRef && purchase.ref !== purchaseRef) return false;
+      if (productId && purchase.productId !== productId) return false;
+      if (examSet && (purchase.examSet || "A").toUpperCase() !== examSet.toUpperCase()) return false;
+      return getExamPlan(purchase.productId, purchase.examSet || "A").hasSuppliedExam;
+    });
+    setEligiblePurchases(submitted);
+  }, []);
+
   return (
     <div className="wb-dashboard-view">
       <section className="wb-dashboard-card wb-solutions-view">
         <div className="wb-solutions-head">
-          <span className="wb-subject-chip">TGAT 90 ความถนัดทั่วไป · ชุด A</span>
-          <button
-            className="wb-solutions-download"
-            type="button"
-            onClick={() => {
-              window.print();
-              onAction("เปิดหน้าพิมพ์ไฟล์เฉลยตัวอย่างแล้ว");
-            }}
-          >
-            <LuDownload aria-hidden="true" />
-            <span>ดาวน์โหลด PDF</span>
-          </button>
+          <div>
+            <h2>เฉลยข้อสอบ PDF</h2>
+            <p>เปิดดูหรือดาวน์โหลดเฉลยของรายการที่ส่งข้อสอบแล้ว</p>
+          </div>
         </div>
-        <p>อัปเดตเมื่อ: 15 ก.ค. 2568</p>
-        <table className="wb-solutions-table">
-          <thead>
-            <tr><th>ข้อ</th><th>เนื้อหา</th><th aria-label="วิดีโอเฉลย" /></tr>
-          </thead>
-          <tbody>
-            {solutions.map((part, index) => (
-              <tr key={part.id}>
-                <td>{index + 1}</td>
-                <td>
-                  <b>{part.name}</b>
-                  <small>ความยาว {part.duration}</small>
-                </td>
-                <td>
-                  <button
-                    type="button"
-                    className="wb-btn-primary wb-solutions-play-btn"
-                    onClick={() =>
-                      setSelectedSolution({ ...part, index: index + 1 })
-                    }
-                  >
-                    <span className="wb-solutions-btn-desktop">ดูวิดีโอเฉลย</span>
-                    <span className="wb-solutions-btn-mobile">ดู</span>
-                    <LuPlay className="wb-solutions-play-icon" aria-hidden="true" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {eligiblePurchases.length === 0 ? (
+          <div className="wb-solutions-empty" role="status">เฉลยจะแสดงหลังจากส่งข้อสอบในรายการที่ซื้อแล้ว</div>
+        ) : eligiblePurchases.map((purchase) => {
+          const product = getProduct(purchase.productId);
+          const plan = getExamPlan(purchase.productId, purchase.examSet || "A");
+          return (
+            <section className="wb-solution-purchase" key={purchase.ref}>
+              <header>
+                <div><b>{product.name} {product.parts} · ชุด {purchase.examSet || "A"}</b><small>เลขรายการ {purchase.ref}</small></div>
+                {plan.sections.length === 1 && <a href={plan.sections[0].solutionPdf} download onClick={() => onAction("กำลังดาวน์โหลดไฟล์เฉลย PDF")}>ดาวน์โหลดเฉลย PDF</a>}
+              </header>
+              {plan.sections.map((section) => (
+                <details className="wb-solution-document" key={section.id} open>
+                  <summary>{section.title} · เฉลย PDF</summary>
+                  <div><a href={section.solutionPdf} target="_blank" rel="noreferrer">เปิดในแท็บใหม่</a><a href={section.solutionPdf} download onClick={() => onAction(`กำลังดาวน์โหลดเฉลย ${section.title}`)}>ดาวน์โหลด PDF</a></div>
+                  <iframe src={`${section.solutionPdf}#toolbar=1&navpanes=0&view=FitH`} title={`เฉลย ${section.title} ชุด 4`} loading="lazy" />
+                </details>
+              ))}
+            </section>
+          );
+        })}
       </section>
-
-      {selectedSolution && (
-        <VideoSolutionModal
-          solution={selectedSolution}
-          onClose={() => setSelectedSolution(null)}
-          onDownloadPdf={() => {
-            window.print();
-            onAction("เปิดหน้าพิมพ์ไฟล์เฉลยตัวอย่างแล้ว");
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-function VideoSolutionModal({
-  solution,
-  onClose,
-  onDownloadPdf,
-}: {
-  solution: { id: string; name: string; duration: string; index: number };
-  onClose: () => void;
-  onDownloadPdf: () => void;
-}) {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState("1.0x");
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
-  return (
-    <div
-      className="wb-video-modal-overlay"
-      role="presentation"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        className="wb-video-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="wb-video-modal-title"
-      >
-        <div className="wb-video-modal-header">
-          <div className="wb-video-modal-title-group">
-            <span className="wb-video-badge">
-              ข้อที่ {solution.index} · {solution.duration}
-            </span>
-            <h3 id="wb-video-modal-title">วิดีโอเฉลย: {solution.name}</h3>
-          </div>
-          <button
-            type="button"
-            className="wb-video-modal-close"
-            aria-label="ปิดหน้าต่างวิดีโอ"
-            onClick={onClose}
-          >
-            <LuX aria-hidden="true" />
-          </button>
-        </div>
-
-        <div className="wb-video-modal-body">
-          {/* Mockup Video Screen */}
-          <div
-            className="wb-video-player-mockup"
-            onClick={() => setIsPlaying(!isPlaying)}
-          >
-            <div className="wb-video-screen-content">
-              <span className="wb-video-screen-watermark">
-                STUDY UNITH · วิดีโอเฉลยตัวอย่าง (Mockup Player)
-              </span>
-
-              <div className="wb-video-play-center">
-                <button
-                  type="button"
-                  className={`wb-video-big-play-btn ${isPlaying ? "is-playing" : ""}`}
-                  aria-label={isPlaying ? "หยุดวิดีโอ" : "เล่นวิดีโอ"}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsPlaying(!isPlaying);
-                  }}
-                >
-                  {isPlaying ? (
-                    <LuPause size={30} aria-hidden="true" />
-                  ) : (
-                    <LuPlay size={30} className="wb-video-play-icon-offset" aria-hidden="true" />
-                  )}
-                </button>
-                <p className="wb-video-play-hint">
-                  {isPlaying
-                    ? "กำลังเล่นวิดีโอเฉลยตัวอย่าง (คลิกเพื่อหยุด)"
-                    : "คลิกเพื่อดูวิดีโอเฉลยตัวอย่าง"}
-                </p>
-              </div>
-
-              <div className="wb-video-screen-info">
-                <span>TGAT 90 ความถนัดทั่วไป · ชุด A</span>
-                <b>ข้อ {solution.index}: {solution.name}</b>
-              </div>
-            </div>
-
-            {/* Video Player Bottom Controls Bar */}
-            <div
-              className="wb-video-controls"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="wb-video-progress-bar">
-                <div
-                  className="wb-video-progress-fill"
-                  style={{ width: isPlaying ? "48%" : "30%" }}
-                />
-                <div
-                  className="wb-video-progress-thumb"
-                  style={{ left: isPlaying ? "48%" : "30%" }}
-                />
-              </div>
-
-              <div className="wb-video-controls-row">
-                <div className="wb-video-controls-left">
-                  <button
-                    type="button"
-                    className="wb-video-ctrl-btn"
-                    onClick={() => setIsPlaying(!isPlaying)}
-                    aria-label={isPlaying ? "หยุด" : "เล่น"}
-                  >
-                    {isPlaying ? <LuPause size={17} /> : <LuPlay size={17} />}
-                  </button>
-                  <div className="wb-video-time">
-                    <span>{isPlaying ? "14:20" : "09:12"}</span>
-                    <i>/</i>
-                    <span>{solution.duration}</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="wb-video-ctrl-btn"
-                    title="ระดับเสียง"
-                    aria-label="ระดับเสียง"
-                  >
-                    <LuVolume2 size={17} />
-                  </button>
-                </div>
-
-                <div className="wb-video-controls-right">
-                  <button
-                    type="button"
-                    className="wb-video-speed-btn"
-                    onClick={() => {
-                      const speeds = ["1.0x", "1.25x", "1.5x", "2.0x"];
-                      const next =
-                        speeds[(speeds.indexOf(playbackSpeed) + 1) % speeds.length];
-                      setPlaybackSpeed(next);
-                    }}
-                    title="ความเร็วในการเล่น"
-                  >
-                    {playbackSpeed}
-                  </button>
-                  <span className="wb-video-quality-tag">1080p HD</span>
-                  <button
-                    type="button"
-                    className="wb-video-ctrl-btn"
-                    title="เต็มจอ"
-                    aria-label="เต็มหน้าจอ"
-                  >
-                    <LuMaximize2 size={16} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Description & Features under video */}
-          <div className="wb-video-meta-section">
-            <div className="wb-video-meta-desc">
-              <h4>สรุปประเด็นเฉลย</h4>
-              <p>
-                วิดีโอนี้อธิบายหลักการวิเคราะห์โจทย์ข้อนี้โดยละเอียด
-                พร้อมแนะแนวเทคนิคการตัดตัวเลือกที่ผิดอย่างรวดเร็วและการสังเกตจุดหลอกยอดนิยม
-              </p>
-            </div>
-            <div className="wb-video-meta-tags">
-              <span className="wb-video-tag">
-                <LuClock size={13} aria-hidden="true" />
-                ความยาว {solution.duration}
-              </span>
-              <span className="wb-video-tag">
-                <LuFileText size={13} aria-hidden="true" />
-                มีเฉลยแบบข้อความใน PDF
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="wb-video-modal-footer">
-          <button
-            type="button"
-            className="wb-video-footer-download"
-            onClick={onDownloadPdf}
-          >
-            <LuDownload size={15} aria-hidden="true" />
-            <span>ดาวน์โหลดเอกสารเฉลย (PDF)</span>
-          </button>
-          <button
-            type="button"
-            className="wb-video-footer-close"
-            onClick={onClose}
-          >
-            ปิดหน้าต่าง
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -2334,9 +2153,9 @@ function StudentProfile({
               <label>
                 ระดับการศึกษา
                 <div className="wb-profile-select-wrapper">
-                  <select name="education" defaultValue={student.grade}>
-                    {["ม.4", "ม.5", "ม.6", "เทียบเท่า"].map((grade) => (
-                      <option key={grade}>{grade}</option>
+                  <select name="education" defaultValue={normalizeEducation(student.grade)}>
+                    {educationOptions.map((education) => (
+                      <option key={education}>{education}</option>
                     ))}
                   </select>
                   <LuChevronDown className="wb-profile-select-chevron" aria-hidden="true" />
@@ -2561,9 +2380,9 @@ export default function WebBStudentArea({
           {!isDetailView && <StudentBanner />}
           {!isDetailView && <MobileEnrollCard onSelect={selectView} />}
           {activeView === "overview" ? (
-            <StudentOverview productId={productId} onSelect={selectView} />
+            <StudentOverview onSelect={selectView} />
           ) : activeView === "exam" ? (
-            <ExamRoom productId={productId} />
+            <ExamRoom />
           ) : activeView === "results" ? (
             <ExamResults onSelect={selectView} />
           ) : activeView === "subresults" ? (

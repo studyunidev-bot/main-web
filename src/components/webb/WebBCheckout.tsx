@@ -6,6 +6,7 @@ import { formatBaht, type ExamProduct } from "./data";
 import { PublicShell } from "./PublicShell";
 import { WebBImage } from "./WebBImage";
 import WebBPaymentSuccess from "./WebBPaymentSuccess";
+import { getExamPlan } from "./exam-documents";
 import {
   addDemoEmail,
   DEMO_AUTH_KEY,
@@ -37,10 +38,11 @@ export default function WebBCheckout({ product }: { product: ExamProduct }) {
   }, [product.id]);
 
   const duplicate = productIsOwnedOrOverlapping(product.id, purchases);
-  const canPay = !!account && loggedIn && available && !duplicate;
+  const hasExamFile = getExamPlan(product.id, "A").hasSuppliedExam;
+  const canPay = !!account && loggedIn && available && hasExamFile && !duplicate;
 
   function payDemo() {
-    if (!canPay || !account) return;
+    if (!canPay || !account || !getExamPlan(product.id, "A").hasSuppliedExam) return;
     const now = new Date();
     const ref = `DO-${now.getFullYear() + 543}-${String(Date.now()).slice(-6)}`;
     const profileSnapshot = {
@@ -154,6 +156,7 @@ export default function WebBCheckout({ product }: { product: ExamProduct }) {
                   {!account && <p className="wb-checkout-warning">สมัครสมาชิกก่อนซื้อชุดข้อสอบ <Link href="/webb/register">สมัครสมาชิก →</Link></p>}
                   {account && !loggedIn && <p className="wb-checkout-warning">เข้าสู่ระบบเพื่อซื้อชุดข้อสอบ <Link href="/webb/login">เข้าสู่ระบบ →</Link></p>}
                   {duplicate && <p className="wb-checkout-warning">บัญชีนี้มีสิทธิ์ในวิชาที่รวมอยู่ในชุดนี้แล้ว <Link href="/webb/products">เลือกชุดอื่น →</Link></p>}
+                  {!hasExamFile && <p className="wb-checkout-warning">ยังไม่มีไฟล์ข้อสอบและเฉลยสำหรับชุดนี้ <Link href="/webb/products">เลือก TGAT ชุดที่มีไฟล์ →</Link></p>}
                   {!available && <p className="wb-checkout-warning">สินค้านี้ยังไม่เปิดขาย <Link href="/webb/products">ดูสินค้าทั้งหมด →</Link></p>}
                   <button className="webb-button webb-button-primary webb-full" disabled={!canPay} onClick={payDemo}>ยืนยันชำระ {formatBaht(total)}</button>
                   {!available && <small className="wb-demo-only-note">ปิดการขายโดยผู้ดูแลระบบ</small>}

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type FormEvent, type UIEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type UIEvent } from "react";
 import { WebBBrand } from "./PublicShell";
 import WebBSubjectPurchaseFlow from "./WebBSubjectPurchaseFlow";
 import {
@@ -15,10 +15,19 @@ import {
 } from "./demo-store";
 
 type Registration = DemoStudentProfile & { confirmPassword: string };
+const educationOptions = [
+  "มัธยมศึกษาปีที่ 4",
+  "มัธยมศึกษาปีที่ 5",
+  "มัธยมศึกษาปีที่ 6",
+  "มัธยมศึกษาตอนต้น",
+  "เด็กซิ่ว",
+  "อื่นๆ (ผู้ปกครอง, คุณครู)",
+];
 const emptyRegistration: Registration = {
   username: "", password: "", confirmPassword: "", citizenId: "", firstName: "", lastName: "",
   phone: "", email: "", province: "", school: "", education: "",
 };
+const duplicateRegistrationNotice = "ชื่อผู้ใช้หรืออีเมลนี้มีบัญชีแล้ว กรุณาเข้าสู่ระบบ หรือใช้ข้อมูลบัญชีอื่น";
 const provinces = ["กรุงเทพมหานคร", "เชียงใหม่", "ขอนแก่น", "ชลบุรี", "นครราชสีมา", "สงขลา", "ภูเก็ต", "อื่น ๆ"];
 const schools = ["โรงเรียนเตรียมอุดมศึกษา", "โรงเรียนสวนกุหลาบวิทยาลัย", "โรงเรียนบดินทรเดชา (สิงห์ สิงหเสนี)", "โรงเรียนมหิดลวิทยานุสรณ์", "อื่น ๆ"];
 
@@ -32,15 +41,29 @@ const terms = [
 ];
 
 export default function WebBRegistrationFlow({ initialStep = 1 }: { initialStep?: number }) {
-  const [step, setStep] = useState(initialStep === 2 ? 2 : 1);
+  const initialFlowStep = initialStep >= 3 ? 3 : initialStep === 2 ? 2 : 1;
+  const [step, setStep] = useState(initialFlowStep);
+  const [progressPercent, setProgressPercent] = useState(initialFlowStep * 25);
   const [registration, setRegistration] = useState(emptyRegistration);
   const [notice, setNotice] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
-  const [termsRead, setTermsRead] = useState(true);
+  const [termsRead, setTermsRead] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [isSuccessScreen, setIsSuccessScreen] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const profileFormRef = useRef<HTMLFormElement>(null);
+  const [profileFormValid, setProfileFormValid] = useState(false);
+  const existingAccount = readDemoAccount();
+  const accountFieldsValid = Boolean(registration.username.trim()) &&
+    registration.citizenId.length === 13 &&
+    (registration.password?.length ?? 0) >= 8 &&
+    registration.password === registration.confirmPassword;
+  const hasDuplicateCredentials = !!existingAccount && (
+    (!!registration.username.trim() && existingAccount.username.toLowerCase() === registration.username.trim().toLowerCase()) ||
+    (!!registration.email.trim() && existingAccount.email.toLowerCase() === registration.email.trim().toLowerCase())
+  );
 
   useEffect(() => {
     if (localStorage.getItem(DEMO_AUTH_KEY) === "true") {
@@ -58,6 +81,10 @@ export default function WebBRegistrationFlow({ initialStep = 1 }: { initialStep?
       localStorage.removeItem("webb-registration");
     }
   }, []);
+
+  useEffect(() => {
+    setProfileFormValid(step === 2 && (profileFormRef.current?.checkValidity() ?? false));
+  }, [registration, step]);
 
   useEffect(() => {
     if (!termsOpen) return;
@@ -87,6 +114,7 @@ export default function WebBRegistrationFlow({ initialStep = 1 }: { initialStep?
   }, []);
 
   function update<K extends keyof Registration>(key: K, value: Registration[K]) {
+    setNotice("");
     setRegistration((current) => {
       const next = { ...current, [key]: value };
       localStorage.setItem("webb-registration", JSON.stringify(next));
@@ -97,6 +125,7 @@ export default function WebBRegistrationFlow({ initialStep = 1 }: { initialStep?
   function goTo(nextStep: number) {
     setNotice("");
     setStep(nextStep);
+    setProgressPercent(Math.min(nextStep, 3) * 25);
     if (nextStep <= 5) {
       if (typeof window !== "undefined") {
         const params = new URLSearchParams(window.location.search);
@@ -118,16 +147,22 @@ export default function WebBRegistrationFlow({ initialStep = 1 }: { initialStep?
 
   function submitProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setNotice("");
+    if (hasDuplicateCredentials) {
+      setNotice(duplicateRegistrationNotice);
+      return;
+    }
     setTermsRead(false);
+    setTermsAccepted(false);
     setTermsOpen(true);
   }
 
   function confirmRegistration() {
-    if (!termsRead) return;
+    if (!termsRead || !termsAccepted) return;
     const existing = readDemoAccount();
     if (existing && (existing.username.toLowerCase() === registration.username.trim().toLowerCase() || existing.email.toLowerCase() === registration.email.trim().toLowerCase())) {
       setTermsOpen(false);
-      setNotice("ชื่อผู้ใช้หรืออีเมลนี้มีบัญชีแล้ว กรุณาเข้าสู่ระบบ หรือใช้ข้อมูลบัญชีอื่น");
+      setNotice(duplicateRegistrationNotice);
       return;
     }
     const profile: DemoStudentProfile = {
@@ -201,7 +236,7 @@ export default function WebBRegistrationFlow({ initialStep = 1 }: { initialStep?
             </nav>
             <Link className="wb-registration-close" href="/webb" aria-label="กลับหน้าหลัก">×</Link>
             <div className="wb-registration-progress" aria-hidden="true">
-              <span style={{ width: `${step <= 2 ? step * 50 : 100}%` }} />
+              <span style={{ width: `${progressPercent}%` }} />
             </div>
           </header>
 
@@ -294,7 +329,12 @@ export default function WebBRegistrationFlow({ initialStep = 1 }: { initialStep?
             )}
 
             {step === 2 && (
-              <form className="wb-registration-form wb-profile-step" onSubmit={submitProfile}>
+              <form
+                ref={profileFormRef}
+                className="wb-registration-form wb-profile-step"
+                onChange={(event) => setProfileFormValid(event.currentTarget.checkValidity())}
+                onSubmit={submitProfile}
+              >
                 <label>
                   ชื่อ
                   <input
@@ -371,23 +411,20 @@ export default function WebBRegistrationFlow({ initialStep = 1 }: { initialStep?
                     required
                   >
                     <option value="">เลือกระดับการศึกษา</option>
-                    <option>มัธยมศึกษาปีที่ 4</option>
-                    <option>มัธยมศึกษาปีที่ 5</option>
-                    <option>มัธยมศึกษาปีที่ 6</option>
-                    <option>เทียบเท่า / จบการศึกษาแล้ว</option>
+                    {educationOptions.map((education) => <option key={education}>{education}</option>)}
                   </select>
                 </label>
                 <div className="wb-registration-actions">
                   <button type="button" className="wb-registration-back" onClick={() => goTo(1)}>
                     ย้อนกลับ
                   </button>
-                  <button className="wb-registration-next" type="submit">
-                    สมัครสมาชิก
+                  <button className="wb-registration-next" type="submit" disabled={!accountFieldsValid || !profileFormValid || hasDuplicateCredentials || Boolean(notice)}>
+                    ถัดไป
                   </button>
                 </div>
-                {notice && (
+                {(notice || hasDuplicateCredentials) && (
                   <p className="wb-registration-notice is-wide" role="alert">
-                    {notice}
+                    {hasDuplicateCredentials ? duplicateRegistrationNotice : notice}
                   </p>
                 )}
               </form>
@@ -397,6 +434,7 @@ export default function WebBRegistrationFlow({ initialStep = 1 }: { initialStep?
               <WebBSubjectPurchaseFlow
                 isExistingUser={false}
                 onBackToSignupStep={() => setIsSuccessScreen(true)}
+                onProgressChange={setProgressPercent}
               />
             )}
           </main>
@@ -433,11 +471,20 @@ export default function WebBRegistrationFlow({ initialStep = 1 }: { initialStep?
                 หมายเหตุ: ข้อความนี้เป็นตัวอย่าง UX สำหรับระบบจำลอง ไม่ใช่เอกสารข้อกำหนดทางกฎหมายฉบับใช้งานจริง
               </p>
             </div>
+            <label className={`wb-terms-accept${termsRead ? " is-ready" : ""}`}>
+              <input
+                type="checkbox"
+                checked={termsAccepted}
+                disabled={!termsRead}
+                onChange={(event) => setTermsAccepted(event.target.checked)}
+              />
+              <span>ฉันได้อ่านและยอมรับ <span className="text-red-500">ข้อตกลงและเงื่อนไขการบริการ</span></span>
+            </label>
             <footer>
               <span className={termsRead ? "is-read" : ""}>
                 {termsRead ? "✓ อ่านครบแล้ว" : "เลื่อนลงเพื่ออ่านให้ครบก่อนสมัคร"}
               </span>
-              <button type="button" disabled={!termsRead} onClick={confirmRegistration}>
+              <button type="button" disabled={!termsRead || !termsAccepted} onClick={confirmRegistration}>
                 ยอมรับและสมัคร
               </button>
             </footer>

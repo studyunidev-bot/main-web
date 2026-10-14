@@ -30,7 +30,7 @@ import { useEffect, useState, useRef, type FormEvent } from "react";
 import { PublicFooter, WebBBrand } from "./PublicShell";
 import { getProduct } from "./data";
 import { WebBImage } from "./WebBImage";
-import { DEMO_ACCOUNT_KEY, examAnswersStorageKey, examResultStorageKey, readCurrentDemoPurchases, readDemoAccount, readSocialSettings, safeWrite, setPurchaseExamStatus } from "./demo-store";
+import { DEMO_ACCOUNT_KEY, DEMO_AUTH_KEY, examAnswersStorageKey, examResultStorageKey, readCurrentDemoPurchases, readDemoAccount, readSocialSettings, safeWrite, setPurchaseExamStatus } from "./demo-store";
 import { getExamPlan } from "./exam-documents";
 
 type StudentMode =
@@ -384,6 +384,11 @@ function StudentHeader({
   onSelect: (view: StudentView) => void;
 }) {
   const [helpOpen, setHelpOpen] = useState(false);
+  function handleLogout() {
+    localStorage.removeItem(DEMO_AUTH_KEY);
+    window.dispatchEvent(new Event("webb-demo-auth-updated"));
+    onClose();
+  }
   useEffect(() => {
     if (!menuOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -455,11 +460,7 @@ function StudentHeader({
               <Link
                 className="wb-dashboard-account-action"
                 href="/webb"
-                onClick={() => {
-                  localStorage.removeItem("webb-demo-student-auth");
-                  window.dispatchEvent(new Event("webb-demo-auth-updated"));
-                  onClose();
-                }}
+                onClick={handleLogout}
               >
                 <LuLogOut aria-hidden="true" />
                 ออกจากระบบ
@@ -507,19 +508,6 @@ function StudentHeader({
                 {link.label}
               </Link>
             ))}
-            <Link href="/webb/products" onClick={onClose}>ซื้อข้อสอบเพิ่ม</Link>
-            <Link
-              href="/webb/student?view=exam#exam-list"
-              onClick={() => {
-                onSelect("exam");
-                onClose();
-                setTimeout(() => {
-                  document.getElementById("exam-list")?.scrollIntoView({ behavior: "smooth" });
-                }, 100);
-              }}
-            >
-              รายการที่ซื้อแล้ว
-            </Link>
           </div>
           <button
             type="button"
@@ -545,16 +533,15 @@ function StudentHeader({
             </button>
             <Link
               href="/webb"
-              onClick={() => {
-                localStorage.removeItem("webb-demo-student-auth");
-                window.dispatchEvent(new Event("webb-demo-auth-updated"));
-              }}
+              onClick={handleLogout}
             >
               <LuLogOut aria-hidden="true" />
               ออกจากระบบ
             </Link>
+            <Link className="wb-dashboard-mobile-register" href="/webb/products" onClick={onClose}>
+              สมัครสอบ
+            </Link>
           </div>
-          {/* Logged-in student menu intentionally has no registration action. */}
         </nav>
       </div>
       {helpOpen && <StudentHelpDialog onClose={() => setHelpOpen(false)} />}

@@ -7,8 +7,10 @@ import WebBPaymentSuccess from "./WebBPaymentSuccess";
 import { getExamPlan } from "./exam-documents";
 import {
   addDemoEmail,
+  DEMO_ACCOUNT_KEY,
   DEMO_AUTH_KEY,
   DEMO_PURCHASES_KEY,
+  DEMO_PROFILE_KEY,
   readDemoAccount,
   readCurrentDemoPurchases,
   readDemoPurchases,
@@ -301,8 +303,10 @@ export default function WebBSubjectPurchaseFlow({
     setShowPaymentQR(false);
 
     // Save purchase to demo store
-    const account = readDemoAccount() || {
-      username: "somchai",
+    const existingAccount = readDemoAccount();
+    const account = existingAccount || {
+      username: "sss",
+      password: "sss",
       firstName: "สมชาย",
       lastName: "ศิริกุล",
       email: "somchai@example.com",
@@ -312,6 +316,12 @@ export default function WebBSubjectPurchaseFlow({
       education: "ม.6",
       citizenId: "1-6799-12345-34-1",
     };
+    if (!existingAccount) {
+      safeWrite(DEMO_ACCOUNT_KEY, account);
+      safeWrite(DEMO_PROFILE_KEY, account);
+      safeWrite(DEMO_AUTH_KEY, true);
+      window.dispatchEvent(new Event("webb-demo-auth-updated"));
+    }
 
     const now = new Date();
     const ref = checkoutRef;

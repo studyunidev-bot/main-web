@@ -2,15 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  LuArrowDown,
-  LuArrowUp,
-  LuChevronDown,
-  LuChevronUp,
-  LuMinus,
-  LuPlus,
-  LuSearch,
-} from "react-icons/lu";
+import { LuChevronDown, LuChevronUp } from "react-icons/lu";
 import type { ExamProduct } from "./data";
 import { getExamPlan, getExamQuestionDetails, type ExamPlan } from "./exam-documents";
 import { addDemoEmail, currentPurchaseForExam, currentPurchaseForRef, examAnswersStorageKey, examResultStorageKey, readDemoAccount, recordDemoRankingResult, setPurchaseExamStatus, updateAdminAttempt } from "./demo-store";
@@ -49,14 +41,8 @@ function formatTime(seconds: number) {
 
 function MockExamPdf({
   page,
-  onPageChange,
-  zoom,
-  onZoomChange,
 }: {
   page: number;
-  onPageChange: (newPage: number) => void;
-  zoom: number;
-  onZoomChange: (delta: number) => void;
 }) {
   const viewerRef = useRef<HTMLElement>(null);
   const currentPageData =
@@ -68,61 +54,8 @@ function MockExamPdf({
 
   return (
     <section className="wb-pdf-viewer" ref={viewerRef} aria-label="เอกสารข้อสอบ">
-      <div className="wb-pdf-toolbar">
-        <LuSearch />
-        <button
-          type="button"
-          title="หน้าก่อนหน้า"
-          aria-label="หน้าก่อนหน้า"
-          disabled={page <= 1}
-          onClick={() => onPageChange(page - 1)}
-        >
-          <LuArrowUp />
-        </button>
-        <button
-          type="button"
-          title="หน้าถัดไป"
-          aria-label="หน้าถัดไป"
-          disabled={page >= TOTAL_MOCK_PAGES}
-          onClick={() => onPageChange(page + 1)}
-        >
-          <LuArrowDown />
-        </button>
-        <span className="wb-pdf-page-count">
-          {page} <i>of</i> {TOTAL_MOCK_PAGES}
-        </span>
-        <span className="wb-pdf-toolbar-spacer" />
-        <button
-          type="button"
-          title="ลดขนาดตัวหนังสือ"
-          aria-label="ลดขนาดตัวหนังสือ"
-          disabled={zoom <= 80}
-          onClick={() => onZoomChange(-10)}
-        >
-          <LuMinus />
-        </button>
-        <button
-          type="button"
-          title="เพิ่มขนาดตัวหนังสือ"
-          aria-label="เพิ่มขนาดตัวหนังสือ"
-          disabled={zoom >= 140}
-          onClick={() => onZoomChange(10)}
-        >
-          <LuPlus />
-        </button>
-        <span
-          style={{ cursor: "pointer", userSelect: "none" }}
-          title="รีเซ็ตขนาด 100%"
-          onClick={() => onZoomChange(100 - zoom)}
-        >
-          {zoom}%
-        </span>
-      </div>
       <article
         className="wb-pdf-sheet"
-        style={{
-          zoom: zoom / 100,
-        }}
       >
         <h2>{currentPageData.section}</h2>
         {currentPageData.subSection && (
@@ -248,7 +181,7 @@ function AnswerPaper({
       </header>
       {expanded && (
         <>
-          {pdfBacked ? (
+          {examPlan ? (
             <div className="wb-answer-legend wb-answer-legend-static" aria-label="สถานะคำตอบ">
               <span><i className="is-answered" />ตอบแล้ว</span>
               <span><i />ยังไม่ตอบ</span>
@@ -278,7 +211,7 @@ function AnswerPaper({
               ยังไม่ตอบ ({unansweredCount})
             </button>
           </div>}
-          {pdfBacked && examPlan && (
+          {examPlan && (
             <div className="wb-answer-instruction">
               <b>{examPlan.sections[activeSectionIndex]?.title}</b>
               <small>
@@ -446,8 +379,8 @@ export default function WebBExam({
   const selectedPurchase = currentPurchaseForRef(purchaseRef) || currentPurchaseForExam(product.id, examSet);
   const examPlan = getExamPlan(product.id, examSet);
   const pdfBacked = examType === "purchased";
-  const questionCount = pdfBacked ? examPlan.questionCount : TOTAL_QUESTIONS;
-  const examDurationSeconds = (examType === "trial" ? 180 : examPlan.durationMinutes) * 60;
+  const questionCount = pdfBacked ? examPlan.questionCount : Math.min(TOTAL_QUESTIONS, examPlan.questionCount);
+  const examDurationSeconds = examPlan.durationMinutes * 60;
   const [answers, setAnswers] =
     useState<Record<number, string>>(initialAnswers);
   const [remaining, setRemaining] = useState(examDurationSeconds);
@@ -459,7 +392,6 @@ export default function WebBExam({
   const [answerPaperExpanded, setAnswerPaperExpanded] = useState(true);
   const [page, setPage] = useState(1);
   const [activeSectionIndex, setActiveSectionIndex] = useState(0);
-  const [zoom, setZoom] = useState(100);
   const answeredCount = useMemo(() => Object.keys(answers).length, [answers]);
   const activeExamSection = pdfBacked
     ? examPlan.sections[activeSectionIndex] || examPlan.sections[0]
@@ -471,13 +403,6 @@ export default function WebBExam({
       newAnswers[i] = String(Math.floor(Math.random() * getExamQuestionDetails(examPlan, i).choiceCount));
     }
     setAnswers(newAnswers);
-  }
-
-  function handleClearAll() {
-    setAnswers({});
-    try {
-      localStorage.removeItem(answerStorageKey);
-    } catch {}
   }
 
   function testExamExpiry() {
@@ -719,34 +644,6 @@ export default function WebBExam({
         </button>
       </header>
 
-      {!pdfBacked && <div className="wb-exam-mockup-toolbar">
-        <div className="wb-exam-toolbar-inner">
-          <div className="wb-exam-info-badge">
-            {/* <strong className="wb-exam-info-subject">
-              {product.id === "tgat-full" ? "TGAT1 · TGAT2 · TGAT3" : `${product.name} ${product.parts}`}
-            </strong> */}
-            <span className="text-xs">{examPlan.sections.some((section) => section.choiceCount === 5) ? "4–5 ตัวเลือก" : "4 ตัวเลือก"} · เลือกคำตอบที่ถูกต้อง</span>
-          </div>
-          <div className="wb-mockup-btn-group">
-            <button
-              type="button"
-              className="wb-mockup-action-btn"
-              onClick={handleClearAll}
-              title="ล้างคำตอบที่ตอบไว้ทั้งหมด"
-            >
-              ล้างคำตอบ
-            </button>
-            <Link
-              href={`/webb/rules?product=${product.id}&set=${encodeURIComponent(examSet)}&ref=${encodeURIComponent(purchaseRef || "")}&type=${examType}&back=exam`}
-              className="wb-mockup-action-btn wb-mockup-exit-btn"
-              title="กลับไปยังหน้ากติกาการสอบ"
-            >
-              ออกจากห้องสอบ
-            </Link>
-          </div>
-        </div>
-      </div>}
-
       {remaining <= 300 && remaining > 0 && (
         <div className="wb-answer-warning" role="status">
           <b>
@@ -761,15 +658,10 @@ export default function WebBExam({
           {pdfBacked ? <PurchasedExamDocuments
             plan={examPlan}
             activeSectionIndex={activeSectionIndex}
-          /> : <MockExamPdf
-            page={page}
-            onPageChange={handlePageChange}
-            zoom={zoom}
-            onZoomChange={(delta) => setZoom((z) => Math.min(140, Math.max(80, z + delta)))}
-          />}
+          /> : <MockExamPdf page={page} />}
           <AnswerPaper
             questionCount={activeExamSection?.questionCount || questionCount}
-            examPlan={pdfBacked ? examPlan : null}
+            examPlan={examPlan}
             pdfBacked={pdfBacked}
             questionOffset={activeExamSection?.answerIndexStart || 0}
             activeSectionIndex={activeSectionIndex}

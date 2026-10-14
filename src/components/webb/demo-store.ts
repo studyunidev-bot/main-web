@@ -111,7 +111,25 @@ export function readDemoAccount(): DemoStudentProfile | null {
   const saved = safeRead<DemoStudentProfile | null>(DEMO_ACCOUNT_KEY, null);
   if (saved) return saved;
   const legacy = safeRead<Partial<DemoStudentProfile> | null>(DEMO_PROFILE_KEY, null);
-  if (!legacy?.email) return null;
+  if (!legacy?.email) {
+    // The seeded sss/sss login has no separately saved profile. Resolve it to
+    // the same demo identity used by the student area and purchase flow.
+    if (safeRead<boolean>(DEMO_AUTH_KEY, false)) {
+      return {
+        username: "sss",
+        password: "sss",
+        citizenId: "1-6799-12345-34-1",
+        firstName: "สมชาย",
+        lastName: "ศิริกุล",
+        phone: "082-2193-291",
+        email: "somchai@example.com",
+        province: "ขอนแก่น",
+        school: "โรงเรียนตัวอย่างวิทยา",
+        education: "มัธยมศึกษาปีที่ 6",
+      };
+    }
+    return null;
+  }
   return {
     username: legacy.username || "sss",
     password: legacy.password || "sss",
@@ -132,7 +150,13 @@ export function readDemoPurchases() {
 
 export function purchaseBelongsToCurrentAccount(purchase: DemoPurchase) {
   const account = readDemoAccount();
-  return !!account && purchase.profileSnapshot.username.toLowerCase() === account.username.toLowerCase();
+  if (!account) return false;
+  if (purchase.profileSnapshot.username.toLowerCase() === account.username.toLowerCase()) return true;
+
+  // Older anonymous demo checkouts used this fallback username before the
+  // seeded sss identity was resolved consistently.
+  const isSeedDemoAccount = account.username === "sss" && account.email === "somchai@example.com";
+  return isSeedDemoAccount && purchase.profileSnapshot.username.toLowerCase() === "somchai";
 }
 
 export function readCurrentDemoPurchases() {

@@ -1444,6 +1444,8 @@
   .wb-dashboard-menu-panel {
     position: absolute;
     inset: 0 0 0 auto;
+    display: flex;
+    flex-direction: column;
     width: min(70vw, 430px);
     overflow-y: auto;
     padding: 16px 16px 24px;
@@ -1523,6 +1525,21 @@
   .wb-dashboard-menu-section.is-secondary svg {
     width: 19px;
     height: 19px;
+  }
+  .wb-dashboard-menu-section .wb-dashboard-mobile-register {
+    display: flex;
+    width: 100%;
+    min-height: 50px;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    margin-top: 10px;
+    border-radius: 999px;
+    background: #ffcc00;
+    color: #111;
+    font-weight: 800;
+    text-decoration: none;
+    text-align: center;
   }
 }
 .wb-dashboard-layout {
@@ -3638,6 +3655,8 @@
   .wb-dashboard-menu-panel {
     position: absolute;
     inset: 0 0 0 auto;
+    display: flex;
+    flex-direction: column;
     width: min(70vw, 430px);
     overflow-y: auto;
     padding: 16px 16px 24px;
@@ -3717,6 +3736,9 @@
   .wb-dashboard-menu-section.is-secondary svg {
     width: 19px;
     height: 19px;
+  }
+  .wb-dashboard-menu-section .wb-dashboard-mobile-register {
+    min-height: 50px;
   }
   .wb-dashboard-profilebar {
     display: block;

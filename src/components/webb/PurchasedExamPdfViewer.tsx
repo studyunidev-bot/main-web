@@ -17,6 +17,7 @@ export default function PurchasedExamPdfViewer({
   const [pdf, setPdf] = useState<PdfDocument | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
+  const [zoom, setZoom] = useState(100);
   const [viewerWidth, setViewerWidth] = useState(0);
   const [error, setError] = useState(false);
 
@@ -30,6 +31,7 @@ export default function PurchasedExamPdfViewer({
     setPdf(null);
     setPageCount(0);
     setCurrentPage(1);
+    setZoom(100);
     setError(false);
 
     void import("pdfjs-dist/build/pdf.mjs")
@@ -90,7 +92,7 @@ export default function PurchasedExamPdfViewer({
 
         const originalViewport = page.getViewport({ scale: 1 });
         const viewport = page.getViewport({
-          scale: Math.max(0.1, (viewerWidth - 24) / originalViewport.width),
+          scale: Math.max(0.1, (viewerWidth - 24) / originalViewport.width) * (zoom / 100),
         });
         canvas.width = Math.floor(viewport.width * pixelRatio);
         canvas.height = Math.floor(viewport.height * pixelRatio);
@@ -121,7 +123,7 @@ export default function PurchasedExamPdfViewer({
       cancelled = true;
       renderTasks.forEach((task) => task.cancel());
     };
-  }, [pdf, pageCount, viewerWidth]);
+  }, [pdf, pageCount, viewerWidth, zoom]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -157,6 +159,27 @@ export default function PurchasedExamPdfViewer({
         <span className="wb-pdf-page-count" aria-live="polite">
           {pageCount ? `${currentPage} / ${pageCount}` : "กำลังเปิดเอกสาร"}
         </span>
+        <div className="wb-pdf-toolbar-controls">
+          <button
+            type="button"
+            onClick={() => setZoom((value) => Math.max(50, value - 25))}
+            disabled={zoom <= 50}
+            aria-label="ย่อ PDF"
+            title="ย่อ PDF"
+          >
+            −
+          </button>
+          <span className="wb-pdf-zoom-level" aria-live="polite">{zoom}%</span>
+          <button
+            type="button"
+            onClick={() => setZoom((value) => Math.min(200, value + 25))}
+            disabled={zoom >= 200}
+            aria-label="ขยาย PDF"
+            title="ขยาย PDF"
+          >
+            +
+          </button>
+        </div>
         <div className="wb-pdf-toolbar-spacer" />
         <button
           type="button"

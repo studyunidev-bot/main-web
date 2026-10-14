@@ -6170,10 +6170,13 @@
   display: grid;
   justify-items: center;
   gap: 14px;
+  width: max-content;
+  min-width: 100%;
   padding: 12px;
 }
 .wb-purchased-pdf-page {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   min-height: 180px;
   display: flex;
   justify-content: center;
@@ -6182,7 +6185,7 @@
 }
 .wb-purchased-pdf-page canvas {
   display: block;
-  max-width: 100%;
+  flex: none;
   background: white;
 }
 .wb-purchased-pdf-message {
@@ -6251,6 +6254,24 @@
 }
 .wb-pdf-toolbar-spacer {
   flex: 1;
+}
+.wb-pdf-toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.wb-pdf-toolbar .wb-pdf-zoom-level {
+  min-width: 34px;
+  color: #eee;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.wb-pdf-toolbar .wb-pdf-toolbar-controls button {
+  min-width: 24px;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1;
 }
 .wb-pdf-sheet {
   width: min(645px, 84%);

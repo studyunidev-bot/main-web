@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { LuChevronDown, LuChevronUp } from "react-icons/lu";
 import type { ExamProduct } from "./data";
 import { getExamPlan, getExamQuestionDetails, type ExamPlan } from "./exam-documents";
+import PurchasedExamPdfViewer from "./PurchasedExamPdfViewer";
 import { addDemoEmail, currentPurchaseForExam, currentPurchaseForRef, examAnswersStorageKey, examResultStorageKey, readDemoAccount, recordDemoRankingResult, setPurchaseExamStatus, updateAdminAttempt } from "./demo-store";
 import { MOCK_EXAM_PAGES, TOTAL_MOCK_QUESTIONS, TOTAL_MOCK_PAGES, getPageForQuestion } from "./mock-exam-questions";
 
@@ -352,10 +353,9 @@ function PurchasedExamDocuments({
   return (
     <div className="wb-purchased-exam-documents">
       <section className="wb-purchased-exam-document" key={section.id}>
-        <iframe
-          src={`${section.examPdf}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+        <PurchasedExamPdfViewer
+          src={section.examPdf}
           title={`ข้อสอบ ${section.title} ชุด 4`}
-          loading="lazy"
         />
       </section>
     </div>

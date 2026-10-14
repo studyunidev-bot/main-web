@@ -421,7 +421,7 @@ export default function WebBSubjectPurchaseFlow({
   // STEP 6: Success Screen
   if (subStep === 6 && completedOrder) {
     return (
-      <div style={{ maxWidth: "560px", margin: "20px auto 40px", padding: "0 16px" }}>
+      <div className="wb-subject-purchase-success-wrap">
         <WebBPaymentSuccess
           orderRef={completedOrder.ref}
           paidDate={completedOrder.purchasedAt}

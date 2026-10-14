@@ -34,6 +34,7 @@
     "next": "^16.2.9",
     "next-auth": "^4.24.14",
     "nextjs-toploader": "^3.7.15",
+    "pdfjs-dist": "^5.7.284",
     "pg": "^8.23.1",
     "postcss": "^8",
     "qrcode.react": "^4.2.0",

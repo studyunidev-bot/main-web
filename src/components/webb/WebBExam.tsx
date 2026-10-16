@@ -12,6 +12,16 @@ import { MOCK_EXAM_PAGES, TOTAL_MOCK_QUESTIONS, TOTAL_MOCK_PAGES, getPageForQues
 const TOTAL_QUESTIONS = TOTAL_MOCK_QUESTIONS;
 const initialAnswers: Record<number, string> = {};
 
+function clearTrialAttempt(resultKey: string, answerKey: string, startedAtKey: string) {
+  try {
+    localStorage.removeItem(resultKey);
+    localStorage.removeItem(answerKey);
+    localStorage.removeItem(startedAtKey);
+  } catch {
+    /* Trial data is isolated from the student's saved exam results. */
+  }
+}
+
 function ExamMark() {
   return (
     <span className="wb-answer-mark" aria-hidden="true">
@@ -104,6 +114,7 @@ function AnswerPaper({
   questionCount,
   examPlan,
   pdfBacked,
+  demoPageData,
   answers,
   onAnswer,
   expanded,
@@ -119,6 +130,7 @@ function AnswerPaper({
   questionCount: number;
   examPlan: ExamPlan | null;
   pdfBacked: boolean;
+  demoPageData?: (typeof MOCK_EXAM_PAGES)[number] | null;
   answers: Record<number, string>;
   onAnswer: (question: number, choice: number) => void;
   expanded: boolean;
@@ -147,11 +159,11 @@ function AnswerPaper({
         if (filter === "unanswered") return !isAnswered;
         return true;
       })
-      .slice(pdfBacked ? 0 : (page - 1) * 10, pdfBacked ? undefined : page * 10);
-  }, [filter, answers, questionCount, questionOffset, pdfBacked, page]);
+      .slice(pdfBacked || demoPageData ? 0 : (page - 1) * 10, pdfBacked || demoPageData ? undefined : page * 10);
+  }, [filter, answers, questionCount, questionOffset, pdfBacked, demoPageData, page]);
 
   useEffect(() => {
-    if (pdfBacked) return;
+    if (pdfBacked || demoPageData) return;
     const pageData = MOCK_EXAM_PAGES.find((p) => p.pageNumber === page);
     if (pageData && pageData.questions.length > 0) {
       const firstQ = pageData.questions[0].number;
@@ -160,7 +172,7 @@ function AnswerPaper({
         targetRow.scrollIntoView({ block: "start", behavior: "smooth" });
       }
     }
-  }, [page, pdfBacked]);
+  }, [page, pdfBacked, demoPageData]);
 
   return (
     <aside
@@ -214,9 +226,11 @@ function AnswerPaper({
           </div>}
           {examPlan && (
             <div className="wb-answer-instruction">
-              <b>{examPlan.sections[activeSectionIndex]?.title}</b>
+              <b>{demoPageData?.section || examPlan.sections[activeSectionIndex]?.title}</b>
               <small>
-                {examPlan.sections[activeSectionIndex]?.choiceCount} ตัวเลือก (1–{examPlan.sections[activeSectionIndex]?.choiceCount}) · เลือกคำตอบที่ถูกต้อง
+                {demoPageData
+                  ? `${demoPageData.questions[0]?.choices.length || 4} ตัวเลือก (1–${demoPageData.questions[0]?.choices.length || 4}) · เลือกคำตอบที่ถูกต้อง`
+                  : `${examPlan.sections[activeSectionIndex]?.choiceCount} ตัวเลือก (1–${examPlan.sections[activeSectionIndex]?.choiceCount}) · เลือกคำตอบที่ถูกต้อง`}
               </small>
             </div>
           )}
@@ -229,13 +243,16 @@ function AnswerPaper({
               <div className="wb-answer-grid">
                 {filteredQuestions.map((question, idx) => {
                   const answerIndex = questionOffset + question;
-                  const questionDetails = examPlan
+                  const demoQuestion = demoPageData?.questions.find((item) => item.id === answerIndex);
+                  const questionDetails = demoQuestion
+                    ? { questionNumber: demoQuestion.number, choiceCount: demoQuestion.choices.length }
+                    : examPlan
                     ? getExamQuestionDetails(examPlan, answerIndex)
                     : { questionNumber: answerIndex + 1, choiceCount: 4 };
-                  const questionNumber = pdfBacked ? question + 1 : questionDetails.questionNumber;
-                  const pageNum = pdfBacked ? null : getPageForQuestion(question);
+                  const questionNumber = questionDetails.questionNumber;
+                  const pageNum = pdfBacked ? null : demoPageData?.pageNumber ?? getPageForQuestion(question);
                   const isFirstOfPage =
-                    !pdfBacked &&
+                    !pdfBacked && !demoPageData &&
                     filter === "all" &&
                     (idx === 0 ||
                       getPageForQuestion(filteredQuestions[idx - 1]) !== pageNum);
@@ -287,42 +304,22 @@ function AnswerPaper({
               </div>
             )}
           </div>
-          {pdfBacked ? <footer className="wb-answer-panel-actions">
+          {(pdfBacked || demoPageData) && <footer className="wb-answer-panel-actions">
             <button
               type="button"
-              onClick={() => onSectionChange?.(activeSectionIndex - 1)}
-              disabled={activeSectionIndex <= 0}
+              onClick={() => demoPageData ? onPageChange(page - 1) : onSectionChange?.(activeSectionIndex - 1)}
+              disabled={demoPageData ? page <= 1 : activeSectionIndex <= 0}
               aria-label="ย้อนกลับ"
             >
               ย้อนกลับ
             </button>
             <button
               type="button"
-              onClick={() => onSectionChange?.(activeSectionIndex + 1)}
-              disabled={activeSectionIndex >= sectionCount - 1}
+              onClick={() => demoPageData ? onPageChange(page + 1) : onSectionChange?.(activeSectionIndex + 1)}
+              disabled={demoPageData ? page >= totalPages : activeSectionIndex >= sectionCount - 1}
               aria-label="ถัดไป"
             >
               ถัดไป <span aria-hidden="true">→</span>
-            </button>
-          </footer> : <footer className="wb-answer-panel-actions">
-            <button
-              type="button"
-              onClick={() => onPageChange(page - 1)}
-              disabled={page <= 1}
-              aria-label="ย้อนกลับหน้า"
-            >
-              ย้อนกลับ
-            </button>
-            <span className="wb-answer-page-badge">
-              หน้า {page}/{totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => onPageChange(page + 1)}
-              disabled={page >= totalPages}
-              aria-label="ถัดไปหน้า"
-            >
-              ถัดไป
             </button>
           </footer>}
         </>
@@ -396,6 +393,9 @@ export default function WebBExam({
   const activeExamSection = pdfBacked
     ? examPlan.sections[activeSectionIndex] || examPlan.sections[0]
     : null;
+  const activeDemoPage = pdfBacked
+    ? null
+    : MOCK_EXAM_PAGES[page - 1] || MOCK_EXAM_PAGES[0];
 
   function handleAutoFill() {
     const newAnswers: Record<number, string> = {};
@@ -540,21 +540,21 @@ export default function WebBExam({
 
   useEffect(() => {
     if (remaining !== 0 || attemptStatus !== "ready") return;
-    localStorage.setItem(
-      resultKey,
-      JSON.stringify({ answers, answeredCount, status: "timeout" }),
-    );
     if (examType === "purchased") {
+      localStorage.setItem(
+        resultKey,
+        JSON.stringify({ answers, answeredCount, status: "timeout" }),
+      );
       setPurchaseExamStatus(product.id, "submitted", false, selectedPurchase?.ref);
       updateAdminAttempt(product.id, "ส่งแล้ว", `${answeredCount}/${questionCount}`);
       recordDemoRankingResult(product.id, 60.7);
       const account = readDemoAccount();
       if (account?.email) addDemoEmail(account.email, `หมดเวลาสอบ ${product.name}`, `ระบบส่งคำตอบล่าสุดของคุณแล้ว · ดูผลสอบและวิดีโอเฉลยได้ในบัญชีผู้เรียน (อีเมลนี้เป็นการจำลอง)`);
+    } else {
+      clearTrialAttempt(resultKey, answerStorageKey, startedAtKey);
     }
+    setConfirmSubmit(false);
     setAttemptStatus("timeout");
-    window.location.replace(
-      `/webb/error?product=${product.id}&set=${encodeURIComponent(examSet)}&ref=${encodeURIComponent(purchaseRef || "")}&type=${examType}`,
-    );
   }, [
     remaining,
     attemptStatus,
@@ -564,7 +564,25 @@ export default function WebBExam({
     answers,
     answeredCount,
     questionCount,
+    answerStorageKey,
+    startedAtKey,
   ]);
+
+
+  useEffect(() => {
+    if (attemptStatus !== "timeout") return;
+    const timer = window.setTimeout(() => {
+      if (examType === "trial") {
+        clearTrialAttempt(resultKey, answerStorageKey, startedAtKey);
+        window.location.replace("/webb/student?view=exam");
+      } else {
+        window.location.replace(
+          `/webb/error?product=${product.id}&set=${encodeURIComponent(examSet)}&ref=${encodeURIComponent(purchaseRef || "")}&type=${examType}`,
+        );
+      }
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [attemptStatus, product.id, examSet, purchaseRef, examType, resultKey, answerStorageKey, startedAtKey]);
 
   function chooseAnswer(question: number, choice: number) {
     setAnswers((current) => {
@@ -584,17 +602,20 @@ export default function WebBExam({
 
   function submit() {
     if (attemptStatus !== "ready") return;
+    if (examType === "trial") {
+      clearTrialAttempt(resultKey, answerStorageKey, startedAtKey);
+      window.location.replace("/webb/student?view=exam");
+      return;
+    }
     localStorage.setItem(
       resultKey,
       JSON.stringify({ answers, answeredCount, status: "submitted" }),
     );
-    if (examType === "purchased") {
-      setPurchaseExamStatus(product.id, "submitted", false, selectedPurchase?.ref);
-      updateAdminAttempt(product.id, "ส่งแล้ว", `${answeredCount}/${questionCount}`);
-      recordDemoRankingResult(product.id, 60.7);
-      const account = readDemoAccount();
-      if (account?.email) addDemoEmail(account.email, `ส่งข้อสอบ ${product.name} สำเร็จ`, `ระบบบันทึกคำตอบ ${answeredCount} ข้อแล้ว · ดูผลสอบและวิดีโอเฉลยได้ในบัญชีผู้เรียน (อีเมลนี้เป็นการจำลอง)`);
-    }
+    setPurchaseExamStatus(product.id, "submitted", false, selectedPurchase?.ref);
+    updateAdminAttempt(product.id, "ส่งแล้ว", `${answeredCount}/${questionCount}`);
+    recordDemoRankingResult(product.id, 60.7);
+    const account = readDemoAccount();
+    if (account?.email) addDemoEmail(account.email, `ส่งข้อสอบ ${product.name} สำเร็จ`, `ระบบบันทึกคำตอบ ${answeredCount} ข้อแล้ว · ดูผลสอบและวิดีโอเฉลยได้ในบัญชีผู้เรียน (อีเมลนี้เป็นการจำลอง)`);
     setAttemptStatus("submitted");
     window.location.replace(
       `/webb/success?product=${product.id}&set=${encodeURIComponent(examSet)}&ref=${encodeURIComponent(purchaseRef || "")}&type=${examType}`,
@@ -605,7 +626,7 @@ export default function WebBExam({
     return <main className="wb-answer-page"><PurchasedExamDocuments plan={examPlan} /></main>;
   }
 
-  if (attemptStatus !== "ready") {
+  if (attemptStatus !== "ready" && attemptStatus !== "timeout") {
     return (
       <main className="wb-answer-page" aria-busy="true">
         <p className="wb-answer-checking" role="status">
@@ -644,15 +665,31 @@ export default function WebBExam({
         </button>
       </header>
 
-      {remaining <= 300 && remaining > 0 && (
-        <div className="wb-answer-warning" role="status">
-          <b>
-            ◷ เหลือเวลาอีก{" "}
-            {examDurationSeconds <= 300 ? `${remaining} วินาที` : "5 นาที"}
-          </b>
-          <small>กรุณาเตรียมตัวส่งกระดาษคำตอบ</small>
+      {((remaining <= 300 && remaining > 0) || attemptStatus === "timeout") && (
+        <div className="wb-answer-alert-stack" role="status" aria-live="polite">
+          <section className="wb-answer-warning">
+            <svg className="wb-answer-warning-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <b>
+              เหลือเวลาอีก {attemptStatus === "timeout" ? "5 นาที" : examDurationSeconds <= 300 ? `${remaining} วินาที` : "5 นาที"}
+            </b>
+            <small>กรุณาเตรียมตัวส่งกระดาษคำตอบ</small>
+          </section>
+          {attemptStatus === "timeout" && (
+            <section className="wb-timeout-modal" aria-labelledby="wb-timeout-title" aria-describedby="wb-timeout-description">
+              <svg className="wb-timeout-hourglass" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 3h12M6 21h12M7 3c0 4 1.7 6 5 9-3.3 3-5 5-5 9m10-18c0 4-1.7 6-5 9 3.3 3 5 5 5 9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M9 6h6l-3 4-3-4Zm0 12h6l-3-4-3 4Z" fill="currentColor" opacity=".28" />
+              </svg>
+              <h2 id="wb-timeout-title">หมดเวลาทำข้อสอบ</h2>
+              <p id="wb-timeout-description">กรุณาเตรียมตัวส่งกระดาษคำตอบ</p>
+            </section>
+          )}
         </div>
       )}
+
       <div className="wb-answer-container">
         <div className="wb-answer-layout">
           {pdfBacked ? <PurchasedExamDocuments
@@ -660,10 +697,11 @@ export default function WebBExam({
             activeSectionIndex={activeSectionIndex}
           /> : <MockExamPdf page={page} />}
           <AnswerPaper
-            questionCount={activeExamSection?.questionCount || questionCount}
+            questionCount={activeExamSection?.questionCount || activeDemoPage?.questions.length || questionCount}
             examPlan={examPlan}
             pdfBacked={pdfBacked}
-            questionOffset={activeExamSection?.answerIndexStart || 0}
+            demoPageData={activeDemoPage}
+            questionOffset={activeExamSection?.answerIndexStart ?? activeDemoPage?.questions[0]?.id ?? 0}
             activeSectionIndex={activeSectionIndex}
             sectionCount={examPlan.sections.length}
             onSectionChange={setActiveSectionIndex}

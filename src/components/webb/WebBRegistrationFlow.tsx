@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent, type UIEvent } from "react";
 import { WebBBrand } from "./PublicShell";
 import WebBSubjectPurchaseFlow from "./WebBSubjectPurchaseFlow";
+import WebBProvinceSelect from "./WebBProvinceSelect";
 import {
   addDemoEmail,
   DEMO_ACCOUNT_KEY,
@@ -28,8 +29,6 @@ const emptyRegistration: Registration = {
   phone: "", email: "", province: "", school: "", education: "",
 };
 const duplicateRegistrationNotice = "ชื่อผู้ใช้หรืออีเมลนี้มีบัญชีแล้ว กรุณาเข้าสู่ระบบ หรือใช้ข้อมูลบัญชีอื่น";
-const provinces = ["กรุงเทพมหานคร", "เชียงใหม่", "ขอนแก่น", "ชลบุรี", "นครราชสีมา", "สงขลา", "ภูเก็ต", "อื่น ๆ"];
-const schools = ["โรงเรียนเตรียมอุดมศึกษา", "โรงเรียนสวนกุหลาบวิทยาลัย", "โรงเรียนบดินทรเดชา (สิงห์ สิงหเสนี)", "โรงเรียนมหิดลวิทยานุสรณ์", "อื่น ๆ"];
 
 const terms = [
   ["ข้อมูลบัญชี", "ผู้สมัครยืนยันว่าข้อมูลที่กรอกเป็นข้อมูลจริงและเป็นของตนเอง โดยเฉพาะชื่อ เลขประจำตัวประชาชน และช่องทางติดต่อ"],
@@ -379,29 +378,22 @@ export default function WebBRegistrationFlow({ initialStep = 1 }: { initialStep?
                 </label>
                 <label>
                   จังหวัด
-                  <select
+                  <WebBProvinceSelect
+                    inputId="webb-registration-province"
                     value={registration.province}
-                    onChange={(e) => update("province", e.target.value)}
+                    onChange={(province) => update("province", province)}
                     required
-                  >
-                    <option value="">เลือกจังหวัด</option>
-                    {provinces.map((province) => (
-                      <option key={province}>{province}</option>
-                    ))}
-                  </select>
+                  />
                 </label>
                 <label>
                   โรงเรียน
-                  <select
+                  <input
                     value={registration.school}
                     onChange={(e) => update("school", e.target.value)}
+                    placeholder="พิมพ์ชื่อโรงเรียน"
+                    autoComplete="organization"
                     required
-                  >
-                    <option value="">เลือกโรงเรียน</option>
-                    {schools.map((school) => (
-                      <option key={school}>{school}</option>
-                    ))}
-                  </select>
+                  />
                 </label>
                 <label className="is-wide">
                   ระดับการศึกษา

@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, type ReactNode } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import WebBPaymentSuccess from "./WebBPaymentSuccess";
 import { getExamPlan } from "./exam-documents";
+import { formatThaiDateTime } from "./data";
 import {
   addDemoEmail,
   DEMO_ACCOUNT_KEY,
@@ -24,6 +25,36 @@ export type WebBSubjectPurchaseFlowProps = {
   onProgressChange?: (percent: number) => void;
 };
 
+function UnavailableSubjectGroup({
+  id,
+  title,
+  subjects,
+  expandedDetails,
+  onToggle,
+  pickCheck,
+}: {
+  id: string;
+  title: string;
+  subjects: [string, string][];
+  expandedDetails: string[];
+  onToggle: (id: string) => void;
+  pickCheck: (on: boolean, disabled?: boolean) => ReactNode;
+}) {
+  const expanded = expandedDetails.includes(id);
+  return <section className="wb-pick-card wb-pick-unavailable-card">
+    <button type="button" className="wb-pick-group-toggle" aria-expanded={expanded} onClick={() => onToggle(id)}>
+      {pickCheck(false, true)}
+      <span><strong>{title}</strong><small>{subjects.length} วิชา · ยังไม่เปิดให้บริการ</small></span>
+      <b aria-hidden="true">{expanded ? "⌃" : "⌄"}</b>
+    </button>
+    {expanded && <div className="wb-pick-subject-details">{subjects.map(([name, info]) => <article key={name}>
+      {pickCheck(false, true)}
+      <strong>{name}</strong>
+      <span>⏱ {info.split(" · ")[0]} · 📝 {info.split(" · ")[1]} · ยังไม่เปิดให้บริการ</span>
+    </article>)}</div>}
+  </section>;
+}
+
 export default function WebBSubjectPurchaseFlow({
   isExistingUser = true,
   onBackToSignupStep,
@@ -33,6 +64,7 @@ export default function WebBSubjectPurchaseFlow({
   const [subStep, setSubStep] = useState<3 | 5 | 6>(3);
   const [showPaymentQR, setShowPaymentQR] = useState(false);
   const [expandedReviews, setExpandedReviews] = useState<string[]>([]);
+  const [expandedDetails, setExpandedDetails] = useState<string[]>([]);
   const [loggedIn, setLoggedIn] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<DemoPurchase | null>(null);
 
@@ -213,6 +245,12 @@ export default function WebBSubjectPurchaseFlow({
       : [...current, id]);
   }
 
+  function toggleDetails(id: string) {
+    setExpandedDetails((current) => current.includes(id)
+      ? current.filter((item) => item !== id)
+      : [...current, id]);
+  }
+
   function pickCheck(on: boolean, disabled = false) {
     return (
       <span className={`wb-pick-check${on ? " is-on" : ""}${disabled ? " is-disabled" : ""}`} aria-hidden="true">
@@ -228,7 +266,7 @@ export default function WebBSubjectPurchaseFlow({
   function renderSetButtons(subjectId: string) {
     return (
       <div className="wb-pick-pills">
-        {["A", "B", "C", "D"].map((set) => {
+        {["A"].map((set) => {
           const available = subjectId === "tgat" && getExamPlan("tgat-full", set).hasSuppliedExam;
           const owned = available && isSetOwned(subjectId, set);
           const selected = (selectedSets[subjectId] || []).includes(set);
@@ -249,7 +287,7 @@ export default function WebBSubjectPurchaseFlow({
     );
   }
 
-  function renderExamBlock(id: string, title: string, nested = false) {
+  function renderExamBlock(id: string, title: string, nested = false, detail = "") {
     const available = id === "tgat" && getExamPlan("tgat-full", "A").hasSuppliedExam;
     const selected = available && selectedSubjects.includes(id);
     const sets = selectedSets[id] || [];
@@ -264,29 +302,27 @@ export default function WebBSubjectPurchaseFlow({
           onClick={() => available && toggleSubject(id)}
           onKeyDown={(event) => {
             if (!available) return;
-            if (event.key === " " || event.key === "Enter") {
-              event.preventDefault();
-              toggleSubject(id);
-            }
+            if (event.key === " " || event.key === "Enter") { event.preventDefault(); toggleSubject(id); }
           }}
         >
           {pickCheck(selected)}
           <div className="wb-pick-head-text">
             <strong>{title}</strong>
-            <span>{available ? "⏱ 180 นาที · 📝 200 ข้อ" : "ยังไม่เปิดให้บริการ"}</span>
+            <span>
+              ⏱ {detail ? detail.split(" · ")[0] : "180 นาที"} · 📝 {detail ? detail.split(" · ")[1] : "200 ข้อ"}
+              {!available && " · ยังไม่เปิดให้บริการ"}
+            </span>
           </div>
           <b className="wb-pick-price">{available ? (sets.length > 0 ? `${sets.length * 179} บาท` : "179 บาท/ชุด") : ""}</b>
         </div>
-        {selected && (
-          <>
-            <hr className="wb-pick-divider" />
-            <p className="wb-pick-hint">เลือกชุดข้อสอบ <span>(มีไฟล์พร้อมสอบเฉพาะชุด A)</span></p>
-            {renderSetButtons(id)}
-          </>
-        )}
+        {selected && <>
+          <hr className="wb-pick-divider" />
+          <p className="wb-pick-hint">เลือกชุดข้อสอบ <span>(มีไฟล์พร้อมสอบเฉพาะชุด A)</span></p>
+          {renderSetButtons(id)}
+        </>}
       </>
     );
-    return nested ? <div className={`wb-pick-sub${selected ? " is-on" : ""}`}>{block}</div> : block;
+    return nested ? <div className={`wb-pick-sub${selected ? " is-on" : ""}${!available ? " is-unavailable" : ""}`}>{block}</div> : block;
   }
 
   function renderDetail(rows: { key: string; label: string }[]) {
@@ -325,7 +361,7 @@ export default function WebBSubjectPurchaseFlow({
 
     const now = new Date();
     const ref = checkoutRef;
-    const purchasedAt = now.toLocaleString("th-TH", { timeZone: "Asia/Bangkok" });
+    const purchasedAt = formatThaiDateTime(now);
 
     // Store newly purchased sets into localStorage so they appear as owned
     try {
@@ -462,24 +498,51 @@ export default function WebBSubjectPurchaseFlow({
               {renderDetail(selectedSets.tgat.map((set) => ({ key: `tgat-${set}`, label: `TGAT ความถนัดทั่วไป ชุด ${set}` })))}
             </section>
 
-            <section className={`wb-pick-card${tpatTotalCount > 0 || selectedSubjects.some((id) => id.startsWith("tpat")) ? " is-on" : ""}`}>
-              <div className="wb-pick-head" aria-hidden="true">
-                {pickCheck(selectedSubjects.some((id) => id.startsWith("tpat")))}
-                <div className="wb-pick-head-text"><strong>TPAT ความถนัดทางวิชาชีพ</strong></div>
-              </div>
-              {renderExamBlock("tpat1", "TPAT1 ความถนัดแพทย์", true)}
-              {renderExamBlock("tpat2", "TPAT2 ความถนัดศิลปกรรมศาสตร์", true)}
-              {renderExamBlock("tpat3", "TPAT3 ความถนัดด้านวิทยาศาสตร์ เทคโนโลยี และวิศวกรรมศาสตร์", true)}
-              {renderExamBlock("tpat4", "TPAT4 ความถนัดทางสถาปัตยกรรมศาสตร์", true)}
-              {renderDetail([
-                ...selectedSets.tpat1.map((set) => ({ key: `tpat1-${set}`, label: `TPAT1 ความถนัดแพทย์ ชุด ${set}` })),
-                ...selectedSets.tpat2.map((set) => ({ key: `tpat2-${set}`, label: `TPAT2 ความถนัดศิลปกรรมศาสตร์ ชุด ${set}` })),
-                ...selectedSets.tpat3.map((set) => ({ key: `tpat3-${set}`, label: `TPAT3 ความถนัดด้านวิทยาศาสตร์ เทคโนโลยี และวิศวกรรมศาสตร์ ชุด ${set}` })),
-                ...selectedSets.tpat4.map((set) => ({ key: `tpat4-${set}`, label: `TPAT4 ความถนัดทางสถาปัตยกรรมศาสตร์ ชุด ${set}` })),
-              ])}
-            </section>
-            <div className="wb-pick-other is-disabled" aria-disabled="true">{pickCheck(false, true)}<strong>A-Level ความรู้ทางวิชาการ</strong><em>ยังไม่เปิดจำหน่าย</em></div>
-            <div className="wb-pick-other is-disabled" aria-disabled="true">{pickCheck(false, true)}<strong>NETSAT</strong><em>ยังไม่เปิดจำหน่าย</em></div>
+            <UnavailableSubjectGroup
+              id="tpat"
+              title="TPAT ความถนัดทางวิชาชีพ"
+              subjects={[
+                ["TPAT1 ความถนัดแพทย์", "210 นาที · 90 ข้อ"],
+                ["TPAT2 ความถนัดศิลปกรรมศาสตร์", "180 นาที · 150 ข้อ"],
+                ["TPAT3 ความถนัดด้านวิทยาศาสตร์ เทคโนโลยี และวิศวกรรมศาสตร์", "180 นาที · 70 ข้อ"],
+                ["TPAT4 ความถนัดทางสถาปัตยกรรมศาสตร์", "180 นาที · 40 ข้อ"],
+                ["TPAT5 ความถนัดครุศาสตร์-ศึกษาศาสตร์", "180 นาที · 100 ข้อ"],
+              ]}
+              expandedDetails={expandedDetails}
+              onToggle={toggleDetails}
+              pickCheck={pickCheck}
+            />
+            <UnavailableSubjectGroup
+              id="alevel"
+              title="A-Level ความรู้ทางวิชาการ"
+              subjects={[
+                ["คณิตศาสตร์ประยุกต์ 1", "90 นาที · 30 ข้อ"], ["คณิตศาสตร์ประยุกต์ 2", "90 นาที · 30 ข้อ"],
+                ["วิทยาศาสตร์ประยุกต์", "90 นาที · 30 ข้อ"], ["ฟิสิกส์", "90 นาที · 30 ข้อ"],
+                ["เคมี", "90 นาที · 35 ข้อ"], ["ชีววิทยา", "90 นาที · 40 ข้อ"], ["สังคมศึกษา", "90 นาที · 50 ข้อ"],
+                ["ภาษาไทย", "90 นาที · 50 ข้อ"], ["ภาษาอังกฤษ", "90 นาที · 80 ข้อ"], ["ภาษาฝรั่งเศส", "90 นาที · 50 ข้อ"],
+                ["ภาษาเยอรมัน", "90 นาที · 50 ข้อ"], ["ภาษาญี่ปุ่น", "90 นาที · 50 ข้อ"], ["ภาษาเกาหลี", "90 นาที · 50 ข้อ"],
+                ["ภาษาจีน", "90 นาที · 50 ข้อ"], ["ภาษาบาลี", "90 นาที · 50 ข้อ"], ["ภาษาสเปน", "90 นาที · 50 ข้อ"],
+              ]}
+              expandedDetails={expandedDetails}
+              onToggle={toggleDetails}
+              pickCheck={pickCheck}
+            />
+            <UnavailableSubjectGroup
+              id="netsat"
+              title="NETSAT"
+              subjects={[
+                ["ความฉลาดรู้ทั่วไปด้านภาษา: ภาษาไทย", "90 นาที · 50 ข้อ"],
+                ["ความฉลาดรู้ทั่วไปด้านภาษา: ภาษาอังกฤษ", "90 นาที · 50 ข้อ"],
+                ["ความฉลาดรู้ทั่วไปด้านคณิตศาสตร์", "90 นาที · 50 ข้อ"],
+                ["ความฉลาดรู้เฉพาะด้าน: วิทยาศาสตร์และเทคโนโลยี", "90 นาที · 50 ข้อ"],
+                ["ความฉลาดรู้เฉพาะด้าน: ฟิสิกส์", "90 นาที · 50 ข้อ"],
+                ["ความฉลาดรู้เฉพาะด้าน: เคมี", "90 นาที · 50 ข้อ"],
+                ["ความฉลาดรู้เฉพาะด้าน: ชีววิทยา", "90 นาที · 50 ข้อ"],
+              ]}
+              expandedDetails={expandedDetails}
+              onToggle={toggleDetails}
+              pickCheck={pickCheck}
+            />
           </div>
 
           {notice && <p className="wb-pick-notice" role="alert">{notice}</p>}
@@ -560,7 +623,7 @@ export default function WebBSubjectPurchaseFlow({
                     <strong style={{ fontSize: "15px" }}>TGAT ความถนัดทั่วไป</strong>
                     <span style={{ fontSize: "15px", fontWeight: 700 }}>{tgatCount * 179} บาท</span>
                   </div>
-                  <div style={{ fontSize: "12px", color: "#666", marginBottom: "8px" }}>⏱ 180 นาที 📝 60 ข้อ</div>
+                  <div style={{ fontSize: "12px", color: "#666", marginBottom: "8px" }}>⏱ 180 นาที 📝 200 ข้อ</div>
                   <button type="button" className="wb-review-detail-toggle" aria-expanded={isReviewExpanded("tgat")} onClick={() => toggleReview("tgat")}>
                     <span>รายละเอียดข้อสอบ</span><span aria-hidden="true">{isReviewExpanded("tgat") ? "⌃" : "⌄"}</span>
                   </button>
@@ -568,9 +631,9 @@ export default function WebBSubjectPurchaseFlow({
                     {selectedSets["tgat"].map((set) => (
                       <div key={set} style={{ marginBottom: "10px", color: "#111" }}>
                         <strong style={{ display: "block", marginBottom: "4px" }}>ชุดข้อสอบ {set}</strong>
-                        <span style={{ display: "block" }}>TGAT1 การสื่อสารภาษาอังกฤษ</span>
-                        <span style={{ display: "block" }}>TGAT2 การคิดอย่างมีเหตุผล</span>
-                        <span style={{ display: "block" }}>TGAT3 สมรรถนะการทำงาน</span>
+                        <span style={{ display: "block" }}>TGAT1 การสื่อสารภาษาอังกฤษ · 60 นาที · 60 ข้อ</span>
+                        <span style={{ display: "block" }}>TGAT2 การคิดอย่างมีเหตุผล · 60 นาที · 80 ข้อ</span>
+                        <span style={{ display: "block" }}>TGAT3 สมรรถนะการทำงาน · 60 นาที · 60 ข้อ</span>
                       </div>
                     ))}
                   </div>}
@@ -583,7 +646,7 @@ export default function WebBSubjectPurchaseFlow({
                     <strong style={{ fontSize: "15px" }}>{subject.title}</strong>
                     <span style={{ fontSize: "15px", fontWeight: 700 }}>{subject.sets.length * 179} บาท</span>
                   </div>
-                  <div style={{ fontSize: "12px", color: "#666", marginBottom: "8px" }}>⏱ 180 นาที 📝 60 ข้อ</div>
+                  <div style={{ fontSize: "12px", color: "#666", marginBottom: "8px" }}>⏱ 180 นาที 📝 200 ข้อ</div>
                   <button type="button" className="wb-review-detail-toggle" aria-expanded={isReviewExpanded(subject.id)} onClick={() => toggleReview(subject.id)}>
                     <span>รายละเอียดข้อสอบ</span><span aria-hidden="true">{isReviewExpanded(subject.id) ? "⌃" : "⌄"}</span>
                   </button>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { formatBaht, type ExamProduct } from "./data";
+import { formatBaht, formatThaiDateTime, type ExamProduct } from "./data";
 import { PublicShell } from "./PublicShell";
 import { WebBImage } from "./WebBImage";
 import WebBPaymentSuccess from "./WebBPaymentSuccess";
@@ -62,7 +62,7 @@ export default function WebBCheckout({ product }: { product: ExamProduct }) {
       amount: total,
       baseAmount: product.price,
       payment: payment === "qr" ? "QR Payment · Demo" : "Credit card · Demo",
-      purchasedAt: now.toLocaleString("th-TH", { timeZone: "Asia/Bangkok" }),
+      purchasedAt: formatThaiDateTime(now),
       purchasedAtIso: now.toISOString(),
       receipt: `RC-${ref}`,
       profileSnapshot,

@@ -66,7 +66,7 @@ export function getExamPlan(productId: string, examSet = "A"): ExamPlan {
   let answerIndexStart = 0;
   const sections = sectionIds.map((id) => {
     const source = suppliedSetFourSections[id];
-    const section = { ...source, questionStart: answerIndexStart + 1, answerIndexStart };
+    const section = { ...source, answerIndexStart };
     answerIndexStart += section.questionCount;
     return section;
   });

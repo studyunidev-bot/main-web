@@ -95,3 +95,15 @@ export function formatBaht(value: number) {
     " บาท"
   );
 }
+
+export function formatThaiDateTime(date: Date = new Date()) {
+  return new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(date);
+}

@@ -27,6 +27,22 @@ function ExamStateScreen({
   interrupted?: boolean;
 }) {
   const solutionHref = `/webb/solutions?product=${productId}&set=${encodeURIComponent(examSet)}&ref=${encodeURIComponent(purchaseRef || "")}`;
+  useEffect(() => {
+    if (examType !== "trial") return;
+    try {
+      localStorage.removeItem(examResultStorageKey(productId, "trial", undefined, examSet));
+      localStorage.removeItem(examAnswersStorageKey(productId, "trial", undefined, examSet));
+      localStorage.removeItem(`webb-demo-started:${productId}:trial:${examSet}`);
+    } catch {
+      /* Trial completion never depends on saved score data. */
+    }
+    window.location.replace("/webb/student?view=exam");
+  }, [examType, productId, examSet]);
+
+  if (examType === "trial") {
+    return <main className="wb-exam-state-page" aria-busy="true"><p className="wb-answer-checking">กำลังกลับไปที่แท็บห้องสอบ…</p></main>;
+  }
+
   return (
     <main
       className={`wb-exam-state-page${success ? " is-success" : " is-error"}`}
@@ -75,7 +91,7 @@ function ExamStateScreen({
             {interrupted ? "ติดต่อทีมช่วยเหลือ" : "ดูผลสอบ"}
           </Link>
         </div>
-        {success && examType === "purchased" && <p className="wb-exam-state-solution-link"><Link href={solutionHref}>ดูเฉลย PDF →</Link></p>}
+        {/* {success && examType === "purchased" && <p className="wb-exam-state-solution-link"><Link href={solutionHref}>ดูเฉลย PDF →</Link></p>} */}
         <div style={{ marginTop: 18, textAlign: "center" }}>
           <Link
             href={`/webb/rules?product=${productId}&type=trial&back=exam`}
@@ -114,7 +130,7 @@ function RulesScreen({
   const examPlan = getExamPlan(product.id, examSet);
   const canUseExam = examType === "trial" || examPlan.hasSuppliedExam;
   const questionCount = examType === "trial" ? 60 : examPlan.questionCount;
-  const durationMinutes = examType === "trial" ? 180 : examPlan.durationMinutes;
+  const durationMinutes = examPlan.durationMinutes;
   const examTitle = product.id === "tgat-full"
     ? "TGAT ความถนัดทั่วไป"
     : `${product.name} ${product.parts}`;
@@ -160,18 +176,16 @@ function RulesScreen({
     try {
       localStorage.removeItem(resultKey);
       localStorage.removeItem(answerKey);
-      localStorage.removeItem(examResultStorageKey(product.id, "trial", undefined, examSet));
-      localStorage.removeItem(examAnswersStorageKey(product.id, "trial", undefined, examSet));
-      localStorage.removeItem(examResultStorageKey(product.id, "purchased", undefined, examSet));
-      localStorage.removeItem(examAnswersStorageKey(product.id, "purchased", undefined, examSet));
       localStorage.removeItem(`webb-demo-started:${product.id}:${examType}:${examSet}`);
-      localStorage.removeItem(`webb-demo-started:${product.id}:trial:${examSet}`);
-      localStorage.removeItem(`webb-demo-started:${product.id}:purchased:${examSet}`);
+      localStorage.removeItem(examResultStorageKey(product.id, examType));
+      localStorage.removeItem(examAnswersStorageKey(product.id, examType));
 
-      try {
-        setPurchaseExamStatus(product.id, "available", false, selectedPurchase?.ref);
-      } catch {
-        /* ignore */
+      if (examType === "purchased") {
+        try {
+          setPurchaseExamStatus(product.id, "available", false, selectedPurchase?.ref);
+        } catch {
+          /* ignore */
+        }
       }
 
       setAttemptState("");

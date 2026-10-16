@@ -27,11 +27,35 @@ import {
   LuX,
 } from "react-icons/lu";
 import { useEffect, useState, useRef, type FormEvent } from "react";
+import { FaFacebookF, FaInstagram, FaLine, FaTiktok, FaYoutube } from "react-icons/fa6";
+import Select from "react-select";
+import { QRCodeSVG } from "qrcode.react";
 import { PublicFooter, WebBBrand } from "./PublicShell";
 import { getProduct } from "./data";
 import { WebBImage } from "./WebBImage";
-import { DEMO_ACCOUNT_KEY, DEMO_AUTH_KEY, examAnswersStorageKey, examResultStorageKey, readCurrentDemoPurchases, readDemoAccount, readSocialSettings, safeWrite, setPurchaseExamStatus } from "./demo-store";
+import {
+  DEMO_ACCOUNT_KEY,
+  DEMO_AUTH_KEY,
+  examAnswersStorageKey,
+  examResultStorageKey,
+  readCurrentDemoPurchases,
+  readDemoAccount,
+  readSocialSettings,
+  safeWrite,
+  setPurchaseExamStatus,
+} from "./demo-store";
 import { getExamPlan } from "./exam-documents";
+import WebBProvinceSelect, {
+  WEBB_PROVINCES,
+  WEBB_SELECT_STYLES,
+} from "./WebBProvinceSelect";
+
+const WEBB_SOLUTION_UPDATED_AT = new Intl.DateTimeFormat("th-TH", {
+  timeZone: "Asia/Bangkok",
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+}).format(new Date("2025-07-15T12:00:00+07:00"));
 
 type StudentMode =
   | "student"
@@ -108,7 +132,12 @@ function StudentAvatar({
           src={avatarUrl}
           alt="ภาพโปรไฟล์นักเรียน"
           className="wb-dashboard-avatar-image"
-          style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            borderRadius: "50%",
+          }}
         />
       ) : (
         <WebBImage
@@ -186,8 +215,22 @@ const examPartReports: Record<string, ExamPartReport> = {
     total: 60,
     color: "#006ab5",
     skills: [
-      { name: "Speaking Skill", total: 30, start: 1, score: "31.7/50", correct: 19, wrong: 11 },
-      { name: "Reading Skill", total: 30, start: 1, score: "29/50", correct: 17, wrong: 13 },
+      {
+        name: "Speaking Skill",
+        total: 30,
+        start: 1,
+        score: "31.7/50",
+        correct: 19,
+        wrong: 11,
+      },
+      {
+        name: "Reading Skill",
+        total: 30,
+        start: 1,
+        score: "29/50",
+        correct: 17,
+        wrong: 13,
+      },
     ],
   },
   tgat2: {
@@ -201,10 +244,38 @@ const examPartReports: Record<string, ExamPartReport> = {
     total: 80,
     color: "#ff6638",
     skills: [
-      { name: "ความสามารถทางภาษา", total: 20, start: 1, score: "15/20", correct: 13, wrong: 7 },
-      { name: "ความสามารถทางตัวเลข", total: 20, start: 21, score: "14/20", correct: 14, wrong: 6 },
-      { name: "ความสามารถทางมิติสัมพันธ์", total: 20, start: 41, score: "14/20", correct: 14, wrong: 6 },
-      { name: "ความสามารถทางเหตุผล", total: 20, start: 61, score: "13/20", correct: 13, wrong: 7 },
+      {
+        name: "ความสามารถทางภาษา",
+        total: 20,
+        start: 1,
+        score: "15/20",
+        correct: 13,
+        wrong: 7,
+      },
+      {
+        name: "ความสามารถทางตัวเลข",
+        total: 20,
+        start: 21,
+        score: "14/20",
+        correct: 14,
+        wrong: 6,
+      },
+      {
+        name: "ความสามารถทางมิติสัมพันธ์",
+        total: 20,
+        start: 41,
+        score: "14/20",
+        correct: 14,
+        wrong: 6,
+      },
+      {
+        name: "ความสามารถทางเหตุผล",
+        total: 20,
+        start: 61,
+        score: "13/20",
+        correct: 13,
+        wrong: 7,
+      },
     ],
   },
   tgat3: {
@@ -218,10 +289,46 @@ const examPartReports: Record<string, ExamPartReport> = {
     total: 60,
     color: "#3b66ff",
     skills: [
-      { name: "การสร้างคุณค่าและนวัตกรรม", total: 15, start: 1, score: "15.42/25", correct: 9.25, wrong: 9.58, correctText: "9.25", wrongText: "9.58" },
-      { name: "การแก้ไขปัญหาที่ซับซ้อน", total: 15, start: 16, score: "7.50/25", correct: 4.5, wrong: 10.5, correctText: "4.5", wrongText: "10.5" },
-      { name: "การบริหารจัดการอารมณ์", total: 15, start: 31, score: "15/25", correct: 9, wrong: 6, correctText: "9", wrongText: "6" },
-      { name: "การเป็นพลเมืองที่มีส่วนร่วมของสังคม", total: 15, start: 46, score: "16.67/25", correct: 10, wrong: 5, correctText: "10", wrongText: "5" },
+      {
+        name: "การสร้างคุณค่าและนวัตกรรม",
+        total: 15,
+        start: 1,
+        score: "15.42/25",
+        correct: 9.25,
+        wrong: 9.58,
+        correctText: "9.25",
+        wrongText: "9.58",
+      },
+      {
+        name: "การแก้ไขปัญหาที่ซับซ้อน",
+        total: 15,
+        start: 16,
+        score: "7.50/25",
+        correct: 4.5,
+        wrong: 10.5,
+        correctText: "4.5",
+        wrongText: "10.5",
+      },
+      {
+        name: "การบริหารจัดการอารมณ์",
+        total: 15,
+        start: 31,
+        score: "15/25",
+        correct: 9,
+        wrong: 6,
+        correctText: "9",
+        wrongText: "6",
+      },
+      {
+        name: "การเป็นพลเมืองที่มีส่วนร่วมของสังคม",
+        total: 15,
+        start: 46,
+        score: "16.67/25",
+        correct: 10,
+        wrong: 5,
+        correctText: "10",
+        wrongText: "5",
+      },
     ],
   },
 };
@@ -256,12 +363,16 @@ export function maskCitizenId(id?: string): string {
     return `${digits[0]}-${digits.slice(1, 3)}**-*****-${digits.slice(10, 12)}-${digits[12]}`;
   }
   if (/^\d-\d{2}[*\d]{2}-[*\d]{5}-\d{2}-\d$/.test(withAsterisks)) {
-    return withAsterisks.replace(/^(\d-\d{2})[*\d]{2}-[*\d]{5}(-\d{2}-\d)$/, "$1**-*****$2");
+    return withAsterisks.replace(
+      /^(\d-\d{2})[*\d]{2}-[*\d]{5}(-\d{2}-\d)$/,
+      "$1**-*****$2",
+    );
   }
   if (withAsterisks.includes("-")) {
     const parts = withAsterisks.split("-");
     if (parts.length === 5) {
-      const p1 = parts[1].length >= 2 ? `${parts[1].slice(0, 2)}**` : `${parts[1]}**`;
+      const p1 =
+        parts[1].length >= 2 ? `${parts[1].slice(0, 2)}**` : `${parts[1]}**`;
       return `${parts[0]}-${p1}-*****-${parts[3]}-${parts[4]}`;
     }
   }
@@ -280,7 +391,8 @@ function modeToView(mode: StudentMode): StudentView {
 function readStudent(): StudentInfo {
   try {
     const value = JSON.parse(localStorage.getItem("webb-demo-profile") ?? "{}");
-    const customAvatar = localStorage.getItem("webb-demo-avatar") || value.avatarUrl || "";
+    const customAvatar =
+      localStorage.getItem("webb-demo-avatar") || value.avatarUrl || "";
     return {
       ...defaultStudent,
       name:
@@ -312,43 +424,100 @@ type EnrolledExam = {
   purchaseRef?: string;
 };
 
-const examSubjects: Record<string, { productId: string; title: string; detail: string }> = {
-  tgat: { productId: "tgat-full", title: "TGAT ความถนัดทั่วไป", detail: "TGAT1 การสื่อสารภาษาอังกฤษ · TGAT2 การคิดอย่างมีเหตุผล · TGAT3 สมรรถนะการทำงาน" },
-  "tgat-full": { productId: "tgat-full", title: "TGAT ความถนัดทั่วไป", detail: "TGAT1 การสื่อสารภาษาอังกฤษ · TGAT2 การคิดอย่างมีเหตุผล · TGAT3 สมรรถนะการทำงาน" },
-  tgat1: { productId: "tgat1", title: "TGAT1 การสื่อสารภาษาอังกฤษ", detail: "การสื่อสารภาษาอังกฤษ" },
-  tgat2: { productId: "tgat2", title: "TGAT2 การคิดอย่างมีเหตุผล", detail: "การคิดอย่างมีเหตุผล" },
-  tgat3: { productId: "tgat3", title: "TGAT3 สมรรถนะการทำงาน", detail: "สมรรถนะการทำงาน" },
-  tgat23: { productId: "tgat23", title: "TGAT2 + TGAT3", detail: "การคิดอย่างมีเหตุผล · สมรรถนะการทำงาน" },
-  tpat1: { productId: "tpat1", title: "TPAT1 ความถนัดแพทย์", detail: "ความถนัดแพทย์" },
-  tpat2: { productId: "tpat2", title: "TPAT2 ความถนัดศิลปกรรมศาสตร์", detail: "ความถนัดทางศิลปกรรม" },
-  tpat3: { productId: "tpat3", title: "TPAT3 ความถนัดด้านวิทยาศาสตร์ เทคโนโลยี และวิศวกรรมศาสตร์", detail: "วิทยาศาสตร์ เทคโนโลยี และวิศวกรรมศาสตร์" },
-  tpat4: { productId: "tpat4", title: "TPAT4 ความถนัดทางสถาปัตยกรรมศาสตร์", detail: "ความถนัดทางสถาปัตยกรรมศาสตร์" },
+const examSubjects: Record<
+  string,
+  { productId: string; title: string; detail: string }
+> = {
+  tgat: {
+    productId: "tgat-full",
+    title: "TGAT ความถนัดทั่วไป",
+    detail:
+      "TGAT1 การสื่อสารภาษาอังกฤษ · TGAT2 การคิดอย่างมีเหตุผล · TGAT3 สมรรถนะการทำงาน",
+  },
+  "tgat-full": {
+    productId: "tgat-full",
+    title: "TGAT ความถนัดทั่วไป",
+    detail:
+      "TGAT1 การสื่อสารภาษาอังกฤษ · TGAT2 การคิดอย่างมีเหตุผล · TGAT3 สมรรถนะการทำงาน",
+  },
+  tgat1: {
+    productId: "tgat1",
+    title: "TGAT1 การสื่อสารภาษาอังกฤษ",
+    detail: "การสื่อสารภาษาอังกฤษ",
+  },
+  tgat2: {
+    productId: "tgat2",
+    title: "TGAT2 การคิดอย่างมีเหตุผล",
+    detail: "การคิดอย่างมีเหตุผล",
+  },
+  tgat3: {
+    productId: "tgat3",
+    title: "TGAT3 สมรรถนะการทำงาน",
+    detail: "สมรรถนะการทำงาน",
+  },
+  tgat23: {
+    productId: "tgat23",
+    title: "TGAT2 + TGAT3",
+    detail: "การคิดอย่างมีเหตุผล · สมรรถนะการทำงาน",
+  },
+  tpat1: {
+    productId: "tpat1",
+    title: "TPAT1 ความถนัดแพทย์",
+    detail: "ความถนัดแพทย์",
+  },
+  tpat2: {
+    productId: "tpat2",
+    title: "TPAT2 ความถนัดศิลปกรรมศาสตร์",
+    detail: "ความถนัดทางศิลปกรรม",
+  },
+  tpat3: {
+    productId: "tpat3",
+    title: "TPAT3 ความถนัดด้านวิทยาศาสตร์ เทคโนโลยี และวิศวกรรมศาสตร์",
+    detail: "วิทยาศาสตร์ เทคโนโลยี และวิศวกรรมศาสตร์",
+  },
+  tpat4: {
+    productId: "tpat4",
+    title: "TPAT4 ความถนัดทางสถาปัตยกรรมศาสตร์",
+    detail: "ความถนัดทางสถาปัตยกรรมศาสตร์",
+  },
 };
 
 function readEnrolledExams(): EnrolledExam[] {
   try {
     return readCurrentDemoPurchases().flatMap((purchase) => {
-      const subjectId = purchase.productId === "tgat" ? "tgat-full" : purchase.productId;
+      const subjectId =
+        purchase.productId === "tgat" ? "tgat-full" : purchase.productId;
       const config = examSubjects[subjectId];
       if (!config) return [];
       const set = purchase.examSet || "A";
       const plan = getExamPlan(config.productId, set);
-      let savedAttempt = localStorage.getItem(examResultStorageKey(config.productId, "purchased", undefined, set));
+      let savedAttempt = localStorage.getItem(
+        examResultStorageKey(config.productId, "purchased", undefined, set),
+      );
       if (!savedAttempt) {
         const legacyKey = examResultStorageKey(config.productId, "purchased");
         savedAttempt = localStorage.getItem(legacyKey);
-        if (savedAttempt) localStorage.setItem(examResultStorageKey(config.productId, "purchased", undefined, set), savedAttempt);
+        if (savedAttempt)
+          localStorage.setItem(
+            examResultStorageKey(config.productId, "purchased", undefined, set),
+            savedAttempt,
+          );
       }
-      const savedStatus = savedAttempt ? (JSON.parse(savedAttempt) as { status?: EnrolledExam["status"] }).status : undefined;
-      return [{
-        subjectId,
-        ...config,
-        set,
-        duration: plan.hasSuppliedExam ? `${plan.durationMinutes} นาที` : "—",
-        questions: plan.hasSuppliedExam ? `${plan.questionCount} ข้อ` : "—",
-        status: savedStatus || purchase.examStatus || "available",
-        purchaseRef: purchase.ref,
-      }];
+      const savedStatus = savedAttempt
+        ? (JSON.parse(savedAttempt) as { status?: EnrolledExam["status"] })
+            .status
+        : undefined;
+      return [
+        {
+          subjectId,
+          ...config,
+          set,
+          duration: plan.hasSuppliedExam ? `${plan.durationMinutes} นาที` : "—",
+          questions: plan.hasSuppliedExam ? `${plan.questionCount} ข้อ` : "—",
+          status: savedStatus || purchase.examStatus || "available",
+          purchaseRef: purchase.ref,
+        },
+      ];
     });
   } catch {
     return [];
@@ -415,7 +584,12 @@ function StudentHeader({
             ))}
           </nav>
           <div className="wb-header-actions wb-dashboard-desktop-user">
-            <Link className="wb-pill-button wb-pill-yellow" href="/webb/products">สมัครสอบ</Link>
+            <Link
+              className="wb-pill-button wb-pill-yellow"
+              href="/webb/products"
+            >
+              สมัครสอบ
+            </Link>
             <button
               type="button"
               onClick={onMenu}
@@ -425,7 +599,13 @@ function StudentHeader({
             >
               <StudentAvatar avatarUrl={student.avatarUrl} />
               <span>{student.name}</span>
-              <i>{menuOpen ? <LuChevronUp aria-hidden="true" /> : <LuChevronDown aria-hidden="true" />}</i>
+              <i>
+                {menuOpen ? (
+                  <LuChevronUp aria-hidden="true" />
+                ) : (
+                  <LuChevronDown aria-hidden="true" />
+                )}
+              </i>
             </button>
             <nav
               className={`wb-dashboard-account-dropdown${menuOpen ? " is-open" : ""}`}
@@ -452,7 +632,10 @@ function StudentHeader({
               <button
                 className="wb-dashboard-account-action"
                 type="button"
-                onClick={() => { onClose(); setHelpOpen(true); }}
+                onClick={() => {
+                  onClose();
+                  setHelpOpen(true);
+                }}
               >
                 <LuHeadset aria-hidden="true" />
                 ขอความช่วยเหลือ
@@ -524,21 +707,30 @@ function StudentHeader({
                 {student.grade} · {student.school}
               </small>
             </span>
-            <i><LuChevronRight aria-hidden="true" /></i>
+            <i>
+              <LuChevronRight aria-hidden="true" />
+            </i>
           </button>
           <div className="wb-dashboard-menu-section is-secondary">
-            <button type="button" onClick={() => { onClose(); setHelpOpen(true); }}>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                setHelpOpen(true);
+              }}
+            >
               <LuHeadset aria-hidden="true" />
               ขอความช่วยเหลือ
             </button>
-            <Link
-              href="/webb"
-              onClick={handleLogout}
-            >
+            <Link href="/webb" onClick={handleLogout}>
               <LuLogOut aria-hidden="true" />
               ออกจากระบบ
             </Link>
-            <Link className="wb-dashboard-mobile-register" href="/webb/products" onClick={onClose}>
+            <Link
+              className="wb-dashboard-mobile-register"
+              href="/webb/products"
+              onClick={onClose}
+            >
               สมัครสอบ
             </Link>
           </div>
@@ -552,19 +744,62 @@ function StudentHeader({
 function StudentHelpDialog({ onClose }: { onClose: () => void }) {
   const settings = readSocialSettings();
   const links = [
-    ["LINE", settings.lineUrl, settings.lineId],
-    ["Facebook", settings.facebookUrl, ""],
-    ["Instagram", settings.instagramUrl, ""],
-    ["TikTok", settings.tiktokUrl, ""],
-    ["YouTube", settings.youtubeUrl, ""],
+    ["", settings.lineUrl, settings.lineId],
+    ["", settings.facebookUrl, ""],
+    ["", settings.instagramUrl, ""],
+    ["", settings.tiktokUrl, ""],
+    ["", settings.youtubeUrl, ""],
   ].filter(([, href]) => href);
-  return <div className="wb-contact-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <section className="wb-contact-dialog" role="dialog" aria-modal="true" aria-labelledby="wb-student-help-title">
-      <button type="button" className="wb-contact-close" aria-label="ปิด" onClick={onClose}>×</button>
-      <span className="webb-kicker">STUDY UNITH · SUPPORT</span><h2 id="wb-student-help-title">ขอความช่วยเหลือ</h2><p>เลือกช่องทางติดต่อจากการตั้งค่ากลางของระบบ</p>
-      <div className="wb-contact-links">{links.map(([label, href, handle]) => <a href={href} key={label} target="_blank" rel="noreferrer"><i>↗</i><span><b>{label}</b>{handle && <small>{handle}</small>}</span><strong>↗</strong></a>)}{settings.supportEmail && <a href={`mailto:${settings.supportEmail}`}><i>✉</i><span><b>อีเมลช่วยเหลือ</b><small>{settings.supportEmail}</small></span><strong>↗</strong></a>}</div>
-    </section>
-  </div>;
+  return (
+    <div
+      className="wb-contact-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        className="wb-contact-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="wb-student-help-title"
+      >
+        <button
+          type="button"
+          className="wb-contact-close"
+          aria-label="ปิด"
+          onClick={onClose}
+        >
+          ×
+        </button>
+        <span className="webb-kicker">STUDY UNITH · SUPPORT</span>
+        <h2 id="wb-student-help-title">ขอความช่วยเหลือ</h2>
+        <p>เลือกช่องทางติดต่อจากการตั้งค่ากลางของระบบ</p>
+        <div className="wb-contact-links">
+          {links.map(([label, href, handle]) => (
+            <a href={href} key={label} target="_blank" rel="noreferrer">
+              <i>↗</i>
+              <span>
+                <b>{label}</b>
+                {handle && <small>{handle}</small>}
+              </span>
+              <strong>↗</strong>
+            </a>
+          ))}
+          {settings.supportEmail && (
+            <a href={`mailto:${settings.supportEmail}`}>
+              <i>✉</i>
+              <span>
+                <b>อีเมลช่วยเหลือ</b>
+                <small>{settings.supportEmail}</small>
+              </span>
+              <strong>↗</strong>
+            </a>
+          )}
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function StudentSidebar({
@@ -577,7 +812,9 @@ function StudentSidebar({
   onOpenAvatarModal?: () => void;
 }) {
   const enrolledExams = useEnrolledExams();
-  const enrolledSubjects = [...new Map(enrolledExams.map((item) => [item.subjectId, item])).values()];
+  const enrolledSubjects = [
+    ...new Map(enrolledExams.map((item) => [item.subjectId, item])).values(),
+  ];
   return (
     <aside className="wb-dashboard-sidebar">
       <section className="wb-dashboard-profile-card">
@@ -592,7 +829,8 @@ function StudentSidebar({
           {student.grade} · {student.school}
         </p>
         <span className="wb-dashboard-location">
-          <LuMapPin className="wb-location-icon" aria-hidden="true" /> {student.province}
+          <LuMapPin className="wb-location-icon" aria-hidden="true" />{" "}
+          {student.province}
         </span>
         <button type="button" onClick={() => onSelect("personal")}>
           ข้อมูลผู้เข้าสอบ
@@ -600,7 +838,20 @@ function StudentSidebar({
       </section>
       <section className="wb-dashboard-enroll-card">
         <h3>ข้อสอบชุดที่สมัครสอบ</h3>
-        {enrolledSubjects.length ? enrolledSubjects.map((item, index) => <button type="button" className={index === 0 ? "is-active" : ""} key={item.subjectId} onClick={() => onSelect("exam")}>{item.title}</button>) : <p>ยังไม่มีชุดข้อสอบที่สมัคร</p>}
+        {enrolledSubjects.length ? (
+          enrolledSubjects.map((item, index) => (
+            <button
+              type="button"
+              className={index === 0 ? "is-active" : ""}
+              key={item.subjectId}
+              onClick={() => onSelect("exam")}
+            >
+              {item.title}
+            </button>
+          ))
+        ) : (
+          <p>ยังไม่มีชุดข้อสอบที่สมัคร</p>
+        )}
       </section>
     </aside>
   );
@@ -612,7 +863,9 @@ function MobileEnrollCard({
   onSelect: (view: StudentView) => void;
 }) {
   const enrolledExams = useEnrolledExams();
-  const enrolledSubjects = [...new Map(enrolledExams.map((item) => [item.subjectId, item])).values()];
+  const enrolledSubjects = [
+    ...new Map(enrolledExams.map((item) => [item.subjectId, item])).values(),
+  ];
   const [isOpen, setIsOpen] = useState(false);
   return (
     <section className="wb-dashboard-card wb-mobile-enroll-card">
@@ -624,10 +877,31 @@ function MobileEnrollCard({
         onClick={() => setIsOpen((open) => !open)}
       >
         <span>ข้อสอบชุดที่สมัครสอบ</span>
-        {isOpen ? <LuChevronUp aria-hidden="true" /> : <LuChevronDown aria-hidden="true" />}
+        {isOpen ? (
+          <LuChevronUp aria-hidden="true" />
+        ) : (
+          <LuChevronDown aria-hidden="true" />
+        )}
       </button>
-      <div className="wb-mobile-enroll-pills" id="wb-mobile-enroll-pills" hidden={!isOpen}>
-        {enrolledSubjects.length ? enrolledSubjects.map((item, index) => <button type="button" className={index === 0 ? "is-active" : ""} key={item.subjectId} onClick={() => onSelect("exam")}>{item.title}</button>) : <p>ยังไม่มีชุดข้อสอบที่สมัคร</p>}
+      <div
+        className="wb-mobile-enroll-pills"
+        id="wb-mobile-enroll-pills"
+        hidden={!isOpen}
+      >
+        {enrolledSubjects.length ? (
+          enrolledSubjects.map((item, index) => (
+            <button
+              type="button"
+              className={index === 0 ? "is-active" : ""}
+              key={item.subjectId}
+              onClick={() => onSelect("exam")}
+            >
+              {item.title}
+            </button>
+          ))
+        ) : (
+          <p>ยังไม่มีชุดข้อสอบที่สมัคร</p>
+        )}
       </div>
     </section>
   );
@@ -654,36 +928,51 @@ function StudentOverview({
   onSelect: (view: StudentView) => void;
 }) {
   const examItems = useEnrolledExams();
-  const completed = examItems.filter((item) => item.status === "submitted").length;
-  const upcoming = examItems.find((item) => item.status === "available" || item.status === "in-progress");
-  const enrolledSubjectCount = new Set(examItems.map((item) => item.subjectId)).size;
+  const completed = examItems.filter(
+    (item) => item.status === "submitted",
+  ).length;
+  const upcoming = examItems.find(
+    (item) => item.status === "available" || item.status === "in-progress",
+  );
+  const enrolledSubjectCount = new Set(examItems.map((item) => item.subjectId))
+    .size;
   const history = examItems.filter((item) => item.status === "submitted");
   return (
     <div className="wb-dashboard-view wb-overview-view">
       <section className="wb-progress-card">
         <div className="wb-progress-ring">
-          <b>{completed}/{examItems.length}</b>
+          <b>
+            {completed}/{examItems.length}
+          </b>
           <small>ชุดสอบ</small>
         </div>
         <div className="wb-progress-copy">
           <span>ภาพรวมความคืบหน้า</span>
-          <h2>สอบไปแล้ว {completed} จาก {examItems.length} ชุดที่สมัคร</h2>
+          <h2>
+            สอบไปแล้ว {completed} จาก {examItems.length} ชุดที่สมัคร
+          </h2>
           <p>
-            {examItems.length ? `สมัครสอบทั้งหมด ${enrolledSubjectCount} รายวิชา (${examItems.length} ชุดข้อสอบ) · เหลืออีก ${examItems.length - completed} ชุดที่ยังไม่เสร็จ` : "ยังไม่มีรายการสมัครสอบ เมื่อเลือกซื้อข้อสอบแล้ว รายการและความคืบหน้าจะแสดงที่นี่"}
+            {examItems.length
+              ? `สมัครสอบทั้งหมด ${enrolledSubjectCount} รายวิชา (${examItems.length} ชุดข้อสอบ) · เหลืออีก ${examItems.length - completed} ชุดที่ยังไม่เสร็จ`
+              : "ยังไม่มีรายการสมัครสอบ เมื่อเลือกซื้อข้อสอบแล้ว รายการและความคืบหน้าจะแสดงที่นี่"}
           </p>
         </div>
         <div className="wb-progress-stats">
           <b>
-            {enrolledSubjectCount}<small>รายวิชาที่สมัคร</small>
+            {enrolledSubjectCount}
+            <small>รายวิชาที่สมัคร</small>
           </b>
           <b>
-            {examItems.length}<small>ชุดข้อสอบทั้งหมด</small>
+            {examItems.length}
+            <small>ชุดข้อสอบทั้งหมด</small>
           </b>
           <b>
-            {completed}<small>สอบเสร็จแล้ว</small>
+            {completed}
+            <small>สอบเสร็จแล้ว</small>
           </b>
           <b>
-            {examItems.filter((item) => item.status === "available").length}<small>รอเข้าสอบ</small>
+            {examItems.filter((item) => item.status === "available").length}
+            <small>รอเข้าสอบ</small>
           </b>
         </div>
       </section>
@@ -691,23 +980,67 @@ function StudentOverview({
         <div className="wb-dashboard-card-heading">
           <h2>การสอบที่กำลังจะมาถึง</h2>
         </div>
-        {upcoming ? <article className="wb-exam-mini-card"><div><span className="wb-subject-chip">{upcoming.title} · ชุด {upcoming.set}</span><p>⏱ {upcoming.duration} · 📝 {upcoming.questions}</p></div>{getExamPlan(upcoming.productId, upcoming.set).hasSuppliedExam ? <Link href={`/webb/rules?product=${upcoming.productId}&set=${upcoming.set}&ref=${encodeURIComponent(upcoming.purchaseRef || "")}&type=purchased&back=overview`}>{upcoming.status === "in-progress" ? "ทำข้อสอบต่อ" : "เริ่มสอบ"}</Link> : <span className="wb-exam-unavailable-label">ไฟล์ข้อสอบยังไม่พร้อม</span>}</article> : <p className="wb-empty-state">{examItems.length ? "สมัครครบทุกชุดแล้ว" : "ยังไม่มีรายการสอบที่กำลังจะมาถึง"}</p>}
+        {upcoming ? (
+          <article className="wb-exam-mini-card">
+            <div>
+              <span className="wb-subject-chip">
+                {upcoming.title} · ชุด {upcoming.set}
+              </span>
+              <p>
+                ⏱ {upcoming.duration} · 📝 {upcoming.questions}
+              </p>
+            </div>
+            {getExamPlan(upcoming.productId, upcoming.set).hasSuppliedExam ? (
+              <Link
+                href={`/webb/rules?product=${upcoming.productId}&set=${upcoming.set}&ref=${encodeURIComponent(upcoming.purchaseRef || "")}&type=purchased&back=overview`}
+              >
+                {upcoming.status === "in-progress" ? "ทำข้อสอบต่อ" : "เริ่มสอบ"}
+              </Link>
+            ) : (
+              <span className="wb-exam-unavailable-label">
+                ไฟล์ข้อสอบยังไม่พร้อม
+              </span>
+            )}
+          </article>
+        ) : (
+          <p className="wb-empty-state">
+            {examItems.length
+              ? "สมัครครบทุกชุดแล้ว"
+              : "ยังไม่มีรายการสอบที่กำลังจะมาถึง"}
+          </p>
+        )}
       </section>
       <section className="wb-dashboard-card wb-history-card">
         <h2>ประวัติการเข้าสอบ</h2>
-        {history.length ? history.map((item) => <article key={item.purchaseRef || `${item.subjectId}-${item.set}`}><div><b>{item.title} · ชุด {item.set}</b><span>· สอบเสร็จแล้ว</span></div><i><em style={{ width: "100%" }} /></i><button onClick={() => onSelect("results")}>ดูผลสอบ</button></article>) : <p className="wb-empty-state">ยังไม่มีประวัติการสอบที่เสร็จสมบูรณ์</p>}
+        {history.length ? (
+          history.map((item) => (
+            <article key={item.purchaseRef || `${item.subjectId}-${item.set}`}>
+              <div>
+                <b>
+                  {item.title} · ชุด {item.set}
+                </b>
+                <span>· สอบเสร็จแล้ว</span>
+              </div>
+              <i>
+                <em style={{ width: "100%" }} />
+              </i>
+              <button onClick={() => onSelect("results")}>ดูผลสอบ</button>
+            </article>
+          ))
+        ) : (
+          <p className="wb-empty-state">ยังไม่มีประวัติการสอบที่เสร็จสมบูรณ์</p>
+        )}
       </section>
       <section className="wb-dashboard-promo">
         <div className="wb-dashboard-promo-left">
-          <span
-            className="wb-dashboard-promo-icon"
-            aria-hidden="true"
-          >
+          <span className="wb-dashboard-promo-icon" aria-hidden="true">
             🛍️
           </span>
           <div className="wb-dashboard-promo-copy">
             <h2>แนะนำชุดข้อสอบเพิ่มเติม บน Shopee</h2>
-            <p>รวมแนวข้อสอบอัปเดตล่าสุด พร้อมเฉลยละเอียด สั่งซื้อได้ที่ร้านค้า</p>
+            <p>
+              รวมแนวข้อสอบอัปเดตล่าสุด พร้อมเฉลยละเอียด สั่งซื้อได้ที่ร้านค้า
+            </p>
           </div>
         </div>
         <a
@@ -729,13 +1062,28 @@ function ExamRoom() {
   const examItems = useEnrolledExams();
 
   function resetExam(item: EnrolledExam) {
-    if (!window.confirm(`รีเซ็ต ${item.title} ชุด ${item.set} เพื่อเริ่มสอบใหม่หรือไม่? คำตอบเดิมจะถูกลบ`)) return;
+    if (
+      !window.confirm(
+        `รีเซ็ต ${item.title} ชุด ${item.set} เพื่อเริ่มสอบใหม่หรือไม่? คำตอบเดิมจะถูกลบ`,
+      )
+    )
+      return;
     try {
-      localStorage.removeItem(examResultStorageKey(item.productId, "purchased", undefined, item.set));
-      localStorage.removeItem(examAnswersStorageKey(item.productId, "purchased", undefined, item.set));
-      localStorage.removeItem(`webb-demo-started:${item.productId}:purchased:${item.set}`);
-      localStorage.removeItem(examResultStorageKey(item.productId, "purchased"));
-      localStorage.removeItem(examAnswersStorageKey(item.productId, "purchased"));
+      localStorage.removeItem(
+        examResultStorageKey(item.productId, "purchased", undefined, item.set),
+      );
+      localStorage.removeItem(
+        examAnswersStorageKey(item.productId, "purchased", undefined, item.set),
+      );
+      localStorage.removeItem(
+        `webb-demo-started:${item.productId}:purchased:${item.set}`,
+      );
+      localStorage.removeItem(
+        examResultStorageKey(item.productId, "purchased"),
+      );
+      localStorage.removeItem(
+        examAnswersStorageKey(item.productId, "purchased"),
+      );
       localStorage.removeItem(`webb-demo-started:${item.productId}:purchased`);
     } catch {
       // The purchase status still allows the demo attempt to be reset if storage is unavailable.
@@ -764,15 +1112,23 @@ function ExamRoom() {
               </li>
               <li>
                 <span className="wb-exam-rule-num">2</span>
-                <span>ระบบบันทึกคำตอบอัตโนมัติ (Auto-save) ทุกครั้งที่เลือกคำตอบ</span>
+                <span>
+                  ระบบบันทึกคำตอบอัตโนมัติ (Auto-save) ทุกครั้งที่เลือกคำตอบ
+                </span>
               </li>
               <li>
                 <span className="wb-exam-rule-num">3</span>
-                <span>หากหลุดออกจากระบบ สามารถเข้ามาทำต่อได้ แต่เวลายังคงเดินต่อเนื่อง</span>
+                <span>
+                  หากหลุดออกจากระบบ สามารถเข้ามาทำต่อได้
+                  แต่เวลายังคงเดินต่อเนื่อง
+                </span>
               </li>
               <li>
                 <span className="wb-exam-rule-num">4</span>
-                <span>ระบบจะแจ้งเตือนเมื่อเหลือ 5 นาที และส่งคำตอบอัตโนมัติเมื่อหมดเวลา</span>
+                <span>
+                  ระบบจะแจ้งเตือนเมื่อเหลือ 5 นาที
+                  และส่งคำตอบอัตโนมัติเมื่อหมดเวลา
+                </span>
               </li>
             </ol>
           </div>
@@ -794,41 +1150,69 @@ function ExamRoom() {
           <span className="wb-col-center">จำนวนข้อ</span>
           <span>สถานะ</span>
         </div>
-        {examItems.length ? examItems.map((item) => (
-          <article key={item.purchaseRef || `${item.subjectId}-${item.set}`}>
-            <div className="wb-exam-subject-col">
-              <b>{item.title}</b>
-              <small>{item.detail}</small>
-            </div>
-            <span className="wb-mobile-table-label wb-exam-set-col wb-col-center">
-              <strong className="wb-mobile-label-tag">ชุดข้อสอบ</strong>
-              <b>{item.set}</b>
-            </span>
-            <span className="wb-mobile-table-label wb-exam-time-col wb-col-center">
-              <strong className="wb-mobile-label-tag">เวลาสอบ</strong>
-              <b>{item.duration}</b>
-            </span>
-            <span className="wb-mobile-table-label wb-exam-count-col wb-col-center">
-              <strong className="wb-mobile-label-tag">จำนวนข้อ</strong>
-              <b>{item.questions}</b>
-            </span>
-            <div className="wb-exam-status-col">
-              <em>{item.status === "submitted" ? "สอบเสร็จแล้ว" : item.status === "in-progress" ? "กำลังสอบ" : item.status === "interrupted" ? "รอผู้ดูแลตรวจสอบ" : "ยังไม่ได้สอบ"}</em>
-              <div className="wb-exam-actions">
-                {item.status === "submitted" ? <Link href="/webb/results">ดูผลสอบ</Link> : getExamPlan(item.productId, item.set).hasSuppliedExam ? (
-                  <Link href={`/webb/rules?product=${item.productId}&set=${item.set}&ref=${encodeURIComponent(item.purchaseRef || "")}&type=purchased&back=exam`}>
-                    {item.status === "in-progress" ? "ทำข้อสอบต่อ" : "เริ่มสอบ"}
-                  </Link>
-                ) : <span className="wb-exam-unavailable-label">ไฟล์ข้อสอบยังไม่พร้อม</span>}
-                {getExamPlan(item.productId, item.set).hasSuppliedExam && (
-                  <button type="button" className="wb-exam-reset-btn" onClick={() => resetExam(item)}>
-                    <LuRotateCcw aria-hidden="true" /> รีเซ็ตสอบใหม่
-                  </button>
-                )}
+        {examItems.length ? (
+          examItems.map((item) => (
+            <article key={item.purchaseRef || `${item.subjectId}-${item.set}`}>
+              <div className="wb-exam-subject-col">
+                <b>{item.title}</b>
+                <small>{item.detail}</small>
               </div>
-            </div>
-          </article>
-        )) : <p className="wb-empty-state text-center pt-5">ยังไม่มีชุดข้อสอบที่สมัคร เมื่อเลือกซื้อแล้วรายการสอบจะแสดงที่นี่</p>}
+              <span className="wb-mobile-table-label wb-exam-set-col wb-col-center">
+                <strong className="wb-mobile-label-tag">ชุดข้อสอบ</strong>
+                <b>{item.set}</b>
+              </span>
+              <span className="wb-mobile-table-label wb-exam-time-col wb-col-center">
+                <strong className="wb-mobile-label-tag">เวลาสอบ</strong>
+                <b>{item.duration}</b>
+              </span>
+              <span className="wb-mobile-table-label wb-exam-count-col wb-col-center">
+                <strong className="wb-mobile-label-tag">จำนวนข้อ</strong>
+                <b>{item.questions}</b>
+              </span>
+              <div className="wb-exam-status-col">
+                <em>
+                  {item.status === "submitted"
+                    ? "สอบเสร็จแล้ว"
+                    : item.status === "in-progress"
+                      ? "กำลังสอบ"
+                      : item.status === "interrupted"
+                        ? "รอผู้ดูแลตรวจสอบ"
+                        : "ยังไม่ได้สอบ"}
+                </em>
+                <div className="wb-exam-actions">
+                  {item.status === "submitted" ? (
+                    <Link href="/webb/results">ดูผลสอบ</Link>
+                  ) : getExamPlan(item.productId, item.set).hasSuppliedExam ? (
+                    <Link
+                      href={`/webb/rules?product=${item.productId}&set=${item.set}&ref=${encodeURIComponent(item.purchaseRef || "")}&type=purchased&back=exam`}
+                    >
+                      {item.status === "in-progress"
+                        ? "ทำข้อสอบต่อ"
+                        : "เริ่มสอบ"}
+                    </Link>
+                  ) : (
+                    <span className="wb-exam-unavailable-label">
+                      ไฟล์ข้อสอบยังไม่พร้อม
+                    </span>
+                  )}
+                  {getExamPlan(item.productId, item.set).hasSuppliedExam && (
+                    <button
+                      type="button"
+                      className="wb-exam-reset-btn"
+                      onClick={() => resetExam(item)}
+                    >
+                      <LuRotateCcw aria-hidden="true" /> รีเซ็ตสอบใหม่
+                    </button>
+                  )}
+                </div>
+              </div>
+            </article>
+          ))
+        ) : (
+          <p className="wb-empty-state text-center pt-5">
+            ยังไม่มีชุดข้อสอบที่สมัคร เมื่อเลือกซื้อแล้วรายการสอบจะแสดงที่นี่
+          </p>
+        )}
       </section>
     </div>
   );
@@ -864,7 +1248,11 @@ function ExamResults({ onSelect }: { onSelect: (view: StudentView) => void }) {
             <LuDownload aria-hidden="true" />
             <span>ดาวน์โหลดใบวิเคราะห์ (PDF)</span>
           </button>
-          <button type="button" onClick={() => onSelect("ranking")}>
+          <button
+            type="button"
+            className="wb-ranking-action"
+            onClick={() => onSelect("ranking")}
+          >
             🏆 จัดคะแนนอันดับ
           </button>
           <button
@@ -947,16 +1335,19 @@ function ResultDetails({
           <h2>
             อันดับของคุณ{" "}
             <button onClick={() => onSelect("ranking")}>
-              🏆 จัดคะแนนอันดับ 
+              🏆 จัดคะแนนอันดับ <LuArrowRight aria-hidden="true" />
             </button>
           </h2>
           <div className="wb-detail-score">
-            คะแนน <b>60.7/100</b>
+            <span>คะแนน</span>
+            <b>60.7/100</b>
           </div>
-          <p>
-            ลำดับที่ <strong>415</strong>/2709
-          </p>
-          <small>*คิดจากการสอบครั้งที่ 1 เท่านั้น</small>
+          <div className="wb-detail-place">
+            <p>
+              ลำดับที่ <strong>415</strong>/2709
+            </p>
+            <small>*คิดจากการสอบครั้งที่ 1 เท่านั้น</small>
+          </div>
         </section>
       </div>
       <section className="wb-dashboard-card wb-total-score">
@@ -1118,16 +1509,35 @@ type QuestionResult = {
 const TGAT3_SKILL1_QUESTIONS: QuestionResult[] = [
   { no: 1, ans: "C", badge: "1", score: "0.00", isWrong: true },
   { no: 2, ans: "2,3,4", badge: "1", score: "1.00", note: "หลายข้อ" },
-  { no: "3 -4", ans: "D", badge: "double-check", score: "2.00", note: "เชื่อมโยง" },
+  {
+    no: "3 -4",
+    ans: "D",
+    badge: "double-check",
+    score: "2.00",
+    note: "เชื่อมโยง",
+  },
   { no: 5, ans: "2,4", badge: "0.5", score: "0.5", note: "หลายข้อ" },
   { no: 6, ans: "D", badge: "1", score: "0.00", isWrong: true },
   { no: 6, ans: "1,2,4", badge: "1", score: "1.00", note: "หลายข้อ" },
   { no: 7, ans: "1,2,4", badge: "1", score: "0.00", isWrong: true },
-  { no: "8-9", ans: "A/D", badge: "double-check", score: "2.00", note: "หลายข้อ" },
+  {
+    no: "8-9",
+    ans: "A/D",
+    badge: "double-check",
+    score: "2.00",
+    note: "หลายข้อ",
+  },
   { no: 10, ans: "C", badge: "1", score: "0.75" },
   { no: 11, ans: "2,3", badge: "1", score: "1.00", note: "หลายข้อ" },
   { no: 12, ans: "2,3", badge: "0.75", score: "0.75", note: "หลายข้อ" },
-  { no: "13-14", ans: "D/C", badge: "cross", score: "0.00", note: "เชื่อมโยง", isWrong: true },
+  {
+    no: "13-14",
+    ans: "D/C",
+    badge: "cross",
+    score: "0.00",
+    note: "เชื่อมโยง",
+    isWrong: true,
+  },
   { no: 15, ans: "1,2", badge: "1", score: "1.00", note: "หลายข้อ" },
 ];
 
@@ -1217,7 +1627,7 @@ function getSubResultQuestions(
   partId: string,
   skillName: string,
   skillIndex: number,
-  skill: ExamSkill
+  skill: ExamSkill,
 ): QuestionResult[] {
   const pid = partId.toLowerCase();
   if (pid === "tgat1") {
@@ -1244,10 +1654,27 @@ function getSubResultQuestions(
     }
   }
 
-  const answerChoices = ["A", "C", "B", "C", "B", "C", "A", "C", "A", "C", "D", "B", "A", "C", "D"];
+  const answerChoices = [
+    "A",
+    "C",
+    "B",
+    "C",
+    "B",
+    "C",
+    "A",
+    "C",
+    "A",
+    "C",
+    "D",
+    "B",
+    "A",
+    "C",
+    "D",
+  ];
   return Array.from({ length: skill.total }, (_, index) => {
-    const correct = ((index * 13) % skill.total) < skill.correct;
-    const answer = answerChoices[(index + skillIndex * 3) % answerChoices.length];
+    const correct = (index * 13) % skill.total < skill.correct;
+    const answer =
+      answerChoices[(index + skillIndex * 3) % answerChoices.length];
     return {
       no: skill.start + index,
       ans: answer,
@@ -1268,8 +1695,8 @@ function ExamPartDetails({
   const [openSkills, setOpenSkills] = useState<Record<string, boolean>>({
     "Speaking Skill": true,
     "Reading Skill": false,
-    "ความสามารถทางภาษา": true,
-    "การสร้างคุณค่าและนวัตกรรม": true,
+    ความสามารถทางภาษา: true,
+    การสร้างคุณค่าและนวัตกรรม: true,
   });
 
   const toggleSkill = (name: string) => {
@@ -1288,7 +1715,9 @@ function ExamPartDetails({
   });
 
   return (
-    <div className={`wb-dashboard-view wb-detail-view wb-subresults-page wb-part-${part.id.toLowerCase()}`}>
+    <div
+      className={`wb-dashboard-view wb-detail-view wb-subresults-page wb-part-${part.id.toLowerCase()}`}
+    >
       <div className="wb-subresults-top">
         <button
           type="button"
@@ -1300,7 +1729,10 @@ function ExamPartDetails({
         </button>
       </div>
 
-      <header className="wb-subresults-header" style={{ background: part.color }}>
+      <header
+        className="wb-subresults-header"
+        style={{ background: part.color }}
+      >
         <div className="wb-subresults-header-info">
           <span className="wb-subresults-pill">{part.label}</span>
           <h1 className="wb-subresults-title">
@@ -1323,12 +1755,12 @@ function ExamPartDetails({
 
       <div className={`wb-subresults-grid is-${part.skills.length}-skills`}>
         {part.skills.map((skill, skillIndex) => {
-          const isOpen = openSkills[skill.name] ?? (skillIndex === 0);
+          const isOpen = openSkills[skill.name] ?? skillIndex === 0;
           const questions = getSubResultQuestions(
             part.id,
             skill.name,
             skillIndex,
-            skill
+            skill,
           );
 
           return (
@@ -1349,10 +1781,20 @@ function ExamPartDetails({
                   </h3>
                   <div className="wb-subresults-card-meta-right">
                     <span className="wb-subresults-count-text wb-count-desktop-2skills">
-                      {skill.total} ข้อ · {part.id === "TGAT1" ? "50" : part.id === "TGAT3" ? "25" : "20"} คะแนน
+                      {skill.total} ข้อ ·{" "}
+                      {part.id === "TGAT1"
+                        ? "50"
+                        : part.id === "TGAT3"
+                          ? "25"
+                          : "20"}{" "}
+                      คะแนน
                     </span>
                     <span className="wb-subresults-chevron">
-                      {isOpen ? <LuChevronUp size={20} /> : <LuChevronDown size={20} />}
+                      {isOpen ? (
+                        <LuChevronUp size={20} />
+                      ) : (
+                        <LuChevronDown size={20} />
+                      )}
                     </span>
                   </div>
                 </div>
@@ -1360,7 +1802,13 @@ function ExamPartDetails({
                 {/* แถวล่าง: คะแนน และจำนวนข้อ */}
                 <div className="wb-subresults-count-row">
                   <span className="wb-subresults-count-text">
-                    {skill.total} ข้อ · {part.id === "TGAT1" ? "50" : part.id === "TGAT3" ? "25" : "20"} คะแนน
+                    {skill.total} ข้อ ·{" "}
+                    {part.id === "TGAT1"
+                      ? "50"
+                      : part.id === "TGAT3"
+                        ? "25"
+                        : "20"}{" "}
+                    คะแนน
                   </span>
                 </div>
 
@@ -1379,7 +1827,15 @@ function ExamPartDetails({
                   </div>
                   <div className="wb-subresults-card-score">
                     <strong>{skill.score.split("/")[0]}</strong>
-                    <span>/{skill.score.split("/")[1] || (part.id === "TGAT1" ? "50" : part.id === "TGAT3" ? "25" : "20")}</span>
+                    <span>
+                      /
+                      {skill.score.split("/")[1] ||
+                        (part.id === "TGAT1"
+                          ? "50"
+                          : part.id === "TGAT3"
+                            ? "25"
+                            : "20")}
+                    </span>
                   </div>
                 </div>
 
@@ -1394,7 +1850,9 @@ function ExamPartDetails({
                 </div>
               </div>
 
-              <div className={`wb-subresults-table-wrap ${isOpen ? "is-open" : "is-collapsed"}`}>
+              <div
+                className={`wb-subresults-table-wrap ${isOpen ? "is-open" : "is-collapsed"}`}
+              >
                 <table className="wb-subresults-table">
                   <thead>
                     <tr>
@@ -1406,8 +1864,13 @@ function ExamPartDetails({
                   </thead>
                   <tbody>
                     {questions.map((q, qIndex) => {
-                      const isZero = q.isWrong || q.score === "0.00" || q.score === "0";
-                      const isAmber = q.score === "0.5" || q.score === "0.50" || q.score === "0.25" || q.score === "0.75";
+                      const isZero =
+                        q.isWrong || q.score === "0.00" || q.score === "0";
+                      const isAmber =
+                        q.score === "0.5" ||
+                        q.score === "0.50" ||
+                        q.score === "0.25" ||
+                        q.score === "0.75";
                       return (
                         <tr key={qIndex}>
                           <td className="wb-col-no">{q.no}</td>
@@ -1415,9 +1878,13 @@ function ExamPartDetails({
                           <td className="wb-col-result">
                             {renderResultBadge(q)}
                           </td>
-                          <td className={`wb-col-score ${isZero ? "is-wrong-score" : isAmber ? "is-amber-score" : "is-correct-score"}`}>
+                          <td
+                            className={`wb-col-score ${isZero ? "is-wrong-score" : isAmber ? "is-amber-score" : "is-correct-score"}`}
+                          >
                             <div className="wb-score-val">{q.score}</div>
-                            {q.note && <div className="wb-score-note">{q.note}</div>}
+                            {q.note && (
+                              <div className="wb-score-note">{q.note}</div>
+                            )}
                           </td>
                         </tr>
                       );
@@ -1442,18 +1909,29 @@ function ExamPartDetails({
               <div className="wb-subresults-vertical-axis">
                 <div className="wb-axis-point-top">
                   <span className="wb-axis-label">{part.skills[0].name}</span>
-                  <strong className="wb-axis-val">{part.skills[0].score.split("/")[0]}</strong>
+                  <strong className="wb-axis-val">
+                    {part.skills[0].score.split("/")[0]}
+                  </strong>
                 </div>
                 <div className="wb-axis-line-container">
                   <svg width="24" height="110" viewBox="0 0 24 110" fill="none">
-                    <line x1="12" y1="12" x2="12" y2="98" stroke={part.color} strokeWidth="2.5" />
+                    <line
+                      x1="12"
+                      y1="12"
+                      x2="12"
+                      y2="98"
+                      stroke={part.color}
+                      strokeWidth="2.5"
+                    />
                     <circle cx="12" cy="12" r="5" fill={part.color} />
                     <circle cx="12" cy="98" r="5" fill={part.color} />
                   </svg>
                 </div>
                 <div className="wb-axis-point-bottom">
                   <span className="wb-axis-label">{part.skills[1].name}</span>
-                  <strong className="wb-axis-val">{part.skills[1].score.split("/")[0]}</strong>
+                  <strong className="wb-axis-val">
+                    {part.skills[1].score.split("/")[0]}
+                  </strong>
                 </div>
               </div>
             ) : (
@@ -1471,20 +1949,71 @@ function ExamPartDetails({
                     points="230,75 295,135 230,192 148,135"
                     style={{ stroke: part.color, fill: `${part.color}20` }}
                   />
-                  {[[230, 75], [295, 135], [230, 192], [148, 135]].map(([x, y], index) => (
-                    <circle key={index} cx={x} cy={y} r="5" style={{ fill: part.color }} />
+                  {[
+                    [230, 75],
+                    [295, 135],
+                    [230, 192],
+                    [148, 135],
+                  ].map(([x, y], index) => (
+                    <circle
+                      key={index}
+                      cx={x}
+                      cy={y}
+                      r="5"
+                      style={{ fill: part.color }}
+                    />
                   ))}
-                  <text x="230" y="18" textAnchor="middle" fontWeight="600">{part.skills[0]?.name}</text>
-                  <text x="230" y="32" textAnchor="middle" fontWeight="700" fill="#0f172a">{part.skills[0]?.score.split("/")[0]}</text>
+                  <text x="230" y="18" textAnchor="middle" fontWeight="600">
+                    {part.skills[0]?.name}
+                  </text>
+                  <text
+                    x="230"
+                    y="32"
+                    textAnchor="middle"
+                    fontWeight="700"
+                    fill="#0f172a"
+                  >
+                    {part.skills[0]?.score.split("/")[0]}
+                  </text>
 
-                  <text x="360" y="130" textAnchor="start" fontWeight="600">{part.skills[1]?.name}</text>
-                  <text x="360" y="145" textAnchor="start" fontWeight="700" fill="#0f172a">{part.skills[1]?.score.split("/")[0]}</text>
+                  <text x="360" y="130" textAnchor="start" fontWeight="600">
+                    {part.skills[1]?.name}
+                  </text>
+                  <text
+                    x="360"
+                    y="145"
+                    textAnchor="start"
+                    fontWeight="700"
+                    fill="#0f172a"
+                  >
+                    {part.skills[1]?.score.split("/")[0]}
+                  </text>
 
-                  <text x="230" y="252" textAnchor="middle" fontWeight="600">{part.skills[2]?.name}</text>
-                  <text x="230" y="266" textAnchor="middle" fontWeight="700" fill="#0f172a">{part.skills[2]?.score.split("/")[0]}</text>
+                  <text x="230" y="252" textAnchor="middle" fontWeight="600">
+                    {part.skills[2]?.name}
+                  </text>
+                  <text
+                    x="230"
+                    y="266"
+                    textAnchor="middle"
+                    fontWeight="700"
+                    fill="#0f172a"
+                  >
+                    {part.skills[2]?.score.split("/")[0]}
+                  </text>
 
-                  <text x="100" y="130" textAnchor="end" fontWeight="600">{part.skills[3]?.name}</text>
-                  <text x="100" y="145" textAnchor="end" fontWeight="700" fill="#0f172a">{part.skills[3]?.score.split("/")[0]}</text>
+                  <text x="100" y="130" textAnchor="end" fontWeight="600">
+                    {part.skills[3]?.name}
+                  </text>
+                  <text
+                    x="100"
+                    y="145"
+                    textAnchor="end"
+                    fontWeight="700"
+                    fill="#0f172a"
+                  >
+                    {part.skills[3]?.score.split("/")[0]}
+                  </text>
                 </svg>
               </div>
             )}
@@ -1498,7 +2027,10 @@ function ExamPartDetails({
               {sortedSkills.map((skill, index) => {
                 const scoreNum = parseFloat(skill.score.split("/")[0]);
                 const maxNum = parseFloat(skill.score.split("/")[1] || "50");
-                const pct = Math.min(100, Math.max(0, (scoreNum / maxNum) * 100));
+                const pct = Math.min(
+                  100,
+                  Math.max(0, (scoreNum / maxNum) * 100),
+                );
 
                 return (
                   <div key={skill.name} className="wb-subresults-ranking-item">
@@ -1508,7 +2040,9 @@ function ExamPartDetails({
                       </span>
                       <span className="wb-subresults-ranking-item-score">
                         <strong>{skill.score.split("/")[0]}</strong>
-                        <span className="wb-subresults-ranking-max">/{maxNum}</span>
+                        <span className="wb-subresults-ranking-max">
+                          /{maxNum}
+                        </span>
                       </span>
                     </div>
                     <div className="wb-subresults-ranking-bar">
@@ -1541,15 +2075,42 @@ function Ranking({
   const [grade, setGrade] = useState("ทุกระดับชั้น");
   const [province, setProvince] = useState("ทุกจังหวัด");
   const [period, setPeriod] = useState("ทุกช่วงเวลา");
-  const [search, setSearch] = useState("");
-  const [candidateMode, setCandidateMode] = useState<"actual" | "under" | "over">("actual");
+  const gradeOptions = [
+    "ทุกระดับชั้น",
+    "มัธยมศึกษาปีที่ 4",
+    "มัธยมศึกษาปีที่ 5",
+    "มัธยมศึกษาปีที่ 6",
+  ].map((value) => ({ value, label: value }));
+  const provinceOptions = [
+    { value: "ทุกจังหวัด", label: "ทุกจังหวัด" },
+    ...WEBB_PROVINCES,
+  ];
+  const periodOptions = ["ทุกช่วงเวลา", "เดือนนี้", "สัปดาห์นี้"].map(
+    (value) => ({ value, label: value }),
+  );
   const [currentUsername, setCurrentUsername] = useState("");
-  const [rankRecords, setRankRecords] = useState<{ username: string; email: string; student: string; grade: string; province: string; productId: string; version: string; score: number; submittedAt: number }[]>([]);
-  const minimumRank = 100;
+  const [rankRecords, setRankRecords] = useState<
+    {
+      username: string;
+      email: string;
+      student: string;
+      grade: string;
+      province: string;
+      productId: string;
+      version: string;
+      score: number;
+      submittedAt: number;
+    }[]
+  >([]);
   useEffect(() => {
     const refresh = () => {
-      try { setRankRecords(JSON.parse(localStorage.getItem("webb-demo-ranking-results") || "[]")); }
-      catch { setRankRecords([]); }
+      try {
+        setRankRecords(
+          JSON.parse(localStorage.getItem("webb-demo-ranking-results") || "[]"),
+        );
+      } catch {
+        setRankRecords([]);
+      }
       setCurrentUsername(readDemoAccount()?.username || "");
     };
     refresh();
@@ -1560,45 +2121,36 @@ function Ranking({
       window.removeEventListener("storage", refresh);
     };
   }, []);
-  const ownResult = rankRecords.find((row) => currentUsername ? row.username.toLowerCase() === currentUsername.toLowerCase() : row.email.toLowerCase() === student.email.toLowerCase());
+  const ownResult = rankRecords.find((row) =>
+    currentUsername
+      ? row.username.toLowerCase() === currentUsername.toLowerCase()
+      : row.email.toLowerCase() === student.email.toLowerCase(),
+  );
   const rankingProductId = ownResult?.productId || "tgat1";
   const rankingVersion = ownResult?.version;
-  const actualRows = rankRecords.filter((row) => row.productId === rankingProductId && (!rankingVersion || row.version === rankingVersion));
-  const candidates = candidateMode === "actual" ? actualRows.length : candidateMode === "under" ? 96 : 124;
-  const canFilter = candidates > minimumRank;
-  const mockRows = Array.from({ length: candidateMode === "under" ? 96 : 124 }, (_, index) => ({
-    username: `sample-${index + 1}`,
-    email: `candidate-${index + 1}@example.test`,
-    name: `${[`ศิรศักดิ์ ผ.`, `กมลชนก ต.`, `ธนกร ส.`, `ปาริชาติ ว.`, `ณัฐชา ก.`][index % 5]} ${String(index + 1).padStart(3, "0")}`,
-    grade: index % 3 === 0 ? "มัธยมศึกษาปีที่ 5" : "มัธยมศึกษาปีที่ 6",
-    province: ["ขอนแก่น", "กรุงเทพมหานคร", "เชียงใหม่"][index % 3],
-    period: index % 2 === 0 ? "เดือนนี้" : "สัปดาห์นี้",
-    score: Math.round((45 + ((index * 37) % 520) / 10) * 10) / 10,
-    submittedAt: Date.now() - (index % 25) * 86400000,
+  const actualRows = rankRecords.filter(
+    (row) =>
+      row.productId === rankingProductId &&
+      (!rankingVersion || row.version === rankingVersion),
+  );
+  const rows = actualRows.map((row) => ({
+    ...row,
+    name: row.student,
+    period:
+      Date.now() - row.submittedAt < 7 * 86400000 ? "สัปดาห์นี้" : "เดือนนี้",
   }));
-  const ownRankRow = ownResult ? {
-    username: ownResult.username, email: ownResult.email, name: ownResult.student, grade: ownResult.grade,
-    province: ownResult.province, period: Date.now() - ownResult.submittedAt < 7 * 86400000 ? "สัปดาห์นี้" : "เดือนนี้",
-    score: ownResult.score, submittedAt: ownResult.submittedAt,
-  } : null;
-  const sampleOwnRow = ownRankRow || {
-    username: currentUsername || "current-demo-student", email: student.email, name: student.name,
-    grade: student.grade.includes("6") ? "มัธยมศึกษาปีที่ 6" : student.grade.includes("5") ? "มัธยมศึกษาปีที่ 5" : "มัธยมศึกษาปีที่ 4",
-    province: student.province, period: "เดือนนี้", score: 60.7, submittedAt: Date.now(),
-  };
-  const rows = candidateMode === "actual" ? actualRows.map((row) => ({ ...row, name: row.student, period: Date.now() - row.submittedAt < 7 * 86400000 ? "สัปดาห์นี้" : "เดือนนี้" })) : [
-    ...mockRows.slice(0, Math.max(0, candidates - 1)),
-    sampleOwnRow,
-  ];
-  const ownScore = candidateMode === "actual" ? ownResult?.score : sampleOwnRow.score;
-  const ownRank = ownScore === undefined ? null : rows.filter((row) => row.score > ownScore).length + 1;
-  const filteredRows = rows.filter((row) => {
-    if (!canFilter) return true;
-    return (grade === "ทุกระดับชั้น" || row.grade === grade) &&
+  const ownScore = ownResult?.score;
+  const filteredRows = rows.filter(
+    (row) =>
+      (grade === "ทุกระดับชั้น" || row.grade === grade) &&
       (province === "ทุกจังหวัด" || row.province === province) &&
-      (period === "ทุกช่วงเวลา" || row.period === period) &&
-      row.name.toLowerCase().includes(search.toLowerCase());
-  });
+      (period === "ทุกช่วงเวลา" || row.period === period),
+  );
+  const candidates = filteredRows.length;
+  const ownRank =
+    ownScore === undefined
+      ? null
+      : filteredRows.filter((row) => row.score > ownScore).length + 1;
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -1633,24 +2185,69 @@ function Ranking({
         </div>
         <h2>{student.name}</h2>
         <p>วิชา TGAT ความถนัดทั่วไป</p>
-        <div className="wb-ranking-score"><span>คะแนน</span><b>{ownScore === undefined ? "—" : `${ownScore.toFixed(1)}/100`}</b></div>
-        <div className="wb-ranking-place">อันดับของคุณ <strong>{ownRank ?? "—"}</strong>/{candidates}<small>คำนวณจากผู้ส่งข้อสอบสำเร็จในชุดและเวอร์ชันเดียวกัน</small></div>
-        <div className="wb-ranking-demo-cases" aria-label="กรณีตัวอย่างจำนวนผู้สอบ">
-          <b>ข้อมูล Ranking แต่ละเคส ให้ทดสอบกดเล่น</b>
-          <button type="button" className={candidateMode === "actual" ? "is-active" : ""} onClick={() => setCandidateMode("actual")}>ผลสอบที่ส่งแล้ว · {actualRows.length} คน</button>
-          <button type="button" className={candidateMode === "under" ? "is-active" : ""} onClick={() => setCandidateMode("under")}>ตัวอย่าง 96 คน · ยังไม่เกิน 100</button>
-          <button type="button" className={candidateMode === "over" ? "is-active" : ""} onClick={() => setCandidateMode("over")}>ตัวอย่าง 124 คน · เกิน 100</button>
+        <div className="wb-ranking-score">
+          <span>คะแนน</span>
+          <b>{ownScore === undefined ? "—" : `${ownScore.toFixed(1)}/100`}</b>
         </div>
-        {canFilter ? <>
-          <h3>กรองและค้นหา Ranking</h3>
-          <div className="wb-ranking-filters">
-            <label>ระดับชั้น<select value={grade} onChange={(e) => setGrade(e.target.value)}><option>ทุกระดับชั้น</option><option>มัธยมศึกษาปีที่ 4</option><option>มัธยมศึกษาปีที่ 5</option><option>มัธยมศึกษาปีที่ 6</option></select></label>
-            <label>จังหวัด<select value={province} onChange={(e) => setProvince(e.target.value)}><option>ทุกจังหวัด</option><option>ขอนแก่น</option><option>กรุงเทพมหานคร</option><option>เชียงใหม่</option></select></label>
-            <label>ช่วงเวลา<select value={period} onChange={(e) => setPeriod(e.target.value)}><option>ทุกช่วงเวลา</option><option>เดือนนี้</option><option>สัปดาห์นี้</option></select></label>
-          </div>
-          <input className="wb-ranking-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ค้นหาผู้สอบในชุดนี้" aria-label="ค้นหาผู้สอบในชุดนี้" />
-          <div className="wb-ranking-sample-list">{[...filteredRows].sort((left, right) => right.score - left.score).map((row, index) => <div key={row.username || row.name}><span>{index + 1}</span><b>{row.name}</b><small>{row.grade} · {row.province}</small><strong>{row.score.toFixed(1)}</strong></div>)}{filteredRows.length === 0 && <p>ไม่พบผู้สอบตามตัวกรองนี้</p>}</div>
-        </> : <div className="wb-ranking-locked"><b>ตัวกรองและค้นหาจะเปิดเมื่อเกิน {minimumRank} คน</b><span>{candidateMode === "actual" && candidates === 0 ? "ยังไม่มีผลสอบที่ส่งสำเร็จในชุดและเวอร์ชันนี้" : `ตอนนี้แสดงอันดับเทียบกับผู้สอบทั้งหมด ${candidates} คน`}</span></div>}
+        <div className="wb-ranking-place">
+          อันดับของคุณ <strong>{ownRank ?? "—"}</strong>/{candidates}
+          <small>คำนวณจากผู้ส่งข้อสอบสำเร็จในชุดและเวอร์ชันเดียวกัน</small>
+        </div>
+        <h3>กรองข้อมูลการจัดอันดับ</h3>
+        <div className="wb-ranking-filters">
+          <label>
+            ระดับชั้น
+            <Select
+              className="wb-ranking-select"
+              classNamePrefix="wb-select"
+              options={gradeOptions}
+              value={
+                gradeOptions.find((option) => option.value === grade) || null
+              }
+              onChange={(option) => option && setGrade(option.value)}
+              isSearchable
+              styles={WEBB_SELECT_STYLES as never}
+            />
+          </label>
+          <label>
+            จังหวัด
+            <Select
+              className="wb-ranking-select"
+              classNamePrefix="wb-select"
+              options={provinceOptions}
+              value={
+                provinceOptions.find((option) => option.value === province) ||
+                null
+              }
+              onChange={(option) => option && setProvince(option.value)}
+              isSearchable
+              styles={WEBB_SELECT_STYLES as never}
+            />
+          </label>
+          <label>
+            ช่วงเวลา
+            <Select
+              className="wb-ranking-select"
+              classNamePrefix="wb-select"
+              options={periodOptions}
+              value={
+                periodOptions.find((option) => option.value === period) || null
+              }
+              onChange={(option) => option && setPeriod(option.value)}
+              isSearchable
+              styles={WEBB_SELECT_STYLES as never}
+            />
+          </label>
+        </div>
+        <div className="wb-ranking-qr-wrap">
+          <QRCodeSVG
+            value="https://studyunith.com/webb/register"
+            size={96}
+            level="M"
+            title="QR สมัครสอบ"
+          />
+          <span>สแกน QR สมัครสอบเลย!</span>
+        </div>
       </section>
     </div>
   );
@@ -1670,7 +2267,9 @@ function StudentSolutions({
     set: string;
     pdf: string;
   } | null>(null);
-  const [eligiblePurchases, setEligiblePurchases] = useState<ReturnType<typeof readCurrentDemoPurchases>>([]);
+  const [eligiblePurchases, setEligiblePurchases] = useState<
+    ReturnType<typeof readCurrentDemoPurchases>
+  >([]);
   const [openDownloadMenu, setOpenDownloadMenu] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1682,8 +2281,13 @@ function StudentSolutions({
       if (purchase.examStatus !== "submitted") return false;
       if (purchaseRef && purchase.ref !== purchaseRef) return false;
       if (productId && purchase.productId !== productId) return false;
-      if (examSet && (purchase.examSet || "A").toUpperCase() !== examSet.toUpperCase()) return false;
-      return getExamPlan(purchase.productId, purchase.examSet || "A").hasSuppliedExam;
+      if (
+        examSet &&
+        (purchase.examSet || "A").toUpperCase() !== examSet.toUpperCase()
+      )
+        return false;
+      return getExamPlan(purchase.productId, purchase.examSet || "A")
+        .hasSuppliedExam;
     });
     setEligiblePurchases(submitted);
   }, []);
@@ -1698,91 +2302,149 @@ function StudentSolutions({
           </div>
         </div>
         {eligiblePurchases.length === 0 ? (
-          <div className="wb-solutions-empty" role="status">เฉลยจะแสดงหลังจากส่งข้อสอบในรายการที่ซื้อแล้ว</div>
-        ) : eligiblePurchases.map((purchase) => {
-          const product = getProduct(purchase.productId);
-          const plan = getExamPlan(purchase.productId, purchase.examSet || "A");
-          const downloadMenuId = `solution-download-${purchase.ref}`;
-          return (
-            <section className="wb-solution-purchase" key={purchase.ref}>
-              <header className="wb-solutions-head">
-                <span className="wb-subject-chip">{product.name} {product.parts} · ชุด {purchase.examSet || "A"}</span>
-                <div className="wb-solutions-download-wrap">
-                  <button
-                    className="wb-solutions-download"
-                    type="button"
-                    aria-expanded={openDownloadMenu === downloadMenuId}
-                    aria-controls={downloadMenuId}
-                    onClick={() => {
-                      if (plan.sections.length === 1) {
-                        const link = document.createElement("a");
-                        link.href = plan.sections[0].solutionPdf;
-                        link.download = "";
-                        link.click();
-                        onAction("กำลังดาวน์โหลดไฟล์เฉลย PDF");
-                        return;
-                      }
-                      setOpenDownloadMenu((current) => current === downloadMenuId ? null : downloadMenuId);
-                    }}
-                  >
-                    <LuDownload aria-hidden="true" />
-                    <span>ดาวน์โหลด PDF</span>
-                  </button>
-                  {plan.sections.length > 1 && openDownloadMenu === downloadMenuId && (
-                    <div className="wb-solutions-download-menu" id={downloadMenuId}>
-                      {plan.sections.map((section) => (
-                        <a key={section.id} href={section.solutionPdf} download onClick={() => {
-                          onAction(`กำลังดาวน์โหลดเฉลย ${section.title}`);
-                          setOpenDownloadMenu(null);
-                        }}>{section.title}</a>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </header>
-              <p className="wb-solutions-purchase-ref">เลขรายการ {purchase.ref}</p>
-              <table className="wb-solutions-table">
-                <thead><tr><th>ข้อ</th><th>เนื้อหา</th><th aria-label="วิดีโอเฉลย" /></tr></thead>
-                <tbody>
-                  {plan.sections.map((section, index) => {
-                    const durations: Record<string, string> = { tgat1: "32:10 นาที", tgat2: "28:45 นาที", tgat3: "25:30 นาที" };
-                    return (
-                      <tr key={section.id}>
-                        <td>{index + 1}</td>
-                        <td><b>{section.title}</b><small>ความยาว {durations[section.id] || `${section.durationMinutes}:00 นาที`}</small></td>
-                        <td>
-                          <button
-                            type="button"
-                            className="wb-solutions-play-btn"
-                            onClick={() => setSelectedSolution({
-                              id: section.id,
-                              name: section.title,
-                              duration: durations[section.id] || `${section.durationMinutes}:00 นาที`,
-                              index: index + 1,
-                              productName: `${product.name} ${product.parts}`,
-                              set: purchase.examSet || "A",
-                              pdf: section.solutionPdf,
-                            })}
-                          >
-                            <span className="wb-solutions-btn-desktop">ดูวิดีโอเฉลย</span>
-                            <span className="wb-solutions-btn-mobile">ดู</span>
-                            <LuPlay className="wb-solutions-play-icon" aria-hidden="true" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </section>
-          );
-        })}
+          <div className="wb-solutions-empty" role="status">
+            เฉลยจะแสดงหลังจากส่งข้อสอบในรายการที่ซื้อแล้ว
+          </div>
+        ) : (
+          eligiblePurchases.map((purchase) => {
+            const product = getProduct(purchase.productId);
+            const plan = getExamPlan(
+              purchase.productId,
+              purchase.examSet || "A",
+            );
+            const downloadMenuId = `solution-download-${purchase.ref}`;
+            return (
+              <section className="wb-solution-purchase" key={purchase.ref}>
+                <header className="wb-solutions-head">
+                  <span className="wb-subject-chip">
+                    {purchase.productId === "tgat-full"
+                      ? `TGAT 90 ความถนัดทั่วไป - ชุด ${purchase.examSet || "A"} `
+                      : `${product.name} ${product.parts} · ชุด ${purchase.examSet || "A"}`}
+                  </span>
+                  <div className="wb-solutions-download-wrap">
+                    <button
+                      className="wb-solutions-download"
+                      type="button"
+                      aria-expanded={openDownloadMenu === downloadMenuId}
+                      aria-controls={downloadMenuId}
+                      onClick={() => {
+                        if (plan.sections.length === 1) {
+                          const link = document.createElement("a");
+                          link.href = plan.sections[0].solutionPdf;
+                          link.download = "";
+                          link.click();
+                          onAction("กำลังดาวน์โหลดไฟล์เฉลย PDF");
+                          return;
+                        }
+                        setOpenDownloadMenu((current) =>
+                          current === downloadMenuId ? null : downloadMenuId,
+                        );
+                      }}
+                    >
+                      <LuDownload aria-hidden="true" />
+                      <span>ดาวน์โหลด PDF</span>
+                    </button>
+                    {plan.sections.length > 1 &&
+                      openDownloadMenu === downloadMenuId && (
+                        <div
+                          className="wb-solutions-download-menu"
+                          id={downloadMenuId}
+                        >
+                          {plan.sections.map((section) => (
+                            <a
+                              key={section.id}
+                              href={section.solutionPdf}
+                              download
+                              onClick={() => {
+                                onAction(`กำลังดาวน์โหลดเฉลย ${section.title}`);
+                                setOpenDownloadMenu(null);
+                              }}
+                            >
+                              {section.title}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                  </div>
+                </header>
+                <p className="wb-solutions-purchase-ref">
+                  {purchase.productId === "tgat-full"
+                    ? `อัปเดตเมื่อ : ${WEBB_SOLUTION_UPDATED_AT}`
+                    : `เลขรายการ ${purchase.ref}`}
+                </p>
+                <table className="wb-solutions-table">
+                  <thead>
+                    <tr>
+                      <th>ข้อ</th>
+                      <th>เนื้อหา</th>
+                      <th aria-label="วิดีโอเฉลย" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {plan.sections.map((section, index) => {
+                      const durations: Record<string, string> = {
+                        tgat1: "32:10 นาที",
+                        tgat2: "28:45 นาที",
+                        tgat3: "25:30 นาที",
+                      };
+                      return (
+                        <tr key={section.id}>
+                          <td>{index + 1}</td>
+                          <td>
+                            <b>{section.title}</b>
+                            <small>
+                              ความยาว{" "}
+                              {durations[section.id] ||
+                                `${section.durationMinutes}:00 นาที`}
+                            </small>
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="wb-solutions-play-btn"
+                              onClick={() =>
+                                setSelectedSolution({
+                                  id: section.id,
+                                  name: section.title,
+                                  duration:
+                                    durations[section.id] ||
+                                    `${section.durationMinutes}:00 นาที`,
+                                  index: index + 1,
+                                  productName: `${product.name} ${product.parts}`,
+                                  set: purchase.examSet || "A",
+                                  pdf: section.solutionPdf,
+                                })
+                              }
+                            >
+                              <span className="wb-solutions-btn-desktop">
+                                ดูวิดีโอเฉลย
+                              </span>
+                              <span className="wb-solutions-btn-mobile">
+                                ดู
+                              </span>
+                              <LuPlay
+                                className="wb-solutions-play-icon"
+                                aria-hidden="true"
+                              />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </section>
+            );
+          })
+        )}
       </section>
       {selectedSolution && (
         <VideoSolutionModal
           solution={selectedSolution}
           onClose={() => setSelectedSolution(null)}
-          onDownloadPdf={() => onAction(`กำลังดาวน์โหลดเฉลย ${selectedSolution.name}`)}
+          onDownloadPdf={() =>
+            onAction(`กำลังดาวน์โหลดเฉลย ${selectedSolution.name}`)
+          }
         />
       )}
     </div>
@@ -1794,12 +2456,28 @@ function VideoSolutionModal({
   onClose,
   onDownloadPdf,
 }: {
-  solution: { id: string; name: string; duration: string; index: number; productName: string; set: string; pdf: string };
+  solution: {
+    id: string;
+    name: string;
+    duration: string;
+    index: number;
+    productName: string;
+    set: string;
+    pdf: string;
+  };
   onClose: () => void;
   onDownloadPdf: () => void;
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState("1.0x");
+  const socialSettings = readSocialSettings();
+  const tutorSocials = [
+    { id: "line", label: "LINE", href: socialSettings.lineUrl === "https://line.me/" ? "" : socialSettings.lineUrl, handle: socialSettings.lineId, icon: <FaLine aria-hidden="true" /> },
+    { id: "facebook", label: "Facebook", href: socialSettings.facebookUrl, handle: "", icon: <FaFacebookF aria-hidden="true" /> },
+    { id: "instagram", label: "Instagram", href: socialSettings.instagramUrl, handle: "", icon: <FaInstagram aria-hidden="true" /> },
+    { id: "tiktok", label: "TikTok", href: socialSettings.tiktokUrl, handle: "", icon: <FaTiktok aria-hidden="true" /> },
+    { id: "youtube", label: "YouTube", href: socialSettings.youtubeUrl, handle: "", icon: <FaYoutube aria-hidden="true" /> },
+  ];
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1810,57 +2488,201 @@ function VideoSolutionModal({
   }, [onClose]);
 
   return (
-    <div className="wb-video-modal-overlay" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose();
-    }}>
-      <div className="wb-video-modal" role="dialog" aria-modal="true" aria-labelledby="wb-video-modal-title">
+    <div
+      className="wb-video-modal-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="wb-video-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="wb-video-modal-title"
+      >
         <div className="wb-video-modal-header">
           <div className="wb-video-modal-title-group">
-            <span className="wb-video-badge">เฉลยวิดีโอ · {solution.duration}</span>
+            <span className="wb-video-badge">
+              เฉลยวิดีโอ · {solution.duration}
+            </span>
             <h3 id="wb-video-modal-title">{solution.name}</h3>
           </div>
-          <button type="button" className="wb-video-modal-close" aria-label="ปิดหน้าต่างวิดีโอ" onClick={onClose}><LuX aria-hidden="true" /></button>
+          <button
+            type="button"
+            className="wb-video-modal-close"
+            aria-label="ปิดหน้าต่างวิดีโอ"
+            onClick={onClose}
+          >
+            <LuX aria-hidden="true" />
+          </button>
         </div>
         <div className="wb-video-modal-body">
-          <div className="wb-video-player-mockup" onClick={() => setIsPlaying((playing) => !playing)}>
+          <div
+            className="wb-video-player-mockup"
+            onClick={() => setIsPlaying((playing) => !playing)}
+          >
             <div className="wb-video-screen-content">
-              <span className="wb-video-screen-watermark">STUDY UNITH · วิดีโอเฉลย</span>
+              <span className="wb-video-screen-watermark">
+                STUDY UNITH · วิดีโอเฉลย
+              </span>
               <div className="wb-video-play-center">
-                <button type="button" className={`wb-video-big-play-btn ${isPlaying ? "is-playing" : ""}`} aria-label={isPlaying ? "หยุดวิดีโอ" : "เล่นวิดีโอ"} onClick={(event) => {
-                  event.stopPropagation();
-                  setIsPlaying((playing) => !playing);
-                }}>{isPlaying ? <LuPause size={30} aria-hidden="true" /> : <LuPlay size={30} className="wb-video-play-icon-offset" aria-hidden="true" />}</button>
-                <p className="wb-video-play-hint">{isPlaying ? "กำลังเล่นวิดีโอเฉลยตัวอย่าง (คลิกเพื่อหยุด)" : "คลิกเพื่อดูวิดีโอเฉลยตัวอย่าง"}</p>
+                <button
+                  type="button"
+                  className={`wb-video-big-play-btn ${isPlaying ? "is-playing" : ""}`}
+                  aria-label={isPlaying ? "หยุดวิดีโอ" : "เล่นวิดีโอ"}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setIsPlaying((playing) => !playing);
+                  }}
+                >
+                  {isPlaying ? (
+                    <LuPause size={30} aria-hidden="true" />
+                  ) : (
+                    <LuPlay
+                      size={30}
+                      className="wb-video-play-icon-offset"
+                      aria-hidden="true"
+                    />
+                  )}
+                </button>
+                <p className="wb-video-play-hint">
+                  {isPlaying
+                    ? "กำลังเล่นวิดีโอเฉลยตัวอย่าง (คลิกเพื่อหยุด)"
+                    : "คลิกเพื่อดูวิดีโอเฉลยตัวอย่าง"}
+                </p>
               </div>
-              <div className="wb-video-screen-info"><span>{solution.productName} · ชุด {solution.set}</span><b>วิดีโอเฉลย: {solution.name}</b></div>
+              <div className="wb-video-screen-info">
+                <span>
+                  {solution.productName} · ชุด {solution.set}
+                </span>
+                <b>วิดีโอเฉลย: {solution.name}</b>
+              </div>
             </div>
-            <div className="wb-video-controls" onClick={(event) => event.stopPropagation()}>
-              <div className="wb-video-progress-bar"><div className="wb-video-progress-fill" style={{ width: isPlaying ? "48%" : "30%" }} /><div className="wb-video-progress-thumb" style={{ left: isPlaying ? "48%" : "30%" }} /></div>
+            <div
+              className="wb-video-controls"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="wb-video-progress-bar">
+                <div
+                  className="wb-video-progress-fill"
+                  style={{ width: isPlaying ? "48%" : "30%" }}
+                />
+                <div
+                  className="wb-video-progress-thumb"
+                  style={{ left: isPlaying ? "48%" : "30%" }}
+                />
+              </div>
               <div className="wb-video-controls-row">
                 <div className="wb-video-controls-left">
-                  <button type="button" className="wb-video-ctrl-btn" onClick={() => setIsPlaying((playing) => !playing)} aria-label={isPlaying ? "หยุด" : "เล่น"}>{isPlaying ? <LuPause size={17} /> : <LuPlay size={17} />}</button>
-                  <div className="wb-video-time"><span>{isPlaying ? "14:20" : "09:12"}</span><i>/</i><span>{solution.duration}</span></div>
-                  <button type="button" className="wb-video-ctrl-btn" title="ระดับเสียง" aria-label="ระดับเสียง"><LuVolume2 size={17} /></button>
+                  <button
+                    type="button"
+                    className="wb-video-ctrl-btn"
+                    onClick={() => setIsPlaying((playing) => !playing)}
+                    aria-label={isPlaying ? "หยุด" : "เล่น"}
+                  >
+                    {isPlaying ? <LuPause size={17} /> : <LuPlay size={17} />}
+                  </button>
+                  <div className="wb-video-time">
+                    <span>{isPlaying ? "14:20" : "09:12"}</span>
+                    <i>/</i>
+                    <span>{solution.duration}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="wb-video-ctrl-btn"
+                    title="ระดับเสียง"
+                    aria-label="ระดับเสียง"
+                  >
+                    <LuVolume2 size={17} />
+                  </button>
                 </div>
                 <div className="wb-video-controls-right">
-                  <button type="button" className="wb-video-speed-btn" onClick={() => setPlaybackSpeed((current) => {
-                    const speeds = ["1.0x", "1.25x", "1.5x", "2.0x"];
-                    return speeds[(speeds.indexOf(current) + 1) % speeds.length];
-                  })} title="ความเร็วในการเล่น">{playbackSpeed}</button>
+                  <button
+                    type="button"
+                    className="wb-video-speed-btn"
+                    onClick={() =>
+                      setPlaybackSpeed((current) => {
+                        const speeds = ["1.0x", "1.25x", "1.5x", "2.0x"];
+                        return speeds[
+                          (speeds.indexOf(current) + 1) % speeds.length
+                        ];
+                      })
+                    }
+                    title="ความเร็วในการเล่น"
+                  >
+                    {playbackSpeed}
+                  </button>
                   <span className="wb-video-quality-tag">1080p HD</span>
-                  <button type="button" className="wb-video-ctrl-btn" title="เต็มจอ" aria-label="เต็มหน้าจอ"><LuMaximize2 size={16} /></button>
+                  <button
+                    type="button"
+                    className="wb-video-ctrl-btn"
+                    title="เต็มจอ"
+                    aria-label="เต็มหน้าจอ"
+                  >
+                    <LuMaximize2 size={16} />
+                  </button>
                 </div>
               </div>
             </div>
           </div>
           <div className="wb-video-meta-section">
-            <div className="wb-video-meta-desc"><h4>สรุปประเด็นเฉลย</h4><p>วิดีโอนี้อธิบายแนวคิดและวิธีวิเคราะห์โจทย์ของหัวข้อนี้ พร้อมเทคนิคการตัดตัวเลือก</p></div>
-            <div className="wb-video-meta-tags"><span className="wb-video-tag"><LuClock size={13} aria-hidden="true" />ความยาว {solution.duration}</span><span className="wb-video-tag"><LuFileText size={13} aria-hidden="true" />มีเอกสารเฉลย PDF</span></div>
+            <div className="wb-video-meta-top">
+              <div className="wb-video-meta-desc">
+                <h4>สรุปประเด็นเฉลย</h4>
+                <p>
+                  วิดีโอนี้อธิบายแนวคิดและวิธีวิเคราะห์โจทย์ของหัวข้อนี้
+                  พร้อมเทคนิคการตัดตัวเลือก
+                </p>
+              </div>
+              <div className="wb-video-meta-tags">
+                <span className="wb-video-tag">
+                  <LuClock size={13} aria-hidden="true" />
+                  ความยาว {solution.duration}
+                </span>
+              </div>
+            </div>
+            <section className="wb-video-tutor-card" aria-label="ประวัติและช่องทางติดตามติวเตอร์">
+              <Image src="/images/user/user-01.png" alt="ติวเตอร์แมว" width={52} height={52} />
+              <div className="wb-video-tutor-info">
+                <h4>ติวเตอร์แมว</h4>
+                <p>ครุศาสตร์ จุฬาลงกรณ์มหาวิทยาลัย · ประสบการณ์สอน 5 ปี</p>
+                <small>ติวเตรียมสอบ TGAT และแนะนำเทคนิควิเคราะห์โจทย์</small>
+              </div>
+              <div className="wb-video-tutor-social">
+                <b>ช่องทางติดตาม</b>
+                <div>
+                  {tutorSocials.map((channel) => channel.href ? (
+                    <a key={channel.id} href={channel.href} target="_blank" rel="noreferrer" aria-label={`ติดตามติวเตอร์ทาง ${channel.label}`} title={`${channel.label}${channel.handle ? ` ${channel.handle}` : ""}`}>
+                      {channel.icon}
+                    </a>
+                  ) : (
+                    <span key={channel.id} className="is-placeholder" aria-label={`${channel.label} ยังไม่ระบุลิงก์`} title={`${channel.label} · ตัวอย่างช่องทาง`}>
+                      {channel.icon}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </section>
           </div>
         </div>
         <div className="wb-video-modal-footer">
-          <a className="wb-video-footer-download" href={solution.pdf} download onClick={onDownloadPdf}><LuDownload size={15} aria-hidden="true" /><span>ดาวน์โหลดเอกสารเฉลย (PDF)</span></a>
-          <button type="button" className="wb-video-footer-close" onClick={onClose}>ปิดหน้าต่าง</button>
+          <a
+            className="wb-video-footer-download"
+            href={solution.pdf}
+            download
+            onClick={onDownloadPdf}
+          >
+            <LuDownload size={15} aria-hidden="true" />
+            <span>ดาวน์โหลดเอกสารเฉลย (PDF)</span>
+          </a>
+          <button
+            type="button"
+            className="wb-video-footer-close"
+            onClick={onClose}
+          >
+            ปิดหน้าต่าง
+          </button>
         </div>
       </div>
     </div>
@@ -1901,7 +2723,9 @@ function AvatarEditModal({
   onClose: () => void;
   onSave: (url?: string) => void;
 }) {
-  const [selectedUrl, setSelectedUrl] = useState<string | undefined>(currentAvatar);
+  const [selectedUrl, setSelectedUrl] = useState<string | undefined>(
+    currentAvatar,
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -2028,7 +2852,9 @@ function AvatarEditModal({
             >
               <LuRotateCcw aria-hidden="true" /> คืนค่ารูปเริ่มต้น
             </button>
-          ) : <span />}
+          ) : (
+            <span />
+          )}
           <div className="wb-avatar-modal-footer-actions">
             <button
               type="button"
@@ -2069,7 +2895,9 @@ function StudentProfile({
   const [personalOpen, setPersonalOpen] = useState(true);
   const [passwordOpen, setPasswordOpen] = useState(true);
   const [citizenIdMasked, setCitizenIdMasked] = useState(true);
-  const [visiblePassword, setVisiblePassword] = useState<Record<string, boolean>>({});
+  const [visiblePassword, setVisiblePassword] = useState<
+    Record<string, boolean>
+  >({});
   const [passwordError, setPasswordError] = useState("");
   const [firstName, ...lastNameParts] = student.name.split(" ");
   const lastName = lastNameParts.join(" ");
@@ -2104,17 +2932,18 @@ function StudentProfile({
       }),
     );
     const account = readDemoAccount();
-    if (account) safeWrite(DEMO_ACCOUNT_KEY, {
-      ...account,
-      citizenId: saved.citizenId,
-      firstName: String(data.firstName),
-      lastName: String(data.lastName),
-      phone: saved.phone,
-      email: saved.email,
-      province: saved.province,
-      school: saved.school,
-      education: saved.grade,
-    });
+    if (account)
+      safeWrite(DEMO_ACCOUNT_KEY, {
+        ...account,
+        citizenId: saved.citizenId,
+        firstName: String(data.firstName),
+        lastName: String(data.lastName),
+        phone: saved.phone,
+        email: saved.email,
+        province: saved.province,
+        school: saved.school,
+        education: saved.grade,
+      });
     onSave(saved);
   }
 
@@ -2156,7 +2985,11 @@ function StudentProfile({
               }))
             }
           >
-            {visible ? <LuEye aria-hidden="true" /> : <LuEyeOff aria-hidden="true" />}
+            {visible ? (
+              <LuEye aria-hidden="true" />
+            ) : (
+              <LuEyeOff aria-hidden="true" />
+            )}
           </button>
         </div>
         {note && <small>{note}</small>}
@@ -2166,7 +2999,10 @@ function StudentProfile({
 
   return (
     <div className="wb-dashboard-view wb-personal-profile">
-      <form className="wb-dashboard-card wb-profile-form" onSubmit={savePersonal}>
+      <form
+        className="wb-dashboard-card wb-profile-form"
+        onSubmit={savePersonal}
+      >
         <button
           type="button"
           className="wb-profile-section-heading"
@@ -2200,12 +3036,19 @@ function StudentProfile({
                 <div className="wb-profile-avatar-title-row">
                   <b>รูปโปรไฟล์</b>
                   {student.avatarUrl ? (
-                    <span className="wb-profile-avatar-badge is-custom">รูปภาพที่ตั้งค่าไว้</span>
+                    <span className="wb-profile-avatar-badge is-custom">
+                      รูปภาพที่ตั้งค่าไว้
+                    </span>
                   ) : (
-                    <span className="wb-profile-avatar-badge is-default">รูปเริ่มต้น Mockup</span>
+                    <span className="wb-profile-avatar-badge is-default">
+                      รูปเริ่มต้น Mockup
+                    </span>
                   )}
                 </div>
-                <p>คลิกที่รูปหรือกดปุ่มเพื่ออัปโหลดรูปภาพใหม่ หรือเลือกรูปตัวอย่าง Mockup</p>
+                <p>
+                  คลิกที่รูปหรือกดปุ่มเพื่ออัปโหลดรูปภาพใหม่
+                  หรือเลือกรูปตัวอย่าง Mockup
+                </p>
                 <div className="wb-profile-avatar-btn-group">
                   <button
                     type="button"
@@ -2248,10 +3091,18 @@ function StudentProfile({
                   <button
                     type="button"
                     className="wb-profile-input-toggle-btn"
-                    aria-label={citizenIdMasked ? "แสดงเลขบัตรประชาชน" : "ซ่อนเลขบัตรประชาชน"}
+                    aria-label={
+                      citizenIdMasked
+                        ? "แสดงเลขบัตรประชาชน"
+                        : "ซ่อนเลขบัตรประชาชน"
+                    }
                     onClick={() => setCitizenIdMasked((masked) => !masked)}
                   >
-                    {citizenIdMasked ? <LuEyeOff aria-hidden="true" /> : <LuEye aria-hidden="true" />}
+                    {citizenIdMasked ? (
+                      <LuEyeOff aria-hidden="true" />
+                    ) : (
+                      <LuEye aria-hidden="true" />
+                    )}
                   </button>
                 </div>
               </label>
@@ -2265,50 +3116,63 @@ function StudentProfile({
               </label>
               <label>
                 เบอร์โทรศัพท์
-                <input name="phone" type="tel" defaultValue={student.phone} required />
+                <input
+                  name="phone"
+                  type="tel"
+                  defaultValue={student.phone}
+                  required
+                />
               </label>
               <label>
                 อีเมล
-                <input name="email" type="text" defaultValue={student.email?.split("@")[0] || "Somchai"} required />
+                <input
+                  name="email"
+                  type="text"
+                  defaultValue={student.email?.split("@")[0] || "Somchai"}
+                  required
+                />
               </label>
               <label>
                 จังหวัด
-                <div className="wb-profile-select-wrapper">
-                  <select name="province" defaultValue={student.province}>
-                    {[student.province, "กรุงเทพมหานคร", "ขอนแก่น", "เชียงใหม่"]
-                      .filter((value, index, all) => all.indexOf(value) === index)
-                      .map((province) => (
-                        <option key={province}>{province}</option>
-                      ))}
-                  </select>
-                  <LuChevronDown className="wb-profile-select-chevron" aria-hidden="true" />
-                </div>
+                <WebBProvinceSelect
+                  inputId="webb-profile-province"
+                  name="province"
+                  defaultValue={student.province}
+                />
               </label>
               <label>
                 โรงเรียน
-                <div className="wb-profile-select-wrapper">
-                  <select name="school" defaultValue={student.school}>
-                    <option>{student.school}</option>
-                    <option>โรงเรียนตัวอย่างวิทยา</option>
-                    <option>โรงเรียนเตรียมอุดมศึกษา</option>
-                  </select>
-                  <LuChevronDown className="wb-profile-select-chevron" aria-hidden="true" />
-                </div>
+                <input
+                  name="school"
+                  defaultValue={student.school}
+                  placeholder="พิมพ์ชื่อโรงเรียน"
+                  required
+                />
               </label>
               <label>
                 ระดับการศึกษา
                 <div className="wb-profile-select-wrapper">
-                  <select name="education" defaultValue={normalizeEducation(student.grade)}>
+                  <select
+                    name="education"
+                    defaultValue={normalizeEducation(student.grade)}
+                  >
                     {educationOptions.map((education) => (
                       <option key={education}>{education}</option>
                     ))}
                   </select>
-                  <LuChevronDown className="wb-profile-select-chevron" aria-hidden="true" />
+                  <LuChevronDown
+                    className="wb-profile-select-chevron"
+                    aria-hidden="true"
+                  />
                 </div>
               </label>
             </div>
             <div className="wb-profile-form-actions">
-              <button type="button" className="wb-profile-cancel" onClick={onCancel}>
+              <button
+                type="button"
+                className="wb-profile-cancel"
+                onClick={onCancel}
+              >
                 ยกเลิก
               </button>
               <button type="submit" className="wb-profile-save">
@@ -2319,7 +3183,10 @@ function StudentProfile({
         )}
       </form>
 
-      <form className="wb-dashboard-card wb-profile-password" onSubmit={savePassword}>
+      <form
+        className="wb-dashboard-card wb-profile-password"
+        onSubmit={savePassword}
+      >
         <div className="wb-profile-password-header">
           <div className="wb-profile-password-heading-group">
             <h2 className="wb-profile-password-title">
@@ -2333,11 +3200,19 @@ function StudentProfile({
           <button
             type="button"
             className="wb-profile-collapse-circle"
-            aria-label={passwordOpen ? "ย่อส่วนเปลี่ยนรหัสผ่าน" : "ขยายส่วนเปลี่ยนรหัสผ่าน"}
+            aria-label={
+              passwordOpen
+                ? "ย่อส่วนเปลี่ยนรหัสผ่าน"
+                : "ขยายส่วนเปลี่ยนรหัสผ่าน"
+            }
             aria-expanded={passwordOpen}
             onClick={() => setPasswordOpen((open) => !open)}
           >
-            {passwordOpen ? <LuChevronUp aria-hidden="true" /> : <LuChevronDown aria-hidden="true" />}
+            {passwordOpen ? (
+              <LuChevronUp aria-hidden="true" />
+            ) : (
+              <LuChevronDown aria-hidden="true" />
+            )}
           </button>
         </div>
         {passwordOpen && (
@@ -2351,9 +3226,17 @@ function StudentProfile({
               )}
               {passwordField("confirmPassword", "ยืนยันรหัสผ่าน")}
             </div>
-            {passwordError && <p className="wb-profile-error" role="alert">{passwordError}</p>}
+            {passwordError && (
+              <p className="wb-profile-error" role="alert">
+                {passwordError}
+              </p>
+            )}
             <div className="wb-profile-form-actions">
-              <button type="button" className="wb-profile-cancel" onClick={onCancel}>
+              <button
+                type="button"
+                className="wb-profile-cancel"
+                onClick={onCancel}
+              >
                 ยกเลิก
               </button>
               <button type="submit" className="wb-profile-save">
@@ -2423,9 +3306,14 @@ export default function WebBStudentArea({
         setSelectedPart(queryPart);
       }
     }
-    if (typeof window !== "undefined" && window.location.hash === "#exam-list") {
+    if (
+      typeof window !== "undefined" &&
+      window.location.hash === "#exam-list"
+    ) {
       setTimeout(() => {
-        document.getElementById("exam-list")?.scrollIntoView({ behavior: "smooth" });
+        document
+          .getElementById("exam-list")
+          ?.scrollIntoView({ behavior: "smooth" });
       }, 200);
     }
   }, []);
@@ -2496,7 +3384,9 @@ export default function WebBStudentArea({
                 <br />⌖ {student.province}
               </small>
             </span>
-            <i><LuChevronRight aria-hidden="true" /></i>
+            <i>
+              <LuChevronRight aria-hidden="true" />
+            </i>
           </button>
         </div>
       </div>

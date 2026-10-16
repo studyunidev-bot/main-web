@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { formatBaht } from "./data";
+import { formatBaht, formatThaiDateTime } from "./data";
 
 export type WebBPaymentSuccessProps = {
   orderRef: string;
@@ -26,13 +26,7 @@ export default function WebBPaymentSuccess({
   const displayRef = orderRef.startsWith("#") ? orderRef : `#${orderRef}`;
   const displayDate =
     paidDate ||
-    new Date().toLocaleDateString("th-TH", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    formatThaiDateTime();
 
   return (
     <section className="wb-payment-success-card" aria-label="ชำระเงินสำเร็จ">

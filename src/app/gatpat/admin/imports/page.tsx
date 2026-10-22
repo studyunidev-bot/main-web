@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useEffect, useState } from "react";
 import ThaiDatePicker from "@/components/Gatpat/ThaiDatePicker";
+import AdminSelect from "@/components/ui/AdminSelect";
 
 type PreviewResult = { previewId: string; expiresAt: string; changes: { total: number; counts: Record<string, number> }; result: { meta: { parserVersion: string; importBatchSize: number }; locations: any; onsite: any; simulated: any } };
 
@@ -70,7 +71,7 @@ export default function GatpatImportsPage() {
       </div>
       <div className="mt-5 grid gap-4 rounded-xl border border-stroke bg-white p-5 shadow-1 dark:border-stroke-dark dark:bg-gray-dark">
         <label className="grid max-w-xs gap-2 text-sm">ปีการศึกษา (พ.ศ.)<input className="rounded border p-3" type="number" min="2500" value={year} onChange={(event) => { setYear(event.target.value); setPreview(null); }} /></label>
-        <div className="grid gap-4 sm:grid-cols-3"><label className="grid gap-2 text-sm">รอบสอบ Onsite<select className="rounded border p-3" value={onsiteRound} onChange={(event) => { setOnsiteRound(event.target.value); setPreview(null); }}><option value="MORNING">เช้า</option><option value="AFTERNOON">บ่าย</option></select></label><label className="grid gap-2 text-sm">รอบสอบจำลอง<select className="rounded border p-3" value={simulatedRound} onChange={(event) => { setSimulatedRound(event.target.value); setPreview(null); }}><option value="MORNING">เช้า</option><option value="AFTERNOON">บ่าย</option></select></label><label className="grid gap-2 text-sm">วันที่สอบ<ThaiDatePicker label="วันที่สอบ" value={examDate} onChange={(date) => { setExamDate(date); setPreview(null); }} /></label></div>
+        <div className="grid gap-4 sm:grid-cols-3"><label className="grid gap-2 text-sm">รอบสอบ Onsite<AdminSelect value={onsiteRound} onChange={(value) => { setOnsiteRound(value); setPreview(null); }} options={[{ value: "MORNING", label: "เช้า" }, { value: "AFTERNOON", label: "บ่าย" }]} ariaLabel="รอบสอบ Onsite" /></label><label className="grid gap-2 text-sm">รอบสอบจำลอง<AdminSelect value={simulatedRound} onChange={(value) => { setSimulatedRound(value); setPreview(null); }} options={[{ value: "MORNING", label: "เช้า" }, { value: "AFTERNOON", label: "บ่าย" }]} ariaLabel="รอบสอบจำลอง" /></label><label className="grid gap-2 text-sm">วันที่สอบ<ThaiDatePicker label="วันที่สอบ" value={examDate} onChange={(date) => { setExamDate(date); setPreview(null); }} /></label></div>
         {[["locations", "ไฟล์สนามสอบ"], ["onsite", "ไฟล์ผู้สมัคร Onsite"], ["simulated", "ไฟล์สอบจำลอง"]].map(([key, label]) => <label key={key} className="grid gap-2 text-sm">{label}<input className="rounded border p-2" type="file" accept=".xlsx,.csv" onChange={(event) => changeFile(key, event)} />{files[key] && <span className="text-xs text-slate-500">{files[key]?.name}</span>}</label>)}
         <div className="flex flex-wrap gap-3">
           <button disabled={busy || !Object.values(files).some(Boolean)} onClick={() => submit("preview")} className="rounded-lg border border-primary px-5 py-3 font-semibold text-primary disabled:opacity-50">{busy ? "กำลังประมวลผล…" : "ตรวจสอบ Preview"}</button>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState, type FormEvent } from "react";
 import { WebBBrand } from "./PublicShell";
-import { DEMO_AUTH_KEY, readDemoAccount } from "./demo-store";
+import { DEMO_AUTH_KEY, isDemoStudentSuspended, readDemoAccount } from "./demo-store";
 
 export default function WebBAccount() {
   const [notice, setNotice] = useState("");
@@ -49,6 +49,11 @@ export default function WebBAccount() {
     const isSeedDemoAccount = username === "sss" && password === "sss";
     if (!matchesSavedAccount && !isSeedDemoAccount) {
       setLoginError("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
+      setLoggingIn(false);
+      return;
+    }
+    if (isDemoStudentSuspended(username, account?.email ?? "")) {
+      setLoginError("บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อทีมช่วยเหลือ");
       setLoggingIn(false);
       return;
     }

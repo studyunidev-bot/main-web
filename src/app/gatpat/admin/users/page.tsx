@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import AdminSelect from "@/components/ui/AdminSelect";
 
 type UserRow = { id: string; email: string; fullName: string | null; role: string; isActive: boolean; createdAt: string };
 
@@ -44,7 +45,7 @@ export default function GatpatUsersPage() {
       <input className="rounded border p-3" type="email" placeholder="อีเมล" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required />
       <input className="rounded border p-3" placeholder="ชื่อ-นามสกุล" value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} required />
       <input className="rounded border p-3" type="password" minLength={8} placeholder="รหัสผ่านอย่างน้อย 8 ตัว" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required />
-      <select className="rounded border p-3" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>{["STAFF", "CHECKIN", "VIEWER", "ADMIN", "SUPERADMIN"].map((role) => <option key={role}>{role}</option>)}</select>
+            <AdminSelect value={form.role} onChange={(role) => setForm({ ...form, role })} options={["STAFF", "CHECKIN", "VIEWER", "ADMIN", "SUPERADMIN"].map((value) => ({ value, label: value }))} ariaLabel="บทบาทผู้ดูแล" />
       <button disabled={busy} className="justify-self-start rounded-lg bg-primary px-5 py-3 font-semibold text-white sm:col-span-2">สร้างผู้ใช้</button>
     </form>
     <div className="mt-6 overflow-x-auto rounded-xl border border-stroke bg-white shadow-1 dark:border-stroke-dark dark:bg-gray-dark"><table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-gray-2 text-dark-6 dark:bg-dark-2"><tr><th className="p-3">ชื่อ</th><th className="p-3">อีเมล</th><th className="p-3">Role เว็บ A</th><th className="p-3">สถานะ</th><th className="p-3"></th></tr></thead><tbody>{users.map((user) => <tr className="border-t border-stroke dark:border-stroke-dark" key={user.id}><td className="p-3 text-dark dark:text-white">{user.fullName}</td><td className="p-3">{user.email}</td><td className="p-3">{user.role}</td><td className="p-3">{user.isActive ? "ใช้งาน" : "ปิด"}</td><td className="p-3"><button disabled={busy} onClick={() => toggle(user)} className="rounded-lg border border-stroke px-3 py-2">{user.isActive ? "ปิดบัญชีเว็บ A" : "เปิดบัญชีเว็บ A"}</button></td></tr>)}</tbody></table></div>

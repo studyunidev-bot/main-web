@@ -1,3 +1,4 @@
+import "flatpickr/dist/flatpickr.min.css";
 import "@/css/style.css";
 import { ToastContainer } from "react-toastify";
 import type { ReactNode } from "react";
@@ -9,7 +10,7 @@ import NextTopLoader from "nextjs-toploader";
 import { ThemeProvider } from "@wrksz/themes/next";
 import WebBAdminAccess from "@/components/webb/WebBAdminAccess";
 
-export const metadata = { title: "ระบบรับสมัคร Web B · Demo Admin" };
+export const metadata = { title: "ระบบจัดการ Web B · Study Unith" };
 
 export default function WebBAdminLayout({ children }: { children: ReactNode }) {
   return (
@@ -24,7 +25,7 @@ export default function WebBAdminLayout({ children }: { children: ReactNode }) {
                 <Sidebar demoSite="webb" />
                 <div className="w-full min-w-0 bg-gray-2 dark:bg-[#020d1a]">
                   <Header demoSite="webb" />
-                  <main className="isolate mx-auto w-full max-w-screen-2xl overflow-auto p-4 md:p-6 2xl:p-10">
+                  <main className="relative mx-auto w-full max-w-screen-2xl overflow-auto p-4 md:p-6 2xl:p-10">
                     {children}
                   </main>
                 </div>

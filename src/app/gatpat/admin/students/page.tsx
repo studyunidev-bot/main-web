@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import AdminSelect from "@/components/ui/AdminSelect";
 
 type Enrollment = { id: string; academicYear: number; examRound: string; status: string; sourceType: string; barcode: string; location: string };
 type StudentRow = { id: string; nationalId: string; prefix: string | null; firstNameTh: string; lastNameTh: string; firstNameEn: string | null; lastNameEn: string | null; phone: string | null; email: string | null; schoolName: string | null; province: string | null; updatedAt: string; enrollmentCount: number; enrollments: Enrollment[] };
@@ -45,9 +46,9 @@ export default function GatpatStudentsPage() {
     {error && <p role="alert" className="rounded-lg border border-red/30 bg-red/5 p-4 text-sm text-red">{error}</p>}
     <form onSubmit={applyFilters} className={`${card} grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_180px_150px_170px_170px_auto]`}>
       <input className="rounded-lg border border-stroke px-3 py-2 text-sm dark:border-stroke-dark dark:bg-dark-2 dark:text-white" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ค้นหาเลขบัตร ชื่อ โรงเรียน อีเมล หรือโทรศัพท์" />
-      <select className="rounded-lg border border-stroke px-3 py-2 text-sm dark:border-stroke-dark dark:bg-dark-2 dark:text-white" value={source} onChange={(event) => { setSource(event.target.value); setPage(1); }}><option value="ALL">ทุกแหล่งข้อมูล</option><option value="ONSITE">Onsite</option><option value="SIMULATED">สอบจำลอง</option><option value="BOTH">สมัครทั้งสองประเภท</option></select>
+      <AdminSelect value={source} onChange={(value) => { setSource(value); setPage(1); }} options={[{ value: "ALL", label: "ทุกแหล่งข้อมูล" }, { value: "ONSITE", label: "Onsite" }, { value: "SIMULATED", label: "สอบจำลอง" }, { value: "BOTH", label: "สมัครทั้งสองประเภท" }]} ariaLabel="กรองแหล่งข้อมูล" />
       <input className="rounded-lg border border-stroke px-3 py-2 text-sm dark:border-stroke-dark dark:bg-dark-2 dark:text-white" inputMode="numeric" value={year} onChange={(event) => { setYear(event.target.value.replace(/\D/g, "").slice(0, 4)); setPage(1); }} placeholder="ปี พ.ศ." />
-      <select className="rounded-lg border border-stroke px-3 py-2 text-sm dark:border-stroke-dark dark:bg-dark-2 dark:text-white" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}><option value={10}>10 รายการ/หน้า</option><option value={20}>20 รายการ/หน้า</option><option value={50}>50 รายการ/หน้า</option></select>
+      <AdminSelect value={String(pageSize)} onChange={(value) => { setPageSize(Number(value)); setPage(1); }} options={[10, 20, 50].map((value) => ({ value: String(value), label: `${value} รายการ/หน้า` }))} ariaLabel="จำนวนรายการต่อหน้า" />
       <label className="flex items-center gap-2 rounded-lg border border-stroke px-3 py-2 text-sm text-dark-6 dark:border-stroke-dark"><input type="checkbox" checked={pendingOnly} onChange={(event) => { setPendingOnly(event.target.checked); setPage(1); }} />รอจับคู่สนาม</label>
       <button type="submit" className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white">ค้นหา</button>
     </form>

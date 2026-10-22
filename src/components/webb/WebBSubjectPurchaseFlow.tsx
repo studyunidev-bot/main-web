@@ -2,19 +2,24 @@
 
 import Link from "next/link";
 import { useEffect, useState, useMemo, type ReactNode } from "react";
-import { QRCodeSVG } from "qrcode.react";
+import WebBPaymentQrModal from "./WebBPaymentQrModal";
 import WebBPaymentSuccess from "./WebBPaymentSuccess";
 import { getExamPlan } from "./exam-documents";
-import { formatThaiDateTime } from "./data";
 import {
-  addDemoEmail,
+  createDemoOrder,
   DEMO_ACCOUNT_KEY,
   DEMO_AUTH_KEY,
-  DEMO_PURCHASES_KEY,
   DEMO_PROFILE_KEY,
+  getProductPrice,
+  isDemoSalesOpen,
+  isDemoContentPublished,
+  isDemoStudentSuspended,
+  productAvailability,
+  readDemoOrders,
   readDemoAccount,
   readCurrentDemoPurchases,
   readDemoPurchases,
+  setDemoOrderStatus,
   safeWrite,
   type DemoPurchase,
 } from "./demo-store";
@@ -63,6 +68,9 @@ export default function WebBSubjectPurchaseFlow({
   // Step 3 = subject and set selection, 5 = review, 6 = success
   const [subStep, setSubStep] = useState<3 | 5 | 6>(3);
   const [showPaymentQR, setShowPaymentQR] = useState(false);
+  const [, setCatalogRevision] = useState(0);
+  const [paymentDeadline, setPaymentDeadline] = useState<number | null>(null);
+  const [paymentSecondsRemaining, setPaymentSecondsRemaining] = useState<number | null>(null);
   const [expandedReviews, setExpandedReviews] = useState<string[]>([]);
   const [expandedDetails, setExpandedDetails] = useState<string[]>([]);
   const [loggedIn, setLoggedIn] = useState(false);
@@ -91,7 +99,74 @@ export default function WebBSubjectPurchaseFlow({
   });
 
   const [notice, setNotice] = useState("");
-  const checkoutRef = useMemo(() => `DO-${new Date().getFullYear() + 543}-${String(Date.now()).slice(-6)}`, []);
+  const [checkoutRef, setCheckoutRef] = useState(() => `DO-${new Date().getFullYear() + 543}-${String(Date.now()).slice(-6)}`);
+  const tgatSetPrice = getProductPrice("tgat-full");
+  const tgatAvailable = isDemoSalesOpen() && productAvailability().get("tgat-full") !== false && isDemoContentPublished("tgat-full");
+
+  useEffect(() => {
+    const refreshCatalog = () => setCatalogRevision((revision) => revision + 1);
+    window.addEventListener("webb-demo-products-updated", refreshCatalog);
+    window.addEventListener("storage", refreshCatalog);
+    return () => {
+      window.removeEventListener("webb-demo-products-updated", refreshCatalog);
+      window.removeEventListener("storage", refreshCatalog);
+    };
+  }, []);
+
+  useEffect(() => {
+    const account = readDemoAccount();
+    const pending = [...readDemoOrders()].find((order) => order.status === "รอชำระ" && (!account || order.profileSnapshot.username.toLowerCase() === account.username.toLowerCase()));
+    if (!pending) return;
+    if (pending.expiresAt <= Date.now()) {
+      setDemoOrderStatus(pending.ref, "หมดอายุ");
+      return;
+    }
+    setCheckoutRef(pending.ref);
+    setPaymentDeadline(pending.expiresAt);
+    setPaymentSecondsRemaining(Math.ceil((pending.expiresAt - Date.now()) / 1000));
+    const restoredSets = pending.items.reduce<Record<string, string[]>>((sets, item) => {
+      if (item.examSet) sets.tgat = [...(sets.tgat || []), item.examSet];
+      return sets;
+    }, {});
+    setSelectedSets((current) => ({ ...current, ...restoredSets }));
+    if (restoredSets.tgat?.length) setSelectedSubjects((current) => current.includes("tgat") ? current : [...current, "tgat"]);
+    setShowPaymentQR(true);
+  }, []);
+
+  useEffect(() => {
+    if (paymentDeadline === null || subStep === 6) return;
+    let timer = 0;
+    const updateRemainingTime = () => {
+      const seconds = Math.max(0, Math.ceil((paymentDeadline - Date.now()) / 1000));
+      setPaymentSecondsRemaining(seconds);
+      if (seconds === 0) {
+        setDemoOrderStatus(checkoutRef, "หมดอายุ");
+        window.clearInterval(timer);
+      }
+    };
+    timer = window.setInterval(updateRemainingTime, 1000);
+    updateRemainingTime();
+    return () => window.clearInterval(timer);
+  }, [paymentDeadline, subStep, checkoutRef]);
+
+  useEffect(() => {
+    const refreshOrder = () => {
+      const order = readDemoOrders().find((row) => row.ref === checkoutRef);
+      if (!order) return;
+      if (order.status === "สำเร็จ") {
+        if (subStep !== 6 && !completedOrder) handleCompletePayment();
+      } else if (order.status !== "รอชำระ") {
+        setShowPaymentQR(false);
+        setNotice(`คำสั่งซื้อ ${order.status.toLowerCase()} แล้ว`);
+      }
+    };
+    window.addEventListener("storage", refreshOrder);
+    window.addEventListener("webb-demo-orders-updated", refreshOrder);
+    return () => {
+      window.removeEventListener("storage", refreshOrder);
+      window.removeEventListener("webb-demo-orders-updated", refreshOrder);
+    };
+  }, [checkoutRef, subStep, completedOrder]);
 
   useEffect(() => {
     const isAuth = localStorage.getItem(DEMO_AUTH_KEY) === "true";
@@ -225,7 +300,12 @@ export default function WebBSubjectPurchaseFlow({
 
   const tpatTotalCount = tpat1Count + tpat2Count + tpat3Count + tpat4Count;
   const totalItems = tgatCount + tpatTotalCount + alevelCount + netsatCount;
-  const totalPrice = totalItems * 179;
+  const totalPrice = tgatCount * tgatSetPrice + tpat1Count * getProductPrice("tpat1") + tpat2Count * getProductPrice("tpat2") + tpat3Count * getProductPrice("tpat3") + tpat4Count * getProductPrice("tpat4") + (alevelCount + netsatCount) * 179;
+  const selectedOrderItems = Object.entries(selectedSets).flatMap(([subjectId, sets]) =>
+    subjectId === "tgat"
+      ? sets.filter((examSet) => getExamPlan("tgat-full", examSet).hasSuppliedExam).map((examSet) => ({ productId: "tgat-full", examSet, baseAmount: tgatSetPrice, amount: tgatSetPrice }))
+      : [],
+  );
   const selectedSubjectCount = selectedSubjects.length + alevelCount + netsatCount;
   const selectedTpatSubjects = [
     { id: "tpat1", title: "TPAT1 ความถนัดแพทย์" },
@@ -267,7 +347,7 @@ export default function WebBSubjectPurchaseFlow({
     return (
       <div className="wb-pick-pills">
         {["A"].map((set) => {
-          const available = subjectId === "tgat" && getExamPlan("tgat-full", set).hasSuppliedExam;
+          const available = subjectId === "tgat" && tgatAvailable && getExamPlan("tgat-full", set).hasSuppliedExam;
           const owned = available && isSetOwned(subjectId, set);
           const selected = (selectedSets[subjectId] || []).includes(set);
           return (
@@ -288,7 +368,7 @@ export default function WebBSubjectPurchaseFlow({
   }
 
   function renderExamBlock(id: string, title: string, nested = false, detail = "") {
-    const available = id === "tgat" && getExamPlan("tgat-full", "A").hasSuppliedExam;
+    const available = id === "tgat" && tgatAvailable && getExamPlan("tgat-full", "A").hasSuppliedExam;
     const selected = available && selectedSubjects.includes(id);
     const sets = selectedSets[id] || [];
     const block = (
@@ -313,7 +393,7 @@ export default function WebBSubjectPurchaseFlow({
               {!available && " · ยังไม่เปิดให้บริการ"}
             </span>
           </div>
-          <b className="wb-pick-price">{available ? (sets.length > 0 ? `${sets.length * 179} บาท` : "179 บาท/ชุด") : ""}</b>
+          <b className="wb-pick-price">{available ? (sets.length > 0 ? `${sets.length * tgatSetPrice} บาท` : `${tgatSetPrice} บาท/ชุด`) : ""}</b>
         </div>
         {selected && <>
           <hr className="wb-pick-divider" />
@@ -330,17 +410,14 @@ export default function WebBSubjectPurchaseFlow({
     return (
       <div className="wb-pick-detail">
         <strong>รายละเอียดข้อสอบ</strong>
-        {rows.map((row) => <div key={row.key}><span>{row.label}</span><span>179 บาท</span></div>)}
+        {rows.map((row) => <div key={row.key}><span>{row.label}</span><span>{tgatSetPrice} บาท</span></div>)}
       </div>
     );
   }
 
-  function handleCompletePayment() {
-    setShowPaymentQR(false);
-
-    // Save purchase to demo store
-    const existingAccount = readDemoAccount();
-    const account = existingAccount || {
+  function demoAccount() {
+    const savedAccount = readDemoAccount();
+    const account = savedAccount || {
       username: "sss",
       password: "sss",
       firstName: "สมชาย",
@@ -352,34 +429,13 @@ export default function WebBSubjectPurchaseFlow({
       education: "ม.6",
       citizenId: "1-6799-12345-34-1",
     };
-    if (!existingAccount) {
+    if (!savedAccount) {
       safeWrite(DEMO_ACCOUNT_KEY, account);
       safeWrite(DEMO_PROFILE_KEY, account);
       safeWrite(DEMO_AUTH_KEY, true);
       window.dispatchEvent(new Event("webb-demo-auth-updated"));
     }
-
-    const now = new Date();
-    const ref = checkoutRef;
-    const purchasedAt = formatThaiDateTime(now);
-
-    // Store newly purchased sets into localStorage so they appear as owned
-    try {
-      const nextOwned = { ...ownedSets };
-      Object.keys(selectedSets).forEach((key) => {
-        if (selectedSets[key].length > 0) {
-          nextOwned[key] = Array.from(new Set([...(nextOwned[key] || []), ...selectedSets[key]]));
-        }
-      });
-      const nextOther = { ...ownedOther, ...otherSelected };
-      localStorage.setItem("webb-demo-purchased-sets", JSON.stringify({ ...nextOwned, ...nextOther }));
-      setOwnedSets(nextOwned);
-      setOwnedOther(nextOther);
-    } catch {
-      /* ignore */
-    }
-
-    const profileSnapshot = {
+    return {
       username: account.username,
       citizenId: account.citizenId,
       firstName: account.firstName,
@@ -390,53 +446,68 @@ export default function WebBSubjectPurchaseFlow({
       school: account.school,
       education: account.education,
     };
-    const productIds: Record<string, string> = { tgat: "tgat-full", tpat1: "tpat1", tpat2: "tpat2", tpat3: "tpat3", tpat4: "tpat4" };
-    const selectedEntries = Object.entries(selectedSets).flatMap(([subjectId, sets]) =>
-      subjectId === "tgat"
-        ? sets.filter((examSet) => getExamPlan("tgat-full", examSet).hasSuppliedExam).map((examSet) => ({ subjectId, examSet, productId: productIds[subjectId] }))
-        : [],
-    );
-    const purchaseRows: DemoPurchase[] = selectedEntries.map((item) => {
-      const itemRef = `${ref}-${item.productId}-${item.examSet}`;
-      return {
-        ref: itemRef,
-        productId: item.productId,
-        examSet: item.examSet,
-        amount: 179,
-        baseAmount: 179,
-        payment: "QR Demo · ไม่ใช่การชำระเงินจริง",
-        purchasedAt,
-        purchasedAtIso: now.toISOString(),
-        receipt: `RC-${itemRef}`,
-        profileSnapshot,
-        examStatus: "available",
-        attempts: 0,
-      };
-    });
-    const purchaseRow = { ...purchaseRows[0], ref, amount: totalPrice, baseAmount: totalPrice };
-    const allPurchases = [...readDemoPurchases(), ...purchaseRows];
-    safeWrite(DEMO_PURCHASES_KEY, allPurchases);
-    localStorage.setItem(
-      "webb-demo-order",
-      JSON.stringify({
-        ref,
-        product: selectedEntries[0]?.productId || "tgat-full",
-        amount: totalPrice,
-        payment: purchaseRow.payment,
-        date: purchasedAt,
-        status: "ทำรายการจำลองสำเร็จ · ยังไม่มีการชำระเงินจริง",
-      })
-    );
-    addDemoEmail(
-      account.email,
-      `ยืนยันการสั่งซื้อข้อสอบ ${ref}`,
-      `คุณได้ทำการสั่งซื้อข้อสอบเพิ่มเติมจำนวน ${totalItems} ชุด ยอดชำระ ${totalPrice} บาท สำเร็จแล้ว`
-    );
+  }
 
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new Event("webb-demo-purchases-updated"));
+  function openPaymentModal() {
+    if (!tgatAvailable || selectedOrderItems.length === 0 || !isDemoSalesOpen()) {
+      setNotice("ชุดข้อสอบนี้ปิดขายหรือไม่มีรายการที่พร้อมซื้อแล้ว กรุณาตรวจสอบรายการอีกครั้ง");
+      return;
     }
+    const profileSnapshot = demoAccount();
+    if (isDemoStudentSuspended(profileSnapshot.username, profileSnapshot.email)) {
+      setNotice("บัญชีนี้ถูกระงับโดยผู้ดูแล จึงทำรายการซื้อข้อสอบไม่ได้ใน Demo");
+      return;
+    }
+    const existingRef = readDemoOrders().find((order) => order.ref === checkoutRef);
+    const orderRef = existingRef && existingRef.status !== "รอชำระ"
+      ? `DO-${new Date().getFullYear() + 543}-${String(Date.now()).slice(-6)}`
+      : checkoutRef;
+    const expiresAt = Date.now() + (59 * 60 + 24) * 1000;
+    const order = createDemoOrder({
+      ref: orderRef,
+      profileSnapshot,
+      items: selectedOrderItems,
+      amount: totalPrice,
+      method: "QR Demo · ไม่ใช่การชำระเงินจริง",
+      status: "รอชำระ",
+      createdAt: new Date().toISOString(),
+      expiresAt,
+    });
+    setCheckoutRef(order.ref);
+    setPaymentDeadline(order.expiresAt);
+    setPaymentSecondsRemaining(Math.max(0, Math.ceil((order.expiresAt - Date.now()) / 1000)));
+    setShowPaymentQR(true);
+  }
 
+  function handleCompletePayment() {
+    if (paymentDeadline === null || Date.now() >= paymentDeadline || paymentSecondsRemaining === null || paymentSecondsRemaining <= 0) return;
+    if (!tgatAvailable || !isDemoSalesOpen()) {
+      setShowPaymentQR(false);
+      setNotice("ชุดข้อสอบนี้ปิดขายแล้ว กรุณาตรวจสอบรายการอีกครั้ง");
+      return;
+    }
+    const completed = setDemoOrderStatus(checkoutRef, "สำเร็จ");
+    if (!completed) return;
+    setShowPaymentQR(false);
+    try {
+      const nextOwned = { ...ownedSets };
+      selectedOrderItems.forEach(({ examSet }) => {
+        if (examSet) nextOwned.tgat = Array.from(new Set([...(nextOwned.tgat || []), examSet]));
+      });
+      localStorage.setItem("webb-demo-purchased-sets", JSON.stringify({ ...nextOwned, ...ownedOther }));
+      setOwnedSets(nextOwned);
+    } catch { /* The purchase record remains the source of truth. */ }
+    const firstPurchase = readDemoPurchases().find((purchase) => purchase.orderRef === checkoutRef);
+    if (!firstPurchase) return;
+    const purchaseRow = { ...firstPurchase, ref: checkoutRef, amount: totalPrice, baseAmount: totalPrice };
+    localStorage.setItem("webb-demo-order", JSON.stringify({
+      ref: checkoutRef,
+      product: selectedOrderItems[0]?.productId || "tgat-full",
+      amount: totalPrice,
+      payment: completed.method,
+      date: completed.paidAt,
+      status: "ชำระเงินสำเร็จ (Demo)",
+    }));
     setCompletedOrder(purchaseRow);
     setSubStep(6);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -458,11 +529,26 @@ export default function WebBSubjectPurchaseFlow({
   if (subStep === 6 && completedOrder) {
     return (
       <div className="wb-subject-purchase-success-wrap">
+        <Link
+          className="wb-brand wb-subject-success-brand"
+          href="/webb"
+          aria-label="เรียนต่อมหาลัย TCAS Mock Exam หน้าแรก"
+        >
+          <span className="wb-brand-symbol" aria-hidden="true">
+            <span className="wb-brand-person wb-brand-yellow"><i /><b /></span>
+            <span className="wb-brand-person wb-brand-orange"><i /><b /></span>
+            <span className="wb-brand-person wb-brand-blue"><i /><b /></span>
+          </span>
+          <span className="wb-brand-copy">
+            <strong>เรียนต่อมหาลัย</strong>
+            <small>TCAS MOCK EXAM</small>
+          </span>
+        </Link>
         <WebBPaymentSuccess
           orderRef={completedOrder.ref}
           paidDate={completedOrder.purchasedAt}
-          paymentMethod={completedOrder.payment}
-          subjectsSummary={`${selectedSubjectCount} วิชา (${totalItems} ชุดข้อสอบ)`}
+          paymentMethod="QR Payment"
+          subjectsSummary={`${selectedSubjectCount} วิชา`}
           totalAmount={completedOrder.amount}
           homeHref="/webb"
           examHref="/webb/student?view=exam#exam-list"
@@ -621,7 +707,7 @@ export default function WebBSubjectPurchaseFlow({
                 <div className="wb-review-line" style={{ marginBottom: "20px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                     <strong style={{ fontSize: "15px" }}>TGAT ความถนัดทั่วไป</strong>
-                    <span style={{ fontSize: "15px", fontWeight: 700 }}>{tgatCount * 179} บาท</span>
+                    <span style={{ fontSize: "15px", fontWeight: 700 }}>{tgatCount * tgatSetPrice} บาท</span>
                   </div>
                   <div style={{ fontSize: "12px", color: "#666", marginBottom: "8px" }}>⏱ 180 นาที 📝 200 ข้อ</div>
                   <button type="button" className="wb-review-detail-toggle" aria-expanded={isReviewExpanded("tgat")} onClick={() => toggleReview("tgat")}>
@@ -644,7 +730,7 @@ export default function WebBSubjectPurchaseFlow({
                 <div className="wb-review-line" style={{ marginBottom: "20px" }} key={subject.id}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                     <strong style={{ fontSize: "15px" }}>{subject.title}</strong>
-                    <span style={{ fontSize: "15px", fontWeight: 700 }}>{subject.sets.length * 179} บาท</span>
+                    <span style={{ fontSize: "15px", fontWeight: 700 }}>{subject.sets.length * getProductPrice(subject.id)} บาท</span>
                   </div>
                   <div style={{ fontSize: "12px", color: "#666", marginBottom: "8px" }}>⏱ 180 นาที 📝 200 ข้อ</div>
                   <button type="button" className="wb-review-detail-toggle" aria-expanded={isReviewExpanded(subject.id)} onClick={() => toggleReview(subject.id)}>
@@ -693,7 +779,7 @@ export default function WebBSubjectPurchaseFlow({
           </div>
 
           <p style={{ textAlign: "center", fontSize: "12px", color: "#666", marginTop: "24px" }}>
-            🔒 ข้อมูลของคุณถูกจัดเก็บอย่างปลอดภัย · QR ด้านถัดไปเป็นตัวอย่างในระบบ Demo
+            🔒 ข้อมูลของคุณถูกจัดเก็บอย่างปลอดภัย ชำระผ่าน QR Promptpay
           </p>
 
           <div className="wb-registration-actions" style={{ display: "flex", gap: "16px", marginTop: "24px" }}>
@@ -720,7 +806,9 @@ export default function WebBSubjectPurchaseFlow({
             <button
               type="button"
               className="wb-registration-next"
-              onClick={() => setShowPaymentQR(true)}
+              onClick={() => {
+                openPaymentModal();
+              }}
               style={{
                 flex: 1,
                 padding: "14px",
@@ -733,232 +821,22 @@ export default function WebBSubjectPurchaseFlow({
                 cursor: "pointer",
               }}
             >
-              เปิด QR ตัวอย่าง {totalPrice} บาท →
+              ชำระเงิน {totalPrice} บาท →
             </button>
           </div>
 
-          <div style={{ textAlign: "center", marginTop: "16px" }}>
-            <button
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "#28629a",
-                textDecoration: "underline",
-                fontSize: "13px",
-                cursor: "pointer",
-                padding: "8px",
-              }}
-              onClick={handleCompletePayment}
-            >
-              จำลองการสั่งซื้อสำเร็จ (ไม่ชำระเงินจริง)
-            </button>
-          </div>
         </div>
       )}
 
-      {/* QR MODAL (Matching Figma D_Payment QR.png) */}
       {showPaymentQR && (
-        <div
-          className="wb-terms-overlay"
-          role="presentation"
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0, 0, 0, 0.45)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-            padding: "16px",
-          }}
-        >
-          <button
-            type="button"
-            className="wb-terms-backdrop"
-            aria-label="ปิด"
-            onClick={() => setShowPaymentQR(false)}
-            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, border: "none", background: "transparent" }}
-          />
-          <section
-            role="dialog"
-            aria-modal="true"
-            style={{
-              position: "relative",
-              maxWidth: "380px",
-              width: "100%",
-              maxHeight: "92vh",
-              overflowY: "auto",
-              padding: 0,
-              background: "#fff",
-              borderRadius: "24px",
-              boxShadow: "0 20px 40px rgba(0,0,0,0.12)",
-              zIndex: 1001,
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setShowPaymentQR(false)}
-              style={{
-                position: "absolute",
-                top: "14px",
-                right: "14px",
-                width: "28px",
-                height: "28px",
-                borderRadius: "50%",
-                border: "none",
-                background: "#f0f0f0",
-                cursor: "pointer",
-                fontSize: "14px",
-                fontWeight: 700,
-              }}
-            >
-              ✕
-            </button>
-
-            <div style={{ padding: "24px 20px 20px", textAlign: "center" }}>
-              <h2 style={{ margin: "0 0 4px", fontSize: "18px", fontWeight: 800 }}>สแกน QR เพื่อชำระเงิน</h2>
-              <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#666" }}>
-                QR นี้ใช้ทดสอบการแสดงผลเท่านั้น<br />ไม่สามารถใช้จ่ายเงินจริงได้
-              </p>
-
-              <div style={{ border: "1px solid #e0e0e0", borderRadius: "16px", overflow: "hidden" }}>
-                <div
-                  style={{
-                    background: "#0f365d",
-                    padding: "12px",
-                    color: "#fff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "28px",
-                      height: "28px",
-                      background: "#fff",
-                      borderRadius: "4px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="#0f365d">
-                      <path d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z" />
-                    </svg>
-                  </div>
-                  <div style={{ textAlign: "left", lineHeight: 1.1 }}>
-                    <div style={{ fontSize: "13px", fontWeight: 800 }}>DEMO QR</div>
-                    <div style={{ fontSize: "10px", letterSpacing: "1px" }}>ORDER INFO</div>
-                  </div>
-                </div>
-
-                <div style={{ padding: "18px 16px" }}>
-                  <div
-                    style={{
-                      display: "inline-block",
-                      padding: "4px 12px",
-                      background: "#fff1f1",
-                      color: "#ef4444",
-                      borderRadius: "20px",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      marginBottom: "14px",
-                    }}
-                  >
-                    Demo เท่านั้น · สแกนแล้วไม่ตัดเงินจริง
-                  </div>
-
-                  <div
-                    style={{
-                      width: "140px",
-                      height: "140px",
-                      margin: "0 auto 12px",
-                      background: "#fff",
-                      border: "1px solid #eee",
-                      padding: "6px",
-                      borderRadius: "8px",
-                    }}
-                  >
-                    <QRCodeSVG
-                      id="webb-demo-order-qr"
-                      value={`STUDYUNITH-DEMO|${checkoutRef}|${totalPrice}`}
-                      size={128}
-                      level="M"
-                      title={`QR ข้อมูลคำสั่งซื้อทดลอง ${checkoutRef} ยอด ${totalPrice} บาท ไม่ใช่ QR ชำระเงินจริง`}
-                    />
-                  </div>
-
-                  <div style={{ fontWeight: 800, fontSize: "14px", marginBottom: "2px" }}>
-                    คำสั่งซื้อ {checkoutRef}
-                  </div>
-                  <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "8px" }}>
-                    QR นี้ใช้ตรวจสอบคำสั่งซื้อในโหมด Demo เท่านั้น
-                  </div>
-                  <div style={{ fontWeight: 800, fontSize: "16px", marginBottom: "14px", color: "#111" }}>
-                    ยอดตัวอย่าง {totalPrice} บาท
-                  </div>
-                    <button
-                    type="button"
-                      onClick={downloadDemoQr}
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      background: "#fff",
-                      border: "1.5px solid #111",
-                      borderRadius: "999px",
-                      fontSize: "13px",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
-                    ดาวน์โหลด QR ตัวอย่าง
-                  </button>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  background: "#f8f9fa",
-                  borderRadius: "12px",
-                  padding: "14px",
-                  marginTop: "14px",
-                  textAlign: "left",
-                }}
-              >
-                <div style={{ fontSize: "12px", fontWeight: 800, marginBottom: "6px" }}>วิธีชำระเงินง่ายๆ</div>
-                <ol style={{ margin: 0, paddingLeft: "18px", fontSize: "11px", color: "#555", lineHeight: 1.6 }}>
-                  <li>ใช้กล้องอ่าน QR เพื่อดูรหัสคำสั่งซื้อ</li>
-                  <li>ระบบนี้ไม่เชื่อมต่อธนาคารและไม่รับชำระเงินจริง</li>
-                  <li>กดยืนยันด้านล่างเพื่อจำลองการสั่งซื้อ</li>
-                </ol>
-              </div>
-
-              <button
-                type="button"
-                style={{
-                  marginTop: "14px",
-                  background: "transparent",
-                  border: "none",
-                  color: "#28629a",
-                  textDecoration: "underline",
-                  fontSize: "12px",
-                  cursor: "pointer",
-                  padding: "6px",
-                  fontWeight: 600,
-                }}
-                onClick={handleCompletePayment}
-              >
-                จำลองการสั่งซื้อสำเร็จ
-              </button>
-            </div>
-          </section>
-        </div>
+        <WebBPaymentQrModal
+          checkoutRef={checkoutRef}
+          totalPrice={totalPrice}
+          remainingSeconds={paymentSecondsRemaining ?? 59 * 60 + 24}
+          onClose={() => setShowPaymentQR(false)}
+          onDownload={downloadDemoQr}
+          onSimulatePaid={handleCompletePayment}
+        />
       )}
     </div>
   );

@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LuChevronDown, LuChevronUp } from "react-icons/lu";
 import type { ExamProduct } from "./data";
-import { getExamPlan, getExamQuestionDetails, type ExamPlan } from "./exam-documents";
+import { getExamPlan, getExamQuestionDetails, getExamResponseDetails, type ExamPlan, type ExamResponseType } from "./exam-documents";
 import PurchasedExamPdfViewer from "./PurchasedExamPdfViewer";
-import { addDemoEmail, currentPurchaseForExam, currentPurchaseForRef, examAnswersStorageKey, examResultStorageKey, readDemoAccount, recordDemoRankingResult, setPurchaseExamStatus, updateAdminAttempt } from "./demo-store";
+import { addDemoEmail, calculateDemoScore, currentPurchaseForExam, currentPurchaseForRef, examAnswersStorageKey, examResultStorageKey, isDemoContentPublished, readDemoAccount, recordDemoRankingResult, setPurchaseExamStatus, updateAdminAttempt } from "./demo-store";
 import { MOCK_EXAM_PAGES, TOTAL_MOCK_QUESTIONS, TOTAL_MOCK_PAGES, getPageForQuestion } from "./mock-exam-questions";
 
 const TOTAL_QUESTIONS = TOTAL_MOCK_QUESTIONS;
-const initialAnswers: Record<number, string> = {};
+type ExamAnswer = string | string[];
+const initialAnswers: Record<number, ExamAnswer> = {};
 
 function clearTrialAttempt(resultKey: string, answerKey: string, startedAtKey: string) {
   try {
@@ -131,8 +132,8 @@ function AnswerPaper({
   examPlan: ExamPlan | null;
   pdfBacked: boolean;
   demoPageData?: (typeof MOCK_EXAM_PAGES)[number] | null;
-  answers: Record<number, string>;
-  onAnswer: (question: number, choice: number) => void;
+  answers: Record<number, ExamAnswer>;
+  onAnswer: (question: number, choice: number, responseType: ExamResponseType) => void;
   expanded: boolean;
   onToggle: () => void;
   page: number;
@@ -154,7 +155,8 @@ function AnswerPaper({
   const filteredQuestions = useMemo(() => {
     return Array.from({ length: questionCount }, (_, i) => i)
       .filter((q) => {
-        const isAnswered = answers[questionOffset + q] !== undefined;
+        const answer = answers[questionOffset + q];
+        const isAnswered = Array.isArray(answer) ? answer.length > 0 : answer !== undefined;
         if (filter === "answered") return isAnswered;
         if (filter === "unanswered") return !isAnswered;
         return true;
@@ -230,7 +232,9 @@ function AnswerPaper({
               <small>
                 {demoPageData
                   ? `${demoPageData.questions[0]?.choices.length || 4} ตัวเลือก (1–${demoPageData.questions[0]?.choices.length || 4}) · เลือกคำตอบที่ถูกต้อง`
-                  : `${examPlan.sections[activeSectionIndex]?.choiceCount} ตัวเลือก (1–${examPlan.sections[activeSectionIndex]?.choiceCount}) · เลือกคำตอบที่ถูกต้อง`}
+                  : examPlan.sections[activeSectionIndex]?.id === "tgat3"
+                    ? `${examPlan.sections[activeSectionIndex]?.choiceCount} ตัวเลือก · ดูคำชี้แจงในแต่ละข้อ บางข้อเลือกได้หลายคำตอบ`
+                    : `${examPlan.sections[activeSectionIndex]?.choiceCount} ตัวเลือก (1–${examPlan.sections[activeSectionIndex]?.choiceCount}) · เลือกคำตอบที่ถูกต้อง`}
               </small>
             </div>
           )}
@@ -250,6 +254,10 @@ function AnswerPaper({
                     ? getExamQuestionDetails(examPlan, answerIndex)
                     : { questionNumber: answerIndex + 1, choiceCount: 4 };
                   const questionNumber = questionDetails.questionNumber;
+                  const responseDetails = examPlan
+                    ? getExamResponseDetails(examPlan, answerIndex)
+                    : { responseType: "single" as const, linkedQuestionNumber: undefined };
+                  const selectedAnswer = answers[answerIndex];
                   const pageNum = pdfBacked ? null : demoPageData?.pageNumber ?? getPageForQuestion(question);
                   const isFirstOfPage =
                     !pdfBacked && !demoPageData &&
@@ -271,6 +279,7 @@ function AnswerPaper({
                       )}
                       <div
                         className="wb-answer-row"
+                        data-response-type={responseDetails.responseType}
                         data-choice-count={questionDetails.choiceCount}
                         id={`wb-answer-row-${questionNumber}`}
                       >
@@ -280,19 +289,21 @@ function AnswerPaper({
                           onClick={() => pageNum !== null && onPageChange(pageNum)}
                         >
                           {questionNumber}
+                          {responseDetails.responseType === "multiple" && <small>หลายคำตอบ</small>}
+                          {responseDetails.responseType === "linked" && <small>คู่ข้อ {responseDetails.linkedQuestionNumber}</small>}
                         </b>
                         {Array.from({ length: questionDetails.choiceCount }, (_, choice) => choice).map((choice) => (
                           <button
                             key={choice}
                             type="button"
-                            className={
-                              answers[answerIndex] === String(choice)
-                                ? "is-selected"
-                                : ""
-                            }
+                            className={(Array.isArray(selectedAnswer)
+                              ? selectedAnswer.includes(String(choice))
+                              : selectedAnswer === String(choice)) ? "is-selected" : ""}
                             aria-label={`ข้อ ${questionNumber} ตัวเลือก ${choice + 1}`}
-                            aria-pressed={answers[answerIndex] === String(choice)}
-                            onClick={() => onAnswer(answerIndex, choice)}
+                            aria-pressed={Array.isArray(selectedAnswer)
+                              ? selectedAnswer.includes(String(choice))
+                              : selectedAnswer === String(choice)}
+                            onClick={() => onAnswer(answerIndex, choice, responseDetails.responseType)}
                           >
                             {choice + 1}
                           </button>
@@ -379,7 +390,7 @@ export default function WebBExam({
   const questionCount = pdfBacked ? examPlan.questionCount : Math.min(TOTAL_QUESTIONS, examPlan.questionCount);
   const examDurationSeconds = examPlan.durationMinutes * 60;
   const [answers, setAnswers] =
-    useState<Record<number, string>>(initialAnswers);
+    useState<Record<number, ExamAnswer>>(initialAnswers);
   const [remaining, setRemaining] = useState(examDurationSeconds);
   const [deadlineAt, setDeadlineAt] = useState<number | null>(null);
   const [attemptStatus, setAttemptStatus] = useState<
@@ -398,7 +409,7 @@ export default function WebBExam({
     : MOCK_EXAM_PAGES[page - 1] || MOCK_EXAM_PAGES[0];
 
   function handleAutoFill() {
-    const newAnswers: Record<number, string> = {};
+    const newAnswers: Record<number, ExamAnswer> = {};
     for (let i = 0; i < questionCount; i++) {
       newAnswers[i] = String(Math.floor(Math.random() * getExamQuestionDetails(examPlan, i).choiceCount));
     }
@@ -435,6 +446,10 @@ export default function WebBExam({
           setAttemptStatus("unsupported");
           return true;
         }
+        if (examType === "purchased" && !isDemoContentPublished(product.id)) {
+          setAttemptStatus("unsupported");
+          return true;
+        }
         let saved = localStorage.getItem(resultKey);
         if (!saved) {
           const legacyKey = examResultStorageKey(product.id, examType);
@@ -454,7 +469,7 @@ export default function WebBExam({
           localStorage.removeItem(answerStorageKey);
           localStorage.setItem(resultKey, JSON.stringify({ status: "in-progress", startedAt: Date.now() }));
           setPurchaseExamStatus(product.id, "in-progress", true, selectedPurchase?.ref);
-          updateAdminAttempt(product.id, "กำลังสอบ");
+          updateAdminAttempt(product.id, "กำลังสอบ", "—", examSet);
         }
       } catch {
         /* Continue the demo exam if browser storage is unavailable. */
@@ -478,7 +493,7 @@ export default function WebBExam({
         if (stored) localStorage.setItem(answerStorageKey, stored);
       }
       if (stored) {
-        const parsed = JSON.parse(stored) as Record<string, string>;
+        const parsed = JSON.parse(stored) as Record<string, ExamAnswer>;
         // If the stored data was the old default mock { "0": "0", "1": "1" }, purge it
         const isOldMockDefault =
           Object.keys(parsed).length === 2 &&
@@ -541,13 +556,14 @@ export default function WebBExam({
   useEffect(() => {
     if (remaining !== 0 || attemptStatus !== "ready") return;
     if (examType === "purchased") {
+      const score = calculateDemoScore(answers, product.id, examSet);
       localStorage.setItem(
         resultKey,
-        JSON.stringify({ answers, answeredCount, status: "timeout" }),
+        JSON.stringify({ answers, answeredCount, score, status: "timeout" }),
       );
       setPurchaseExamStatus(product.id, "submitted", false, selectedPurchase?.ref);
-      updateAdminAttempt(product.id, "ส่งแล้ว", `${answeredCount}/${questionCount}`);
-      recordDemoRankingResult(product.id, 60.7);
+      updateAdminAttempt(product.id, "ส่งแล้ว", `${score}/100`, examSet);
+      recordDemoRankingResult(product.id, score, examSet);
       const account = readDemoAccount();
       if (account?.email) addDemoEmail(account.email, `หมดเวลาสอบ ${product.name}`, `ระบบส่งคำตอบล่าสุดของคุณแล้ว · ดูผลสอบและวิดีโอเฉลยได้ในบัญชีผู้เรียน (อีเมลนี้เป็นการจำลอง)`);
     } else {
@@ -584,10 +600,17 @@ export default function WebBExam({
     return () => window.clearTimeout(timer);
   }, [attemptStatus, product.id, examSet, purchaseRef, examType, resultKey, answerStorageKey, startedAtKey]);
 
-  function chooseAnswer(question: number, choice: number) {
+  function chooseAnswer(question: number, choice: number, responseType: ExamResponseType = "single") {
     setAnswers((current) => {
       const next = { ...current };
-      if (next[question] === String(choice)) {
+      if (responseType === "multiple") {
+        const currentChoices = Array.isArray(next[question]) ? next[question] as string[] : [];
+        const selectedChoices = currentChoices.includes(String(choice))
+          ? currentChoices.filter((item) => item !== String(choice))
+          : [...currentChoices, String(choice)].sort((left, right) => Number(left) - Number(right));
+        if (selectedChoices.length) next[question] = selectedChoices;
+        else delete next[question];
+      } else if (next[question] === String(choice)) {
         delete next[question];
       } else {
         next[question] = String(choice);
@@ -607,13 +630,14 @@ export default function WebBExam({
       window.location.replace("/webb/student?view=exam");
       return;
     }
+    const score = calculateDemoScore(answers, product.id, examSet);
     localStorage.setItem(
       resultKey,
-      JSON.stringify({ answers, answeredCount, status: "submitted" }),
+      JSON.stringify({ answers, answeredCount, score, status: "submitted" }),
     );
     setPurchaseExamStatus(product.id, "submitted", false, selectedPurchase?.ref);
-    updateAdminAttempt(product.id, "ส่งแล้ว", `${answeredCount}/${questionCount}`);
-    recordDemoRankingResult(product.id, 60.7);
+    updateAdminAttempt(product.id, "ส่งแล้ว", `${score}/100`, examSet);
+    recordDemoRankingResult(product.id, score, examSet);
     const account = readDemoAccount();
     if (account?.email) addDemoEmail(account.email, `ส่งข้อสอบ ${product.name} สำเร็จ`, `ระบบบันทึกคำตอบ ${answeredCount} ข้อแล้ว · ดูผลสอบและวิดีโอเฉลยได้ในบัญชีผู้เรียน (อีเมลนี้เป็นการจำลอง)`);
     setAttemptStatus("submitted");

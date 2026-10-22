@@ -7,7 +7,7 @@ import { LuCheck, LuRotateCcw } from "react-icons/lu";
 import WebBMyPurchases from "./WebBMyPurchases";
 import { getProduct } from "./data";
 import { getExamPlan } from "./exam-documents";
-import { currentPurchaseForExam, currentPurchaseForRef, examAnswersStorageKey, examResultStorageKey, setPurchaseExamStatus, updateAdminAttempt } from "./demo-store";
+import { currentPurchaseForExam, currentPurchaseForRef, examAnswersStorageKey, examResultStorageKey, isDemoContentPublished, setPurchaseExamStatus, updateAdminAttempt } from "./demo-store";
 type FlowMode = "status" | "rules" | "success" | "error";
 type ExamType = "purchased" | "trial";
 
@@ -105,7 +105,7 @@ function ExamStateScreen({
               textDecoration: "underline",
             }}
           >
-            🔄 กลับไปหน้ากติกาเพื่อทดสอบสอบใหม่อีกครั้ง (Mockup)
+            🔄 กลับไปหน้ากติกาเพื่อเริ่มสอบใหม่อีกครั้ง
           </Link>
         </div>
       </section>
@@ -128,7 +128,7 @@ function RulesScreen({
 }) {
   const product = getProduct(productId);
   const examPlan = getExamPlan(product.id, examSet);
-  const canUseExam = examType === "trial" || examPlan.hasSuppliedExam;
+  const canUseExam = examType === "trial" || (examPlan.hasSuppliedExam && isDemoContentPublished(product.id));
   const questionCount = examType === "trial" ? 60 : examPlan.questionCount;
   const durationMinutes = examPlan.durationMinutes;
   const examTitle = product.id === "tgat-full"
@@ -172,7 +172,7 @@ function RulesScreen({
     } catch { setAttemptState(""); }
   }, [examType, product.id, examSet, purchaseRef, resultKey, selectedPurchase?.examStatus]);
 
-  function handleResetMockup() {
+  function handleResetSample() {
     try {
       localStorage.removeItem(resultKey);
       localStorage.removeItem(answerKey);
@@ -192,7 +192,7 @@ function RulesScreen({
       setResetNotice("ล้างประวัติการสอบของวิชานี้เรียบร้อยแล้ว สามารถกด 'เริ่มทำข้อสอบ' ใหม่ได้ทันที");
       setTimeout(() => setResetNotice(null), 4000);
     } catch (err) {
-      console.error("Failed to reset mockup exam data:", err);
+      console.error("Failed to reset sample exam data:", err);
     }
   }
 
@@ -322,26 +322,26 @@ function RulesScreen({
           </button>
         </div>
 
-        <div className="wb-rules-mockup-bar">
+        <div className="wb-rules-sample-bar">
           <button
             type="button"
-            className="wb-rules-mockup-btn"
-            onClick={handleResetMockup}
-            title="ล้างข้อมูลการสอบทั้งหมดของวิชานี้ เพื่อให้สามารถเริ่มสอบใหม่ได้อีกครั้งสำหรับการทดสอบ Mockup"
+            className="wb-rules-sample-btn"
+            onClick={handleResetSample}
+            title="ล้างข้อมูลการสอบทั้งหมดของวิชานี้ เพื่อให้สามารถเริ่มสอบใหม่ได้อีกครั้ง"
           >
-            <LuRotateCcw className="wb-mockup-icon" aria-hidden="true" />
-            <span>เคลียร์ค่าที่เคยสอบ (สำหรับทดสอบ Mockup เพื่อสอบใหม่)</span>
+            <LuRotateCcw className="wb-sample-icon" aria-hidden="true" />
+            <span>เคลียร์ค่าที่เคยสอบ เพื่อเริ่มสอบใหม่</span>
           </button>
           {resetNotice && (
-            <p className="wb-rules-mockup-notice" role="status">
-              <LuCheck className="wb-mockup-notice-icon" aria-hidden="true" />
+            <p className="wb-rules-sample-notice" role="status">
+              <LuCheck className="wb-sample-notice-icon" aria-hidden="true" />
               <span>{resetNotice}</span>
             </p>
           )}
         </div>
 
         {!hasEntitlement && examType === "purchased" && <p className="wb-exam-access-note">ยังไม่มีสิทธิ์ในชุดนี้ <Link href="/webb/products">เลือกซื้อข้อสอบ</Link></p>}
-        {hasEntitlement && examType === "purchased" && !canUseExam && <p className="wb-exam-access-note">ยังไม่มีไฟล์ข้อสอบสำหรับรายการนี้ · ตอนนี้รองรับไฟล์ TGAT1, TGAT2 และ TGAT3 ชุด A</p>}
+        {hasEntitlement && examType === "purchased" && !canUseExam && <p className="wb-exam-access-note">ข้อสอบยังไม่เผยแพร่หรือยังไม่มีไฟล์พร้อมสอบ · กรุณาติดต่อผู้ดูแลระบบ</p>}
         {attemptState === "interrupted" && <p className="wb-exam-access-note">ระบบรีเซ็ตรอบสอบที่หลุดแล้ว กรุณาติดต่อผู้ดูแลเพื่อขอเปิดสิทธิ์สอบใหม่</p>}
         {["submitted", "timeout"].includes(attemptState) && <p className="wb-exam-access-note">ส่งข้อสอบแล้ว · กลับมาสอบซ้ำไม่ได้ แต่ดูวิดีโอเฉลยได้ตลอด</p>}
         <footer className="wb-rules-copyright">
@@ -430,7 +430,7 @@ function RulesScreen({
                           true,
                           selectedPurchase?.ref,
                         );
-                        updateAdminAttempt(product.id, "กำลังสอบ");
+                        updateAdminAttempt(product.id, "กำลังสอบ", "—", examSet);
                       }
                     } catch {
                       /* Continue to the exam if browser storage is unavailable. */

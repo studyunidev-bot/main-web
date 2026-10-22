@@ -5,22 +5,52 @@ import { cn, handleLogout } from "@/lib/utils";
 import { LogOutIcon } from "@/components/Layouts/header/user-info/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { NAV_DATA } from "./data";
 import { ArrowLeftIcon, ChevronUp } from "./icons";
 import { MenuItem, MenuItemList } from "./menu-item";
 import { useSidebarContext } from "./sidebar-context";
 import { DotIcon } from "@/assets/icons";
 import { useSession } from "next-auth/react";
+import { WebBAdminRoleContext } from "@/components/webb/WebBAdminAccess";
 import { GoDot, GoDotFill } from "react-icons/go";
+import {
+  LuChartNoAxesCombined,
+  LuClipboardCheck,
+  LuLayoutDashboard,
+  LuScrollText,
+  LuSettings,
+  LuShoppingCart,
+  LuUsersRound,
+} from "react-icons/lu";
 
 export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
   const pathname = usePathname();
   const { setIsOpen, isOpen, isMobile, toggleSidebar } = useSidebarContext();
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
-  const [activeHash, setActiveHash] = useState("");
+  const activeDemoRole = useContext(WebBAdminRoleContext);
+  const [demoRolePermissions, setDemoRolePermissions] = useState<Record<string, Record<string, { view?: boolean }>>>({});
 
   const { data: session, status } = useSession();
+
+  useEffect(() => {
+    if (demoSite !== "webb") return;
+    const refresh = () => {
+      try {
+        const saved = localStorage.getItem("webb-admin-demo:role-permissions");
+        setDemoRolePermissions(saved ? JSON.parse(saved) : {});
+      } catch {
+        setDemoRolePermissions({});
+      }
+    };
+    refresh();
+    window.addEventListener("storage", refresh);
+    window.addEventListener("webb-admin-demo-updated", refresh);
+    return () => {
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("webb-admin-demo-updated", refresh);
+    };
+  }, [demoSite]);
 
   useEffect(() => {
     const section =
@@ -34,13 +64,6 @@ export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
       );
     }
   }, [pathname, demoSite]);
-
-  useEffect(() => {
-    const updateHash = () => setActiveHash(window.location.hash);
-    updateHash();
-    window.addEventListener("hashchange", updateHash);
-    return () => window.removeEventListener("hashchange", updateHash);
-  }, []);
 
   const toggleExpanded = (title: string) => {
     setExpandedItems((prev) => (prev.includes(title) ? [] : [title]));
@@ -73,114 +96,69 @@ export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
 
   if (status !== "authenticated" && demoSite !== "webb") return null;
 
-  const webBDemoIcon = NAV_DATA[0].items[0].icon;
   const demoNav = [
     {
-      label: "ระบบจัดการ Web B · Demo",
+      label: "ข้อมูลพื้นฐาน",
       roles: [1],
       items: [
         {
           title: "ภาพรวม",
-          icon: webBDemoIcon,
-          url: "/webb/admin/dashboard#overview",
-          roles: ["DEMO"],
-          items: [],
-        },
-        {
-          title: "คำสั่งซื้อ",
-          icon: webBDemoIcon,
-          url: "/webb/admin/dashboard#orders",
+          icon: LuLayoutDashboard,
+          url: "/webb/admin/dashboard",
           roles: ["DEMO"],
           items: [],
         },
         {
           title: "สมาชิก / ผู้เข้าสอบ",
-          icon: webBDemoIcon,
-          url: "/webb/admin/dashboard#students",
-          roles: ["DEMO"],
-          items: [],
-        },
-        {
-          title: "ชุดฝึกสอบ",
-          icon: webBDemoIcon,
-          url: "/webb/admin/dashboard#products",
-          roles: ["DEMO"],
-          items: [],
-        },
-        {
-          title: "คลังข้อสอบ / เฉลย",
-          icon: webBDemoIcon,
-          url: "/webb/admin/dashboard#content",
-          roles: ["DEMO"],
-          items: [],
-        },
-        {
-          title: "การชำระเงิน / Webhook",
-          icon: webBDemoIcon,
-          url: "/webb/admin/dashboard#payments",
-          roles: ["DEMO"],
-          items: [],
-        },
-        {
-          title: "สิทธิ์สอบ / คำร้อง",
-          icon: webBDemoIcon,
-          url: "/webb/admin/dashboard#entitlements",
-          roles: ["DEMO"],
-          items: [],
-        },
-        {
-          title: "อนุมัติสอบใหม่",
-          icon: webBDemoIcon,
-          url: "/webb/admin/approvals",
-          roles: ["DEMO"],
-          items: [],
-        },
-        {
-          title: "ประวัติการเข้าสอบ",
-          icon: webBDemoIcon,
-          url: "/webb/admin/dashboard#attempts",
-          roles: ["DEMO"],
-          items: [],
-        },
-        {
-          title: "ผลสอบ / Ranking",
-          icon: webBDemoIcon,
-          url: "/webb/admin/dashboard#results",
-          roles: ["DEMO"],
-          items: [],
-        },
-        {
-          title: "เฉลย / สื่อประกอบ",
-          icon: webBDemoIcon,
-          url: "/webb/admin/dashboard#solutions",
-          roles: ["DEMO"],
-          items: [],
-        },
-        {
-          title: "รายงานการเงิน",
-          icon: webBDemoIcon,
-          url: "/webb/admin/dashboard#finance",
-          roles: ["DEMO"],
-          items: [],
-        },
-        {
-          title: "ผู้ดูแล / สิทธิ์",
-          icon: webBDemoIcon,
-          url: "/webb/admin/dashboard#admins",
+          icon: LuUsersRound,
+          url: "/webb/admin/students",
           roles: ["DEMO"],
           items: [],
         },
         {
           title: "Audit Log",
-          icon: webBDemoIcon,
-          url: "/webb/admin/dashboard#audit",
+          icon: LuScrollText,
+          url: "/webb/admin/audit",
           roles: ["DEMO"],
           items: [],
         },
         {
-          title: "ตั้งค่าระบบ",
-          icon: webBDemoIcon,
-          url: "/webb/admin/dashboard#settings",
+          title: "ตั้งค่าระบบ / ผู้ดูแล",
+          icon: LuSettings,
+          url: "/webb/admin/settings",
+          roles: ["DEMO"],
+          items: [],
+        },
+      ],
+    },
+    {
+      label: "ข้อสอบ",
+      roles: [1],
+      items: [
+        {
+          title: "คลังและจัดการข้อสอบ",
+          icon: LuClipboardCheck,
+          url: "/webb/admin/exam-catalog",
+          roles: ["DEMO"],
+          items: [],
+        },
+      ],
+    },
+    {
+      label: "การเงิน",
+      roles: [1],
+      items: [
+        {
+          title: "คำสั่งซื้อและชำระเงิน",
+          icon: LuShoppingCart,
+          url: "/webb/admin/orders",
+          roles: ["DEMO"],
+          items: [],
+        },
+        {
+          title: "รายงานการเงิน",
+          icon: LuChartNoAxesCombined,
+          url: "/webb/admin/finance",
           roles: ["DEMO"],
           items: [],
         },
@@ -190,15 +168,44 @@ export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
   const userRole = demoSite === "webb" ? 1 : Number(session?.user?.role_id);
   const isLinkActive = (url: string) => {
     if (demoSite === "webb") {
-      const [path, anchor] = url.split("#");
+      const baseUrl = url.split("#")[0];
       return (
-        pathname === path &&
-        (!anchor ||
-          activeHash === `#${anchor}` ||
-          (!activeHash && anchor === "overview"))
+        pathname === baseUrl ||
+        (baseUrl === "/webb/admin/exam-catalog" &&
+          pathname.startsWith(`${baseUrl}/`))
       );
     }
     return pathname.startsWith(url);
+  };
+  const canViewDemoMenu = (url: string) => {
+    if (activeDemoRole === "Super Admin") return true;
+    if (url.endsWith("/audit") || url.endsWith("/settings")) return false;
+    if (url.endsWith("/exam-catalog")) {
+      return ["exams", "students", "results"].some((resource) =>
+        demoRolePermissions[activeDemoRole]?.[resource]?.view ??
+        ({ Content: ["exams", "results"], Support: ["students"], Finance: [] }[activeDemoRole] || []).includes(resource),
+      );
+    }
+    const resource = url.endsWith("/dashboard")
+      ? "overview"
+      : url.endsWith("/students") || url.endsWith("/entitlements") || url.endsWith("/approvals") || url.endsWith("/attempts")
+        ? "students"
+        : url.endsWith("/trial-exams") || url.endsWith("/real-exams") || url.endsWith("/products") || url.endsWith("/content") || url.endsWith("/solutions")
+          ? "exams"
+          : url.endsWith("/orders") || url.endsWith("/payments") || url.endsWith("/finance")
+            ? "finance"
+            : url.endsWith("/results")
+              ? "results"
+            : null;
+    if (!resource) return false;
+    const savedView = demoRolePermissions[activeDemoRole]?.[resource]?.view;
+    if (savedView !== undefined) return savedView;
+    const defaults: Record<string, string[]> = {
+      Content: ["overview", "exams", "results"],
+      Support: ["overview", "students"],
+      Finance: ["overview", "finance"],
+    };
+    return defaults[activeDemoRole]?.includes(resource) ?? false;
   };
 
   // กรองเมนูตาม role
@@ -211,7 +218,7 @@ export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
           !item.roles ||
           item.roles.includes(
             demoSite === "webb" ? "DEMO" : String(session?.user?.role ?? ""),
-          ),
+        ) && (demoSite !== "webb" || canViewDemoMenu(item.url || "")),
       ),
     }))
     .filter((section) => section.items.length > 0);
@@ -261,7 +268,7 @@ export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
               className="px-0 py-2.5 min-[850px]:py-0 text-lg text-dark-2 dark:text-dark-8"
             >
               {demoSite === "webb"
-                ? "ระบบจัดการ Web B · Demo"
+                ? "ระบบจัดการ Web B"
                 : "ระบบจัดการหลังบ้าน"}
             </Link>
 

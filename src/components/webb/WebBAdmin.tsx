@@ -2,49 +2,51 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { WEBB_PRODUCTS, WEBB_DEMO_LABEL, formatBaht } from "./data";
+import { WEBB_PRODUCTS, formatBaht, formatThaiDate, toDateInputValue } from "./data";
+import WebBThaiDatePicker from "./WebBThaiDatePicker";
+import WebBAdminInput from "./WebBAdminInput";
 
 const rows = [
   {
     ref: "DO-2570-0001",
-    student: "ศิรศักดิ์ ผู้เรียน Demo",
-    product: "Full TGAT",
-    base: 250,
-    charged: 275,
-    fee: 8.25,
+    student: "ภูวดล ธนกิจ",
+    product: "Full TGAT · ชุด A",
+    base: 179,
+    charged: 179,
+    fee: 5.37,
     method: "QR",
     day: "2026-10-05",
     status: "สำเร็จ",
   },
   {
     ref: "DO-2570-0002",
-    student: "กมลชนก ตัวอย่าง",
-    product: "TGAT1",
-    base: 100,
-    charged: 110,
-    fee: 3.3,
+    student: "ณิชา วัฒนกุล",
+    product: "Full TGAT · ชุด A",
+    base: 179,
+    charged: 179,
+    fee: 5.37,
     method: "บัตรเครดิต",
     day: "2026-10-04",
     status: "สำเร็จ",
   },
   {
     ref: "DO-2570-0003",
-    student: "ธนกร สาธิต",
-    product: "TGAT2 + TGAT3",
-    base: 180,
-    charged: 198,
-    fee: 5.94,
+    student: "ปภังกร รัตนกุล",
+    product: "Full TGAT · ชุด A",
+    base: 179,
+    charged: 179,
+    fee: 5.37,
     method: "QR",
     day: "2026-10-03",
     status: "สำเร็จ",
   },
   {
     ref: "DO-2570-0004",
-    student: "นภัส Demo",
-    product: "TGAT3",
-    base: 100,
-    charged: 110,
-    fee: 3.3,
+    student: "พิมพ์ชนก สุขใจ",
+    product: "Full TGAT · ชุด A",
+    base: 179,
+    charged: 179,
+    fee: 5.37,
     method: "บัตรเครดิต",
     day: "2026-09-29",
     status: "รอชำระ",
@@ -55,8 +57,13 @@ const money = (n: number) =>
 
 export default function WebBAdmin() {
   const [query, setQuery] = useState("");
-  const [from, setFrom] = useState("2026-10-01");
-  const [to, setTo] = useState("2026-10-31");
+  const today = new Date();
+  const [from, setFrom] = useState(toDateInputValue(new Date(today.getFullYear(), today.getMonth(), 1)));
+  const [to, setTo] = useState(toDateInputValue(today));
+  const [salesStart, setSalesStart] = useState("2026-10-01");
+  const [salesEnd, setSalesEnd] = useState("2026-12-31");
+  const [salesStartTime, setSalesStartTime] = useState("09:00");
+  const [salesEndTime, setSalesEndTime] = useState("23:59");
   const [message, setMessage] = useState("");
   const [open, setOpen] = useState(true);
   const filtered = useMemo(
@@ -84,7 +91,7 @@ export default function WebBAdmin() {
     );
   function exportRows() {
     const csv = [
-      "เลขคำสั่งซื้อ,ผู้เรียน,สินค้า,ราคาฐาน,ยอดเรียกเก็บ,ค่าธรรมเนียมจำลอง,ยอดรับสุทธิ,สถานะ",
+      "เลขคำสั่งซื้อ,ผู้เรียน,สินค้า,ราคาฐาน,ยอดเรียกเก็บ,ค่าธรรมเนียม,ยอดรับสุทธิ,สถานะ",
       ...filtered.map((r) =>
         [
           r.ref,
@@ -102,7 +109,7 @@ export default function WebBAdmin() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "web-b-demo-finance.csv";
+    a.download = "webb-finance-report.csv";
     a.click();
     URL.revokeObjectURL(url);
     setMessage("ดาวน์โหลดรายงานตัวอย่างแล้ว");
@@ -110,9 +117,6 @@ export default function WebBAdmin() {
   const card = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm";
   return (
     <div className="space-y-6 text-slate-900">
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs font-bold text-amber-900">
-        {WEBB_DEMO_LABEL} · ไม่มีการเรียก Payso หรือบันทึกฐานข้อมูล
-      </div>
       {message && (
         <div
           role="status"
@@ -134,7 +138,7 @@ export default function WebBAdmin() {
               ภาพรวมแพลตฟอร์มฝึกสอบ
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              ข้อมูลตัวอย่าง ณ 5 ตุลาคม 2569
+              ข้อมูลจำลอง ณ 21 ตุลาคม 2569
             </p>
           </div>
           <Link
@@ -146,9 +150,9 @@ export default function WebBAdmin() {
         </div>
         <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            ["คำสั่งซื้อสำเร็จ", "3", "ข้อมูล Demo"],
+            ["คำสั่งซื้อสำเร็จ", "3", "ข้อมูลจำลอง"],
             ["ยอดขายฐาน", money(530), "ก่อนค่าธรรมเนียม"],
-            ["ค่าธรรมเนียมจำลอง", money(17.49), "ตัวอย่าง 3%"],
+            ["ค่าธรรมเนียม", money(17.49), "ตัวอย่าง 3%"],
             ["ยอดรับสุทธิ", money(565.51), "หลังหักค่าธรรมเนียม"],
           ].map(([label, value, hint]) => (
             <article className={`${card} !p-5`} key={label}>
@@ -162,7 +166,7 @@ export default function WebBAdmin() {
           <article className={card}>
             <h2 className="font-bold">ยอดรับสุทธิรายวัน</h2>
             <p className="mt-1 text-xs text-slate-500">
-              ตัวอย่างภาพรวมการขายและค่าธรรมเนียม
+              ภาพรวมการขายและค่าธรรมเนียม
             </p>
             <div className="mt-6 flex h-44 items-end gap-3 border-b border-l border-slate-100 px-4">
               {[38, 58, 44, 83, 67, 96, 61, 75, 51, 88, 70, 100].map((h, i) => (
@@ -170,7 +174,9 @@ export default function WebBAdmin() {
                   key={i}
                   className="flex-1 rounded-t bg-amber-300 transition hover:bg-indigo-500"
                   style={{ height: `${h}%` }}
-                  title={`${h}%`}
+                  title={`${["1 ต.ค.", "4 ต.ค.", "7 ต.ค.", "10 ต.ค.", "13 ต.ค.", "16 ต.ค.", "19 ต.ค.", "22 ต.ค.", "25 ต.ค.", "28 ต.ค.", "30 ต.ค.", "31 ต.ค."][i]} · ยอดรับสุทธิจำลอง ${h}% ของวันที่ยอดสูงสุด`}
+                  aria-label={`วันที่ ${["1 ต.ค.", "4 ต.ค.", "7 ต.ค.", "10 ต.ค.", "13 ต.ค.", "16 ต.ค.", "19 ต.ค.", "22 ต.ค.", "25 ต.ค.", "28 ต.ค.", "30 ต.ค.", "31 ต.ค."][i]} · ยอดรับสุทธิจำลอง ${h}% ของวันที่ยอดสูงสุด`}
+                  tabIndex={0}
                 />
               ))}
             </div>
@@ -216,7 +222,7 @@ export default function WebBAdmin() {
           </button>
         </div>
         <article className={`${card} mt-4`}>
-          <input
+          <WebBAdminInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="ค้นหาชื่อผู้เรียน เลขที่ หรือชุดสอบ"
@@ -242,7 +248,7 @@ export default function WebBAdmin() {
               <tbody>
                 {filtered.map((r) => (
                   <tr className="border-b border-slate-100" key={r.ref}>
-                    <td className="p-3 font-mono text-xs">{r.ref}</td>
+              <td className="p-3 font-mono text-xs">{r.ref}<small className="mt-1 block font-sans text-slate-400">{formatThaiDate(r.day)}</small></td>
                     <td className="p-3">
                       <b>{r.student}</b>
                       <small className="mt-1 block text-slate-500">
@@ -268,7 +274,7 @@ export default function WebBAdmin() {
       <section id="products" className="scroll-mt-24">
         <h2 className="text-xl font-bold">ชุดฝึกสอบและราคา</h2>
         <p className="mt-1 text-sm text-slate-500">
-          ราคาและจำนวนครั้งเป็นข้อมูลสำหรับ Demo
+          ราคาและจำนวนครั้งเป็นข้อมูลจำลองเพื่อการนำเสนอ
         </p>
         <article className={`${card} mt-4 overflow-x-auto`}>
           <table className="w-full min-w-[650px] text-left text-sm">
@@ -312,28 +318,13 @@ export default function WebBAdmin() {
         </div>
         <article className={`${card} mt-4`}>
           <div className="mb-5 flex flex-wrap items-end gap-3">
-            <label className="grid gap-1 text-xs font-semibold text-slate-500">
-              ตั้งแต่
-              <input
-                type="date"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-                className="rounded-lg border px-3 py-2 text-sm text-slate-800"
-              />
-            </label>
-            <label className="grid gap-1 text-xs font-semibold text-slate-500">
-              ถึงวันที่
-              <input
-                type="date"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                className="rounded-lg border px-3 py-2 text-sm text-slate-800"
-              />
-            </label>
+            <WebBThaiDatePicker label="ตั้งแต่วันที่" value={from} max={to || undefined} onChange={setFrom} />
+            <WebBThaiDatePicker label="ถึงวันที่" value={to} min={from || undefined} onChange={setTo} />
             <button
               onClick={() => {
-                setFrom("2026-10-01");
-                setTo("2026-10-31");
+                const now = new Date();
+                setFrom(toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)));
+                setTo(toDateInputValue(now));
               }}
               className="rounded-lg border px-3 py-2 text-sm"
             >
@@ -345,9 +336,9 @@ export default function WebBAdmin() {
               ["ราคาสินค้ารวม", money(summary.base)],
               ["ยอดเรียกเก็บ", money(summary.charged)],
               ["ส่วนเพิ่มจากผู้เรียน", money(summary.charged - summary.base)],
-              ["ค่าธรรมเนียม Payso (Demo)", money(summary.fee)],
+              ["ค่าธรรมเนียม Payso", money(summary.fee)],
               [
-                "ยอดรับสุทธิ / กำไรขั้นต้น Demo",
+                "ยอดรับสุทธิ / กำไรขั้นต้น",
                 money(summary.net - summary.base),
               ],
             ].map(([l, v]) => (
@@ -367,7 +358,7 @@ export default function WebBAdmin() {
       <section id="settings" className="scroll-mt-24">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold">ตั้งค่าระบบ Demo</h2>
+            <h2 className="text-xl font-bold">ตั้งค่าระบบ</h2>
             <p className="mt-1 text-sm text-slate-500">
               ปรับสถานะจำลองสำหรับการนำเสนอ
             </p>
@@ -394,28 +385,24 @@ export default function WebBAdmin() {
             </span>
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1 text-xs font-semibold text-slate-500">
-              เริ่มเปิดรับ
-              <input
-                type="datetime-local"
-                defaultValue="2026-10-01T09:00"
-                className="rounded-lg border px-3 py-2 text-sm text-slate-800"
-              />
-            </label>
-            <label className="grid gap-1 text-xs font-semibold text-slate-500">
-              ปิดรับ
-              <input
-                type="datetime-local"
-                defaultValue="2026-12-31T23:59"
-                className="rounded-lg border px-3 py-2 text-sm text-slate-800"
-              />
-            </label>
+            <div className="flex flex-wrap items-end gap-3">
+              <WebBThaiDatePicker label="เริ่มเปิดรับ" value={salesStart} max={salesEnd || undefined} onChange={setSalesStart} />
+              <label className="grid gap-1 text-xs font-semibold text-slate-500">เวลา
+                <WebBAdminInput type="time" value={salesStartTime} onChange={(event) => setSalesStartTime(event.target.value)} className="rounded-lg border px-3 py-2 text-sm text-slate-800" />
+              </label>
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <WebBThaiDatePicker label="ปิดรับ" value={salesEnd} min={salesStart || undefined} onChange={setSalesEnd} />
+              <label className="grid gap-1 text-xs font-semibold text-slate-500">เวลา
+                <WebBAdminInput type="time" value={salesEndTime} onChange={(event) => setSalesEndTime(event.target.value)} className="rounded-lg border px-3 py-2 text-sm text-slate-800" />
+              </label>
+            </div>
           </div>
           <button
-            onClick={() => setMessage("บันทึกการตั้งค่าในหน้าจอ Demo แล้ว")}
+            onClick={() => setMessage("บันทึกการตั้งค่าแล้ว")}
             className="mt-4 rounded-xl bg-[#211d4f] px-4 py-2.5 text-sm font-semibold text-white"
           >
-            บันทึก Demo
+            บันทึกการตั้งค่า
           </button>
         </article>
       </section>

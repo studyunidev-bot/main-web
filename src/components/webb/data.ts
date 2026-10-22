@@ -83,7 +83,6 @@ export const WEBB_PRODUCTS: ExamProduct[] = [
 ];
 
 export const WEBB_MOCK_IMAGE = "/images/webb/students-demo.png";
-export const WEBB_DEMO_LABEL = "DO · ข้อมูลจำลองเพื่อสาธิตระบบ";
 
 export function getProduct(id?: string | null) {
   return WEBB_PRODUCTS.find((product) => product.id === id) ?? WEBB_PRODUCTS[4];
@@ -99,6 +98,7 @@ export function formatBaht(value: number) {
 export function formatThaiDateTime(date: Date = new Date()) {
   return new Intl.DateTimeFormat("th-TH", {
     timeZone: "Asia/Bangkok",
+    calendar: "buddhist",
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -106,4 +106,43 @@ export function formatThaiDateTime(date: Date = new Date()) {
     minute: "2-digit",
     hourCycle: "h23",
   }).format(date);
+}
+
+export function parseDateInput(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return year && month && day ? new Date(year, month - 1, day, 12) : null;
+}
+
+export function toDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseWebBDate(value: string | Date) {
+  if (value instanceof Date) return value;
+  const dateOnly = parseDateInput(value);
+  if (dateOnly) return dateOnly;
+  const normalized = value.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::(\d{2}))?$/);
+  if (normalized) return new Date(`${normalized[1]}T${normalized[2]}:${normalized[3] || "00"}+07:00`);
+  return new Date(value);
+}
+
+export function formatThaiDate(value: string | Date) {
+  const date = parseWebBDate(value);
+  if (Number.isNaN(date.getTime())) return value instanceof Date ? "—" : value;
+  return new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
+    calendar: "buddhist",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+export function formatThaiDateTimeValue(value: string | Date) {
+  const date = parseWebBDate(value);
+  if (Number.isNaN(date.getTime())) return value instanceof Date ? "—" : value;
+  return formatThaiDateTime(date);
 }

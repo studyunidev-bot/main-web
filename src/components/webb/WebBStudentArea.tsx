@@ -34,17 +34,22 @@ import { PublicFooter, WebBBrand } from "./PublicShell";
 import { getProduct } from "./data";
 import { WebBImage } from "./WebBImage";
 import {
+  areDemoResultsPublished,
   DEMO_ACCOUNT_KEY,
   DEMO_AUTH_KEY,
+  DEMO_RANKINGS_KEY,
   examAnswersStorageKey,
   examResultStorageKey,
   readCurrentDemoPurchases,
   readDemoAccount,
   readSocialSettings,
+  isDemoStudentSuspended,
+  isDemoSolutionPublished,
   safeWrite,
   setPurchaseExamStatus,
 } from "./demo-store";
 import { getExamPlan } from "./exam-documents";
+import { confirmWebBAction } from "./confirm";
 import WebBProvinceSelect, {
   WEBB_PROVINCES,
   WEBB_SELECT_STYLES,
@@ -142,7 +147,7 @@ function StudentAvatar({
       ) : (
         <WebBImage
           className="wb-dashboard-avatar-image"
-          alt="ภาพ Mockup นักเรียน"
+          alt="ภาพตัวอย่างนักเรียน"
         />
       )}
       {withCamera && (
@@ -1061,13 +1066,13 @@ function ExamRoom() {
   const [rulesOpen, setRulesOpen] = useState(true);
   const examItems = useEnrolledExams();
 
-  function resetExam(item: EnrolledExam) {
-    if (
-      !window.confirm(
-        `รีเซ็ต ${item.title} ชุด ${item.set} เพื่อเริ่มสอบใหม่หรือไม่? คำตอบเดิมจะถูกลบ`,
-      )
-    )
-      return;
+  async function resetExam(item: EnrolledExam) {
+    const confirmed = await confirmWebBAction({
+      title: "เริ่มสอบชุดนี้ใหม่หรือไม่",
+      text: `${item.title} ชุด ${item.set} · คำตอบเดิมจะถูกลบ`,
+      confirmText: "เริ่มสอบใหม่",
+    });
+    if (!confirmed) return;
     try {
       localStorage.removeItem(
         examResultStorageKey(item.productId, "purchased", undefined, item.set),
@@ -1219,6 +1224,28 @@ function ExamRoom() {
 }
 
 function ExamResults({ onSelect }: { onSelect: (view: StudentView) => void }) {
+  const [published, setPublished] = useState(true);
+  const [score, setScore] = useState<number | null>(null);
+  useEffect(() => {
+    const refresh = () => {
+      setPublished(areDemoResultsPublished());
+      const account = readDemoAccount();
+      try {
+        const records = JSON.parse(localStorage.getItem(DEMO_RANKINGS_KEY) || "[]") as { username: string; score: number }[];
+        setScore(records.find((record) => record.username.toLowerCase() === account?.username.toLowerCase())?.score ?? null);
+      } catch { setScore(null); }
+    };
+    refresh();
+    window.addEventListener("webb-demo-ranking-updated", refresh);
+    window.addEventListener("webb-admin-demo-updated", refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener("webb-demo-ranking-updated", refresh);
+      window.removeEventListener("webb-admin-demo-updated", refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, []);
+  if (!published) return <div className="wb-dashboard-view"><section className="wb-dashboard-card"><h2>กำลังตรวจสอบผลสอบ</h2><p>ผลสอบจะปรากฏเมื่อผู้ดูแลเผยแพร่ผลแล้ว</p></section></div>;
   return (
     <div className="wb-dashboard-view">
       <section className="wb-dashboard-card wb-result-summary">
@@ -1237,7 +1264,7 @@ function ExamResults({ onSelect }: { onSelect: (view: StudentView) => void }) {
           </div>
         </div>
         <strong>
-          60.7<small>/100</small>
+          {(score ?? 60.7).toFixed(1)}<small>/100</small>
         </strong>
         <footer>
           <button
@@ -1278,6 +1305,29 @@ function ResultDetails({
   onSelect: (view: StudentView) => void;
   onOpenPart: (part: string) => void;
 }) {
+  const [published, setPublished] = useState(true);
+  const [score, setScore] = useState<number | null>(null);
+  useEffect(() => {
+    const refresh = () => {
+      setPublished(areDemoResultsPublished());
+      const account = readDemoAccount();
+      try {
+        const records = JSON.parse(localStorage.getItem(DEMO_RANKINGS_KEY) || "[]") as { username: string; score: number }[];
+        setScore(records.find((record) => record.username.toLowerCase() === account?.username.toLowerCase())?.score ?? null);
+      } catch { setScore(null); }
+    };
+    refresh();
+    window.addEventListener("webb-demo-ranking-updated", refresh);
+    window.addEventListener("webb-admin-demo-updated", refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener("webb-demo-ranking-updated", refresh);
+      window.removeEventListener("webb-admin-demo-updated", refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, []);
+  if (!published) return <div className="wb-dashboard-view"><section className="wb-dashboard-card"><h2>กำลังตรวจสอบผลสอบ</h2><p>ผลสอบจะปรากฏเมื่อผู้ดูแลเผยแพร่ผลแล้ว</p></section></div>;
+  const displayScore = score ?? 60.7;
   return (
     <div className="wb-dashboard-view wb-detail-view">
       <div className="wb-detail-back">
@@ -1340,7 +1390,7 @@ function ResultDetails({
           </h2>
           <div className="wb-detail-score">
             <span>คะแนน</span>
-            <b>60.7/100</b>
+            <b>{displayScore.toFixed(1)}/100</b>
           </div>
           <div className="wb-detail-place">
             <p>
@@ -1352,14 +1402,14 @@ function ResultDetails({
       </div>
       <section className="wb-dashboard-card wb-total-score">
         <h2>
-          TGAT ความถนัดทั่วไป <b>60.7 / 100</b>
+          TGAT ความถนัดทั่วไป <b>{displayScore.toFixed(1)} / 100</b>
         </h2>
         <i>
-          <em style={{ width: "60.7%" }} />
+          <em style={{ width: `${displayScore}%` }} />
         </i>
         <div>
           <span>0</span>
-          <span>60.7</span>
+          <span>{displayScore.toFixed(1)}</span>
           <span>100</span>
         </div>
       </section>
@@ -2072,6 +2122,7 @@ function Ranking({
   student: StudentInfo;
   onClose: () => void;
 }) {
+  const [published, setPublished] = useState(true);
   const [grade, setGrade] = useState("ทุกระดับชั้น");
   const [province, setProvince] = useState("ทุกจังหวัด");
   const [period, setPeriod] = useState("ทุกช่วงเวลา");
@@ -2104,9 +2155,11 @@ function Ranking({
   >([]);
   useEffect(() => {
     const refresh = () => {
+      const isPublished = areDemoResultsPublished();
+      setPublished(isPublished);
       try {
         setRankRecords(
-          JSON.parse(localStorage.getItem("webb-demo-ranking-results") || "[]"),
+          isPublished ? JSON.parse(localStorage.getItem(DEMO_RANKINGS_KEY) || "[]") : [],
         );
       } catch {
         setRankRecords([]);
@@ -2115,9 +2168,11 @@ function Ranking({
     };
     refresh();
     window.addEventListener("webb-demo-ranking-updated", refresh);
+    window.addEventListener("webb-admin-demo-updated", refresh);
     window.addEventListener("storage", refresh);
     return () => {
       window.removeEventListener("webb-demo-ranking-updated", refresh);
+      window.removeEventListener("webb-admin-demo-updated", refresh);
       window.removeEventListener("storage", refresh);
     };
   }, []);
@@ -2185,6 +2240,8 @@ function Ranking({
         </div>
         <h2>{student.name}</h2>
         <p>วิชา TGAT ความถนัดทั่วไป</p>
+        {!published && <p className="wb-ranking-place">ผลสอบและ Ranking ยังไม่เผยแพร่โดยผู้ดูแล</p>}
+        <div style={{ display: published ? undefined : "none" }}>
         <div className="wb-ranking-score">
           <span>คะแนน</span>
           <b>{ownScore === undefined ? "—" : `${ownScore.toFixed(1)}/100`}</b>
@@ -2248,6 +2305,7 @@ function Ranking({
           />
           <span>สแกน QR สมัครสอบเลย!</span>
         </div>
+        </div>
       </section>
     </div>
   );
@@ -2270,14 +2328,16 @@ function StudentSolutions({
   const [eligiblePurchases, setEligiblePurchases] = useState<
     ReturnType<typeof readCurrentDemoPurchases>
   >([]);
+  const [solutionsPublished, setSolutionsPublished] = useState(true);
   const [openDownloadMenu, setOpenDownloadMenu] = useState<string | null>(null);
 
   useEffect(() => {
+    const refresh = () => {
     const params = new URLSearchParams(window.location.search);
     const productId = params.get("product");
     const examSet = params.get("set");
     const purchaseRef = params.get("ref");
-    const submitted = readCurrentDemoPurchases().filter((purchase) => {
+    const submittedPurchases = readCurrentDemoPurchases().filter((purchase) => {
       if (purchase.examStatus !== "submitted") return false;
       if (purchaseRef && purchase.ref !== purchaseRef) return false;
       if (productId && purchase.productId !== productId) return false;
@@ -2286,10 +2346,20 @@ function StudentSolutions({
         (purchase.examSet || "A").toUpperCase() !== examSet.toUpperCase()
       )
         return false;
-      return getExamPlan(purchase.productId, purchase.examSet || "A")
-        .hasSuppliedExam;
+      return getExamPlan(purchase.productId, purchase.examSet || "A").hasSuppliedExam;
     });
-    setEligiblePurchases(submitted);
+    setSolutionsPublished(submittedPurchases.every((purchase) => isDemoSolutionPublished(purchase.productId)));
+    setEligiblePurchases(submittedPurchases.filter((purchase) => isDemoSolutionPublished(purchase.productId)));
+    };
+    refresh();
+    window.addEventListener("storage", refresh);
+    window.addEventListener("webb-demo-purchases-updated", refresh);
+    window.addEventListener("webb-admin-demo-updated", refresh);
+    return () => {
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("webb-demo-purchases-updated", refresh);
+      window.removeEventListener("webb-admin-demo-updated", refresh);
+    };
   }, []);
 
   return (
@@ -2303,7 +2373,7 @@ function StudentSolutions({
         </div>
         {eligiblePurchases.length === 0 ? (
           <div className="wb-solutions-empty" role="status">
-            เฉลยจะแสดงหลังจากส่งข้อสอบในรายการที่ซื้อแล้ว
+            {solutionsPublished ? "เฉลยจะแสดงหลังจากส่งข้อสอบในรายการที่ซื้อแล้ว" : "ผู้ดูแลพักการเผยแพร่เฉลยไว้ชั่วคราว"}
           </div>
         ) : (
           eligiblePurchases.map((purchase) => {
@@ -2519,7 +2589,7 @@ function VideoSolutionModal({
         </div>
         <div className="wb-video-modal-body">
           <div
-            className="wb-video-player-mockup"
+            className="wb-video-player-sample"
             onClick={() => setIsPlaying((playing) => !playing)}
           >
             <div className="wb-video-screen-content">
@@ -2785,7 +2855,7 @@ function AvatarEditModal({
               ) : (
                 <WebBImage
                   className="wb-dashboard-avatar-image"
-                  alt="ภาพ Mockup นักเรียน"
+                  alt="ภาพตัวอย่างนักเรียน"
                 />
               )}
             </div>
@@ -2817,7 +2887,7 @@ function AvatarEditModal({
 
           <div className="wb-avatar-modal-presets">
             <label className="wb-avatar-modal-presets-label">
-              หรือเลือกจากรูปตัวอย่าง Mockup:
+              หรือเลือกจากรูปตัวอย่าง:
             </label>
             <div className="wb-avatar-modal-preset-grid">
               {AVATAR_PRESETS.map((preset) => {
@@ -3041,13 +3111,13 @@ function StudentProfile({
                     </span>
                   ) : (
                     <span className="wb-profile-avatar-badge is-default">
-                      รูปเริ่มต้น Mockup
+                      รูปเริ่มต้น
                     </span>
                   )}
                 </div>
                 <p>
                   คลิกที่รูปหรือกดปุ่มเพื่ออัปโหลดรูปภาพใหม่
-                  หรือเลือกรูปตัวอย่าง Mockup
+                  หรือเลือกรูปตัวอย่าง
                 </p>
                 <div className="wb-profile-avatar-btn-group">
                   <button
@@ -3271,6 +3341,20 @@ export default function WebBStudentArea({
   useEffect(() => {
     setActiveView(modeToView(mode));
   }, [mode]);
+
+  useEffect(() => {
+    const enforceStudentStatus = () => {
+      const account = readDemoAccount();
+      if (localStorage.getItem(DEMO_AUTH_KEY) === "true" && account && isDemoStudentSuspended(account.username, account.email)) {
+        localStorage.removeItem(DEMO_AUTH_KEY);
+        window.dispatchEvent(new Event("webb-demo-auth-updated"));
+        window.location.replace("/webb/login");
+      }
+    };
+    enforceStudentStatus();
+    window.addEventListener("storage", enforceStudentStatus);
+    return () => window.removeEventListener("storage", enforceStudentStatus);
+  }, []);
 
   useEffect(() => {
     setStudent(readStudent());

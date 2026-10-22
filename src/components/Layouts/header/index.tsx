@@ -5,6 +5,7 @@ import { MenuIcon } from "./icons";
 import { ThemeToggleSwitch } from "./theme-toggle";
 import { UserInfo } from "./user-info";
 import { useSession } from "next-auth/react";
+import { WebBAdminRoleSelector } from "@/components/webb/WebBAdminAccess";
 
 export function Header({ demoSite }: { demoSite?: "webb" }) {
   const { toggleSidebar } = useSidebarContext();
@@ -21,7 +22,7 @@ export function Header({ demoSite }: { demoSite?: "webb" }) {
       </button>
       {demoSite === "webb" ? (
         <p className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-          Web B · Demo
+          Web B · ผู้ดูแลระบบ
         </p>
       ) : session?.user.role_id ? (
         <p>
@@ -40,16 +41,19 @@ export function Header({ demoSite }: { demoSite?: "webb" }) {
 
         <div className="shrink-0">
           {demoSite === "webb" ? (
-            <button
-              type="button"
-              onClick={() => {
-                window.localStorage.removeItem("webb-admin-demo-auth");
-                window.location.assign("/webb");
-              }}
-              className="rounded-lg border border-stroke px-3 py-2 text-xs font-semibold text-dark-6 hover:bg-gray-2"
-            >
-              ออกจาก Demo Admin
-            </button>
+            <div className="flex items-center gap-2">
+              <WebBAdminRoleSelector />
+              <button
+                type="button"
+                onClick={() => {
+                  window.localStorage.removeItem("webb-admin-demo-auth");
+                  window.location.assign("/webb");
+                }}
+                className="rounded-lg border border-stroke px-3 py-2 text-xs font-semibold text-dark-6 hover:bg-gray-2"
+              >
+                ออกจากระบบ
+              </button>
+            </div>
           ) : (
             <UserInfo />
           )}

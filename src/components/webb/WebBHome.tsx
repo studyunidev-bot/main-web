@@ -342,7 +342,7 @@ export default function WebBHome() {
                 <div className="wb-benefit-image">
                   <WebBImage
                     className="wb-image"
-                    alt="ภาพ Mockup จุดเด่นระบบสอบ"
+                    alt="ภาพตัวอย่างจุดเด่นระบบสอบ"
                   />
                 </div>
                 <h3>{benefit.title}</h3>

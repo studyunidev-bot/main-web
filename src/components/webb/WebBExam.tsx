@@ -233,7 +233,7 @@ function AnswerPaper({
                 {demoPageData
                   ? `${demoPageData.questions[0]?.choices.length || 4} ตัวเลือก (1–${demoPageData.questions[0]?.choices.length || 4}) · เลือกคำตอบที่ถูกต้อง`
                   : examPlan.sections[activeSectionIndex]?.id === "tgat3"
-                    ? `${examPlan.sections[activeSectionIndex]?.choiceCount} ตัวเลือก · ดูคำชี้แจงในแต่ละข้อ บางข้อเลือกได้หลายคำตอบ`
+                    ? `${examPlan.sections[activeSectionIndex]?.choiceCount} ตัวเลือก · เลือกตอบได้หลายตัวเลือกในทุกข้อ`
                     : `${examPlan.sections[activeSectionIndex]?.choiceCount} ตัวเลือก (1–${examPlan.sections[activeSectionIndex]?.choiceCount}) · เลือกคำตอบที่ถูกต้อง`}
               </small>
             </div>
@@ -604,7 +604,11 @@ export default function WebBExam({
     setAnswers((current) => {
       const next = { ...current };
       if (responseType === "multiple") {
-        const currentChoices = Array.isArray(next[question]) ? next[question] as string[] : [];
+        const currentChoices = Array.isArray(next[question])
+          ? (next[question] as string[])
+          : next[question] !== undefined && next[question] !== ""
+            ? [String(next[question])]
+            : [];
         const selectedChoices = currentChoices.includes(String(choice))
           ? currentChoices.filter((item) => item !== String(choice))
           : [...currentChoices, String(choice)].sort((left, right) => Number(left) - Number(right));

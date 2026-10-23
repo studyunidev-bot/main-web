@@ -111,3 +111,86 @@ export function writeAdminMockRankings(rankings: DemoRankingResult[]) {
   safeWrite(WEBB_ADMIN_MOCK_RANKINGS_KEY, rankings);
   if (typeof window !== "undefined") window.dispatchEvent(new Event(WEBB_ADMIN_MOCK_UPDATED));
 }
+
+export type DemoMockAttempt = {
+  id: string;
+  student: string;
+  username?: string;
+  product: string;
+  started: string;
+  status: "ส่งแล้ว" | "กำลังสอบ" | "รอเริ่มสอบ" | "ผิดปกติ" | "ยกเลิก" | string;
+  score: string;
+  events?: { time: string; action: string; detail: string }[];
+};
+
+export const initialMockAttempts: DemoMockAttempt[] = [
+  {
+    id: "ATT-001",
+    student: "สมชาย ศิริกุล",
+    product: "Full TGAT · ชุด A",
+    started: "2026-07-15 09:10",
+    status: "ส่งแล้ว",
+    score: "60.7 / 100",
+  },
+  {
+    id: "ATT-002",
+    student: "ณิชา วัฒนกุล",
+    product: "Full TGAT · ชุด A",
+    started: "2026-10-04 13:00",
+    status: "ส่งแล้ว",
+    score: "71.2 / 100",
+  },
+  {
+    id: "ATT-003",
+    student: "ธนกร พิพัฒน์กุล",
+    product: "Full TGAT · ชุด A",
+    started: "2026-10-03 10:00",
+    status: "ส่งแล้ว",
+    score: "58.3 / 100",
+  },
+  {
+    id: "ATT-004",
+    student: "พิมพ์ชนก สุขใจ",
+    product: "Full TGAT · ชุด A",
+    started: "2026-10-02 15:00",
+    status: "ส่งแล้ว",
+    score: "66.5 / 100",
+  },
+  {
+    id: "ATT-005",
+    student: "วริศรา รุ่งเรือง",
+    username: "varisara",
+    product: "Full TGAT · ชุด A",
+    started: "2026-10-06 11:05",
+    status: "ผิดปกติ",
+    score: "—",
+    events: [
+      { time: "2026-10-06 11:05", action: "เริ่มสอบ", detail: "TGAT ชุด A · TGAT3" },
+      { time: "2026-10-06 11:38", action: "การเชื่อมต่อขาดหาย", detail: "ส่งคำตอบไม่ครบ · บันทึกสถานะผิดปกติ" },
+    ],
+  },
+  {
+    id: "ATT-006",
+    student: "ภัทรพล สว่างแจ้ง",
+    product: "Full TGAT · ชุด A",
+    started: "2026-10-01 14:20",
+    status: "ส่งแล้ว",
+    score: "74.8 / 100",
+  },
+];
+
+export const WEBB_ADMIN_MOCK_ATTEMPTS_KEY = `${WEBB_ADMIN_MOCK_PREFIX}attempts`;
+
+export function readAdminMockAttempts(): DemoMockAttempt[] {
+  return safeRead<DemoMockAttempt[]>(
+    WEBB_ADMIN_MOCK_ATTEMPTS_KEY,
+    safeRead<DemoMockAttempt[]>("webb-admin-demo:attempts", initialMockAttempts),
+  );
+}
+
+export function writeAdminMockAttempts(attempts: DemoMockAttempt[]) {
+  safeWrite(WEBB_ADMIN_MOCK_ATTEMPTS_KEY, attempts);
+  safeWrite("webb-admin-demo:attempts", attempts);
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(WEBB_ADMIN_MOCK_UPDATED));
+}
+

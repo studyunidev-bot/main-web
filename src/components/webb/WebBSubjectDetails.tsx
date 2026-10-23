@@ -7,38 +7,40 @@ import { LuArrowLeft, LuArrowRight, LuAward, LuGraduationCap } from "react-icons
 import { PublicShell } from "./PublicShell";
 import { DEMO_AUTH_KEY } from "./demo-store";
 
+import {
+  type TutorSubject,
+  defaultTgatSubjects,
+  defaultALevelSubjects,
+  getTutorsForCategory,
+} from "./webb-tutors";
+
 type SubjectKind = "tgat" | "a-level";
-type TutorSubject = { id: string; title: string; tutor: string; image: string; bullets: string[] };
-
-const tgatSubjects: TutorSubject[] = [
-  { id: "tgat1", title: "TGAT 1 การสื่อสารภาษาอังกฤษ", tutor: "ติวเตอร์แมว", image: "/images/user/user-01.png", bullets: ["ติว TGAT ภาษาอังกฤษ", "เทคนิคทำข้อสอบ", "นักเรียนกว่า 300 คน"] },
-  { id: "tgat2", title: "TGAT 2 การคิดอย่างมีเหตุผล", tutor: "ติวเตอร์แมว", image: "/images/user/user-02.png", bullets: ["ติว TGAT ภาษาอังกฤษ", "เทคนิคทำข้อสอบ", "นักเรียนกว่า 300 คน"] },
-  { id: "tgat3", title: "TGAT 3 สมรรถนะการทำงาน", tutor: "ติวเตอร์แมว", image: "/images/user/user-03.png", bullets: ["ติว TGAT ภาษาอังกฤษ", "เทคนิคทำข้อสอบ", "นักเรียนกว่า 300 คน"] },
-];
-
-const aLevelSubjects: TutorSubject[] = [
-  { id: "math-1", title: "คณิตศาสตร์ประยุกต์ 1", tutor: "ติวเตอร์แมว", image: "/images/user/user-01.png", bullets: ["ติวเข้ามหาวิทยาลัย", "เทคนิคทำข้อสอบ", "นักเรียนกว่า 300 คน"] },
-  { id: "math-2", title: "คณิตศาสตร์ประยุกต์ 2", tutor: "ติวเตอร์แมว", image: "/images/user/user-02.png", bullets: ["ติวเข้ามหาวิทยาลัย", "เทคนิคทำข้อสอบ", "นักเรียนกว่า 300 คน"] },
-  { id: "science", title: "วิทยาศาสตร์ประยุกต์", tutor: "ติวเตอร์แมว", image: "/images/user/user-03.png", bullets: ["ติวสอบ TGAT/TPAT", "เทคนิคทำข้อสอบ", "นักเรียนกว่า 300 คน"] },
-  { id: "physics", title: "ฟิสิกส์", tutor: "ติวเตอร์แมว", image: "/images/user/user-04.png", bullets: ["เขียนโจทย์คำนวณ", "เทคนิคทำข้อสอบ", "นักเรียนกว่า 300 คน"] },
-  { id: "chemistry", title: "เคมี", tutor: "ติวเตอร์แมว", image: "/images/user/user-05.png", bullets: ["ติวเข้าคณะเเพทย์", "เทคนิคทำข้อสอบ", "นักเรียนกว่า 350 คน"] },
-  { id: "biology", title: "ชีววิทยา", tutor: "ติวเตอร์แมว", image: "/images/user/user-06.png", bullets: ["เขียนเจาะเนื้อหาชีวะ", "เทคนิคทำข้อสอบ", "นักเรียนกว่า 300 คน"] },
-  { id: "social", title: "สังคมศึกษา", tutor: "ติวเตอร์แมว", image: "/images/user/user-07.png", bullets: ["ติวสอบเข้ามหาวิทยาลัย", "เทคนิคทำข้อสอบ", "นักเรียนกว่า 250 คน"] },
-  { id: "thai", title: "ภาษาไทย", tutor: "ติวเตอร์แมว", image: "/images/user/user-08.png", bullets: ["เขียนเจาะการจับใจความ", "เทคนิคทำข้อสอบ", "นักเรียนกว่า 400 คน"] },
-  { id: "english", title: "ภาษาอังกฤษ", tutor: "ติวเตอร์แมว", image: "/images/user/user-09.png", bullets: ["ติว TGAT ภาษาอังกฤษ", "เทคนิคทำข้อสอบ", "นักเรียนกว่า 500 คน"] },
-];
 
 export default function WebBSubjectDetails({ kind }: { kind: SubjectKind }) {
   const isALevel = kind === "a-level";
-  const subjects = isALevel ? aLevelSubjects : tgatSubjects;
+  const defaultList = isALevel ? defaultALevelSubjects : defaultTgatSubjects;
+  const [tutorList, setTutorList] = useState<TutorSubject[]>(defaultList);
   const [examSet, setExamSet] = useState(isALevel ? "B" : "A");
   const [selected, setSelected] = useState<string[]>(isALevel ? ["math-2"] : []);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const selectedSubjects = subjects.filter((subject) => selected.includes(subject.id));
+  const selectedSubjects = tutorList.filter((subject) => selected.includes(subject.id));
   const subjectLabel = isALevel ? "A-Level ความรู้เชิงวิชาการ" : "TGAT ความถนัดทั่วไป";
   const description = isALevel
     ? "A-Level คือการสอบวัดความรู้เชิงวิชาการ เพื่อใช้ยื่นเข้าศึกษาต่อในระดับมหาวิทยาลัย ครอบคลุมวิชาหลักที่ผู้เรียนเลือกได้ตามคณะเป้าหมาย"
     : "TGAT ย่อมาจาก Thai General Aptitude Test หรือการสอบวัดสมรรถนะความถนัดทั่วไป เป็นข้อสอบกลางในระบบ TCAS ที่ใช้ประเมินทักษะการคิดวิเคราะห์และการประยุกต์ใช้ความรู้ในชีวิตประจำวัน แทนการท่องจำเนื้อหา";
+
+  useEffect(() => {
+    const loadTutors = () => {
+      setTutorList(getTutorsForCategory(kind));
+    };
+    loadTutors();
+    window.addEventListener("webb-tutors-updated", loadTutors);
+    window.addEventListener("storage", loadTutors);
+    return () => {
+      window.removeEventListener("webb-tutors-updated", loadTutors);
+      window.removeEventListener("storage", loadTutors);
+    };
+  }, [kind, isALevel]);
 
   useEffect(() => {
     const syncAuth = () => {
@@ -150,7 +152,7 @@ export default function WebBSubjectDetails({ kind }: { kind: SubjectKind }) {
               <span>ข้อสอบชุด {examSet}</span>
             </header>
             <div className={`wb-tutor-grid${isALevel ? " is-a-level" : ""}`}>
-              {subjects.map((subject) => {
+              {tutorList.map((subject) => {
                 const checked = selected.includes(subject.id);
                 return (
                   <article
@@ -171,11 +173,11 @@ export default function WebBSubjectDetails({ kind }: { kind: SubjectKind }) {
                       <p>{subject.tutor}</p>
                       <span className="wb-tutor-meta">
                         <LuGraduationCap aria-hidden="true" />
-                        <span>ครุศาสตร์ จุฬาลงกรณ์มหาวิทยาลัย</span>
+                        <span>{subject.education || "ครุศาสตร์ จุฬาลงกรณ์มหาวิทยาลัย"}</span>
                       </span>
                       <span className="wb-tutor-meta">
                         <LuAward aria-hidden="true" />
-                        <span>ประสบการณ์ 5 ปี</span>
+                        <span>{subject.experience || "ประสบการณ์ 5 ปี"}</span>
                       </span>
                       <ul className="wb-tutor-bullets">
                         {subject.bullets.map((bullet) => (

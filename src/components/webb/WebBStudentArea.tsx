@@ -33,8 +33,10 @@ import { QRCodeSVG } from "qrcode.react";
 import { PublicFooter, WebBBrand } from "./PublicShell";
 import { getProduct } from "./data";
 import { WebBImage } from "./WebBImage";
+import WebBFullAnalysisPdfReport from "./WebBFullAnalysisPdfReport";
 import {
   areDemoResultsPublished,
+  setDemoResultsPublished,
   DEMO_ACCOUNT_KEY,
   DEMO_AUTH_KEY,
   DEMO_RANKINGS_KEY,
@@ -208,7 +210,7 @@ type ExamPartReport = {
   skills: ExamSkill[];
 };
 
-const examPartReports: Record<string, ExamPartReport> = {
+export const examPartReports: Record<string, ExamPartReport> = {
   tgat1: {
     id: "TGAT1",
     label: "TGAT1 · 91",
@@ -1223,31 +1225,47 @@ function ExamRoom() {
   );
 }
 
-function ExamResults({ onSelect }: { onSelect: (view: StudentView) => void }) {
+function ExamResults({
+  onSelect,
+  student = defaultStudent,
+}: {
+  onSelect: (view: StudentView) => void;
+  student?: StudentInfo;
+}) {
   const [published, setPublished] = useState(true);
   const [score, setScore] = useState<number | null>(null);
   useEffect(() => {
     const refresh = () => {
-      setPublished(areDemoResultsPublished());
       const account = readDemoAccount();
+      let studentScore: number | null = null;
       try {
         const records = JSON.parse(localStorage.getItem(DEMO_RANKINGS_KEY) || "[]") as { username: string; score: number }[];
-        setScore(records.find((record) => record.username.toLowerCase() === account?.username.toLowerCase())?.score ?? null);
-      } catch { setScore(null); }
+        studentScore = records.find((record) => record.username.toLowerCase() === account?.username.toLowerCase())?.score ?? null;
+      } catch { studentScore = null; }
+      setScore(studentScore);
+
+      const hasSubmitted = studentScore !== null || readCurrentDemoPurchases().some((purchase) => purchase.examStatus === "submitted");
+      setPublished(hasSubmitted || areDemoResultsPublished());
     };
     refresh();
     window.addEventListener("webb-demo-ranking-updated", refresh);
     window.addEventListener("webb-admin-demo-updated", refresh);
+    window.addEventListener("webb-admin-mock-updated", refresh);
     window.addEventListener("storage", refresh);
     return () => {
       window.removeEventListener("webb-demo-ranking-updated", refresh);
       window.removeEventListener("webb-admin-demo-updated", refresh);
+      window.removeEventListener("webb-admin-mock-updated", refresh);
       window.removeEventListener("storage", refresh);
     };
   }, []);
   if (!published) return <div className="wb-dashboard-view"><section className="wb-dashboard-card"><h2>กำลังตรวจสอบผลสอบ</h2><p>ผลสอบจะปรากฏเมื่อผู้ดูแลเผยแพร่ผลแล้ว</p></section></div>;
   return (
     <div className="wb-dashboard-view">
+      <WebBFullAnalysisPdfReport
+        student={student}
+        displayScore={score ?? 60.7}
+      />
       <section className="wb-dashboard-card wb-result-summary">
         <div>
           <span className="wb-subject-chip">
@@ -1309,20 +1327,26 @@ function ResultDetails({
   const [score, setScore] = useState<number | null>(null);
   useEffect(() => {
     const refresh = () => {
-      setPublished(areDemoResultsPublished());
       const account = readDemoAccount();
+      let studentScore: number | null = null;
       try {
         const records = JSON.parse(localStorage.getItem(DEMO_RANKINGS_KEY) || "[]") as { username: string; score: number }[];
-        setScore(records.find((record) => record.username.toLowerCase() === account?.username.toLowerCase())?.score ?? null);
-      } catch { setScore(null); }
+        studentScore = records.find((record) => record.username.toLowerCase() === account?.username.toLowerCase())?.score ?? null;
+      } catch { studentScore = null; }
+      setScore(studentScore);
+
+      const hasSubmitted = studentScore !== null || readCurrentDemoPurchases().some((purchase) => purchase.examStatus === "submitted");
+      setPublished(hasSubmitted || areDemoResultsPublished());
     };
     refresh();
     window.addEventListener("webb-demo-ranking-updated", refresh);
     window.addEventListener("webb-admin-demo-updated", refresh);
+    window.addEventListener("webb-admin-mock-updated", refresh);
     window.addEventListener("storage", refresh);
     return () => {
       window.removeEventListener("webb-demo-ranking-updated", refresh);
       window.removeEventListener("webb-admin-demo-updated", refresh);
+      window.removeEventListener("webb-admin-mock-updated", refresh);
       window.removeEventListener("storage", refresh);
     };
   }, []);
@@ -1330,6 +1354,10 @@ function ResultDetails({
   const displayScore = score ?? 60.7;
   return (
     <div className="wb-dashboard-view wb-detail-view">
+      <WebBFullAnalysisPdfReport
+        student={student}
+        displayScore={displayScore}
+      />
       <div className="wb-detail-back">
         <button
           type="button"
@@ -1437,7 +1465,7 @@ function ResultDetails({
   );
 }
 
-const TGAT1_SPEAKING_QUESTIONS = [
+export const TGAT1_SPEAKING_QUESTIONS = [
   { no: 1, ans: "A", correct: true, score: "1.00" },
   { no: 2, ans: "C", correct: true, score: "1.00" },
   { no: 3, ans: "B", correct: true, score: "1.00" },
@@ -1470,7 +1498,7 @@ const TGAT1_SPEAKING_QUESTIONS = [
   { no: 30, ans: "B", correct: true, score: "1.00" },
 ];
 
-const TGAT1_READING_QUESTIONS = [
+export const TGAT1_READING_QUESTIONS = [
   { no: 1, ans: "A", correct: true, score: "1.00" },
   { no: 2, ans: "C", correct: true, score: "1.00" },
   { no: 3, ans: "B", correct: true, score: "1.00" },
@@ -1546,7 +1574,7 @@ function SubResultCrossIcon({ className = "" }: { className?: string }) {
   );
 }
 
-type QuestionResult = {
+export type QuestionResult = {
   no: string | number;
   ans: string;
   correct?: boolean;
@@ -1556,7 +1584,7 @@ type QuestionResult = {
   isWrong?: boolean;
 };
 
-const TGAT3_SKILL1_QUESTIONS: QuestionResult[] = [
+export const TGAT3_SKILL1_QUESTIONS: QuestionResult[] = [
   { no: 1, ans: "C", badge: "1", score: "0.00", isWrong: true },
   { no: 2, ans: "2,3,4", badge: "1", score: "1.00", note: "หลายข้อ" },
   {
@@ -1591,7 +1619,7 @@ const TGAT3_SKILL1_QUESTIONS: QuestionResult[] = [
   { no: 15, ans: "1,2", badge: "1", score: "1.00", note: "หลายข้อ" },
 ];
 
-const TGAT3_SKILL2_QUESTIONS: QuestionResult[] = [
+export const TGAT3_SKILL2_QUESTIONS: QuestionResult[] = [
   { no: 16, ans: "4", badge: "0.5", score: "0.50", note: "หลายข้อ" },
   { no: 17, ans: "C", badge: "0", score: "0.00", isWrong: true },
   { no: 18, ans: "A", badge: "0.25", score: "0.25" },
@@ -1609,7 +1637,7 @@ const TGAT3_SKILL2_QUESTIONS: QuestionResult[] = [
   { no: 30, ans: "C", badge: "0", score: "0.00", isWrong: true },
 ];
 
-const TGAT3_SKILL3_QUESTIONS: QuestionResult[] = [
+export const TGAT3_SKILL3_QUESTIONS: QuestionResult[] = [
   { no: 31, ans: "D", badge: "check", score: "1.00", correct: true },
   { no: 32, ans: "C", badge: "check", score: "1.00", correct: true },
   { no: 33, ans: "C", badge: "check", score: "1.00", correct: true },
@@ -1627,7 +1655,7 @@ const TGAT3_SKILL3_QUESTIONS: QuestionResult[] = [
   { no: 45, ans: "A", badge: "cross", score: "0.00", isWrong: true },
 ];
 
-const TGAT3_SKILL4_QUESTIONS: QuestionResult[] = [
+export const TGAT3_SKILL4_QUESTIONS: QuestionResult[] = [
   { no: 46, ans: "D", badge: "check", score: "1.00", correct: true },
   { no: 47, ans: "C", badge: "check", score: "1.00", correct: true },
   { no: 48, ans: "C", badge: "check", score: "1.00", correct: true },
@@ -1673,7 +1701,7 @@ function renderResultBadge(q: QuestionResult) {
   return q.correct ? <SubResultCheckIcon /> : <SubResultCrossIcon />;
 }
 
-function getSubResultQuestions(
+export function getSubResultQuestions(
   partId: string,
   skillName: string,
   skillIndex: number,
@@ -2169,10 +2197,12 @@ function Ranking({
     refresh();
     window.addEventListener("webb-demo-ranking-updated", refresh);
     window.addEventListener("webb-admin-demo-updated", refresh);
+    window.addEventListener("webb-admin-mock-updated", refresh);
     window.addEventListener("storage", refresh);
     return () => {
       window.removeEventListener("webb-demo-ranking-updated", refresh);
       window.removeEventListener("webb-admin-demo-updated", refresh);
+      window.removeEventListener("webb-admin-mock-updated", refresh);
       window.removeEventListener("storage", refresh);
     };
   }, []);
@@ -3503,7 +3533,7 @@ export default function WebBStudentArea({
           ) : activeView === "exam" ? (
             <ExamRoom />
           ) : activeView === "results" ? (
-            <ExamResults onSelect={selectView} />
+            <ExamResults onSelect={selectView} student={student} />
           ) : activeView === "subresults" ? (
             <ExamPartDetails
               partId={selectedPart}
@@ -3530,7 +3560,7 @@ export default function WebBStudentArea({
           ) : activeView === "solutions" ? (
             <StudentSolutions onAction={setNotice} />
           ) : activeView === "ranking" ? (
-            <ExamResults onSelect={selectView} />
+            <ExamResults onSelect={selectView} student={student} />
           ) : null}
           {notice && (
             <p className="wb-dashboard-notice" role="status">

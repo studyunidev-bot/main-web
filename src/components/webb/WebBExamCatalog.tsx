@@ -15,25 +15,37 @@ import {
   LuActivity,
   LuChartNoAxesCombined,
   LuCirclePlay,
+  LuDownload,
   LuFileText,
+  LuImage,
   LuKeyRound,
   LuLayoutDashboard,
   LuPencil,
   LuPlus,
   LuTag,
   LuTrash2,
+  LuUpload,
+  LuUser,
 } from "react-icons/lu";
 import AdminSelect from "@/components/ui/AdminSelect";
+import { downloadCsvData } from "./WebBAdminTable";
 import { WebBAdminRoleContext } from "./WebBAdminAccess";
+import {
+  type TutorSubject,
+  getTutorsForCategory,
+  saveTutorsForCategory,
+} from "./webb-tutors";
 import { safeRead, type DemoPurchase } from "./demo-store";
 import { getExamPlan } from "./exam-documents";
 import WebBExamApprovals, { readExamRequests } from "./WebBExamApprovals";
 import WebBAdminDemo from "./WebBAdminDemo";
+import WebBModalPortal from "./WebBModalPortal";
 import { confirmWebBAction } from "./confirm";
 import WebBAdminInput from "./WebBAdminInput";
 import { WEBB_PRODUCTS } from "./data";
 import {
   adminMockKey,
+  readAdminMockAttempts,
   readAdminMockPurchases,
   readAdminMockRankings,
   WEBB_ADMIN_MOCK_UPDATED,
@@ -61,13 +73,6 @@ const primaryButton =
 const choiceButton =
   "rounded-lg border px-3 py-2 text-sm font-semibold transition-colors";
 
-type EntryModalState = {
-  kind: "subject" | "set";
-  mode: "add" | "edit";
-  id?: string;
-  name: string;
-  error?: string;
-};
 
 type PartModalState = {
   mode: "add" | "edit" | "manage";
@@ -323,7 +328,7 @@ function formatPrice(price: number) {
 function samplePayPrice(price: number) {
   return (
     ({ 100: 110, 179: 197, 180: 198, 249: 274 } as Record<number, number>)[
-      price
+    price
     ] ?? price
   );
 }
@@ -352,9 +357,6 @@ export default function WebBExamCatalog({
   const [selectedId, setSelectedId] = useState(focusFamilyId || "");
   const [subjectId, setSubjectId] = useState("");
   const [setId, setSetId] = useState("");
-  const [newFamilyName, setNewFamilyName] = useState("");
-  const [newFlow, setNewFlow] = useState<CatalogFlow>("subject-first");
-  const [entryModal, setEntryModal] = useState<EntryModalState | null>(null);
   const [partModal, setPartModal] = useState<PartModalState | null>(null);
   const [offerModal, setOfferModal] = useState<{
     id?: string;
@@ -367,6 +369,43 @@ export default function WebBExamCatalog({
     error?: string;
   } | null>(null);
   const [message, setMessage] = useState("");
+  const [tutorModal, setTutorModal] = useState<{
+    isOpen: boolean;
+    category: string;
+    setName: string;
+    selectedIndex: number;
+    tutors: TutorSubject[];
+  } | null>(null);
+
+  const openTutorModal = (
+    setName: string,
+    categoryId = selectedId || "tgat",
+    initialIndex = 0,
+    partName?: string,
+  ) => {
+    const kind = categoryId === "alevel" || categoryId === "a-level" ? "a-level" : "tgat";
+    const current = getTutorsForCategory(kind);
+    let matchedIndex = initialIndex;
+    if (partName) {
+      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, "");
+      const target = norm(partName);
+      const found = current.findIndex((t) => {
+        const tNorm = norm(t.title || "");
+        const idNorm = norm(t.id || "");
+        return tNorm.includes(target) || target.includes(tNorm) || idNorm.includes(target) || target.includes(idNorm);
+      });
+      if (found !== -1) matchedIndex = found;
+    }
+    const validIndex = Math.max(0, Math.min(matchedIndex, Math.max(0, current.length - 1)));
+    setTutorModal({
+      isOpen: true,
+      category: kind,
+      setName,
+      selectedIndex: validIndex,
+      tutors: JSON.parse(JSON.stringify(current)),
+    });
+  };
+
   const [managementTab, setManagementTab] = useState<SetManagementTab>(
     focusFamilyId === "tgat" &&
       focusSetId === "tgat-a" &&
@@ -403,11 +442,6 @@ export default function WebBExamCatalog({
   const openerRef = useRef<HTMLElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
-  const entryInputRef = useRef<HTMLInputElement | null>(null);
-  const entryDialogRef = useRef<HTMLElement | null>(null);
-  const entryOpenerRef = useRef<HTMLElement | null>(null);
-  const entryModalRef = useRef<EntryModalState | null>(null);
-  entryModalRef.current = entryModal;
 
   useEffect(() => {
     setManagementTab(
@@ -455,35 +489,8 @@ export default function WebBExamCatalog({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        if (entryModalRef.current) {
-          closeEntryModal();
-        } else {
-          setSelectedId("");
-          requestAnimationFrame(() => openerRef.current?.focus());
-        }
-      }
-      if (
-        event.key === "Tab" &&
-        entryModalRef.current &&
-        entryDialogRef.current
-      ) {
-        const controls = Array.from(
-          entryDialogRef.current.querySelectorAll<HTMLElement>(
-            "button:not([disabled]), input:not([disabled])",
-          ),
-        );
-        if (controls.length) {
-          const first = controls[0];
-          const last = controls[controls.length - 1];
-          if (event.shiftKey && document.activeElement === first) {
-            event.preventDefault();
-            last.focus();
-          } else if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault();
-            first.focus();
-          }
-        }
-        return;
+        setSelectedId("");
+        requestAnimationFrame(() => openerRef.current?.focus());
       }
       if (event.key !== "Tab" || !dialogRef.current) return;
       const controls = Array.from(
@@ -510,10 +517,6 @@ export default function WebBExamCatalog({
   }, [selectedId, isSetPage]);
 
   useEffect(() => {
-    if (entryModal) entryInputRef.current?.focus();
-  }, [entryModal?.kind, entryModal?.mode]);
-
-  useEffect(() => {
     setPortalTarget(document.body);
   }, []);
 
@@ -523,7 +526,7 @@ export default function WebBExamCatalog({
       setAdminMockData({
         purchases: readAdminMockPurchases(),
         requests,
-        attempts: safeRead(adminMockKey("attempts"), []),
+        attempts: readAdminMockAttempts(),
         rankings: readAdminMockRankings(),
         solutions: safeRead(adminMockKey("mock-solutions"), []),
       });
@@ -553,22 +556,29 @@ export default function WebBExamCatalog({
   const focusedSubject =
     isSetPage && selected?.flow === "subject-first"
       ? selected.subjects.find((subject) =>
-          subject.sets.some((set) => set.id === focusSetId),
-        )
+        subject.sets.some((set) => set.id === focusSetId),
+      )
       : undefined;
   const selectedSubject =
     selected?.flow === "subject-first"
       ? focusedSubject ||
-        selected.subjects.find((subject) => subject.id === subjectId) ||
-        selected.subjects[0]
+      selected.subjects.find((subject) => subject.id === subjectId) ||
+      selected.subjects[0]
       : undefined;
   const sets =
     selected?.flow === "set-first"
       ? selected.sets
       : selectedSubject?.sets || [];
-  const selectedSet = isSetPage
-    ? sets.find((set) => set.id === focusSetId)
-    : sets.find((set) => set.id === setId) || sets[0];
+  const fallbackSet: CatalogSet = {
+    id: "default-set",
+    name: "A",
+    parts: [],
+    offers: [],
+  };
+  const selectedSet =
+    (isSetPage
+      ? sets.find((set) => set.id === focusSetId)
+      : sets.find((set) => set.id === setId) || sets[0]) || fallbackSet;
   const isTgatA =
     isSetPage && selected?.id === "tgat" && selectedSet?.id === "tgat-a";
   const managedPartProductId = partModal?.part
@@ -595,7 +605,7 @@ export default function WebBExamCatalog({
   const matchesSet = (examSet?: string) =>
     !selectedSet ||
     (examSet || "A").toLocaleUpperCase() ===
-      selectedSet.name.toLocaleUpperCase();
+    selectedSet.name.toLocaleUpperCase();
   const scopedPurchases = adminMockData.purchases.filter(
     (purchase) =>
       isRelevantProduct(purchase.productId, purchase.productId) &&
@@ -623,9 +633,9 @@ export default function WebBExamCatalog({
   );
   const futureDemoRecord =
     selected?.id &&
-    selected.id !== "tgat" &&
-    selectedSet?.name === "A" &&
-    selectedSubject?.id === futureDemoRecords[selected.id]?.subjectId
+      selected.id !== "tgat" &&
+      selectedSet?.name === "A" &&
+      selectedSubject?.id === futureDemoRecords[selected.id]?.subjectId
       ? futureDemoRecords[selected.id]
       : undefined;
   const adminProducts = safeRead<
@@ -786,7 +796,7 @@ export default function WebBExamCatalog({
               (examSettings.find((section) => section.id === id)
                 ?.questionCount ||
                 ({ tgat1: 60, tgat2: 80, tgat3: 60 } as Record<string, number>)[
-                  id
+                id
                 ] ||
                 0),
             0,
@@ -843,24 +853,24 @@ export default function WebBExamCatalog({
       (family) =>
         family.flow === "set-first"
           ? {
-              ...family,
-              sets: family.sets.map((set) =>
-                set.id === selectedSet.id ? change(set) : set,
-              ),
-            }
+            ...family,
+            sets: family.sets.map((set) =>
+              set.id === selectedSet.id ? change(set) : set,
+            ),
+          }
           : {
-              ...family,
-              subjects: family.subjects.map((subject) =>
-                subject.id === selectedSubject?.id
-                  ? {
-                      ...subject,
-                      sets: subject.sets.map((set) =>
-                        set.id === selectedSet.id ? change(set) : set,
-                      ),
-                    }
-                  : subject,
-              ),
-            },
+            ...family,
+            subjects: family.subjects.map((subject) =>
+              subject.id === selectedSubject?.id
+                ? {
+                  ...subject,
+                  sets: subject.sets.map((set) =>
+                    set.id === selectedSet.id ? change(set) : set,
+                  ),
+                }
+                : subject,
+            ),
+          },
       notice,
     );
   }
@@ -879,155 +889,6 @@ export default function WebBExamCatalog({
     requestAnimationFrame(() => openerRef.current?.focus());
   }
 
-  function openEntryModal(
-    event: ReactMouseEvent<HTMLButtonElement>,
-    modal: EntryModalState,
-  ) {
-    entryOpenerRef.current = event.currentTarget;
-    setEntryModal(modal);
-  }
-
-  function closeEntryModal() {
-    setEntryModal(null);
-    requestAnimationFrame(() => entryOpenerRef.current?.focus());
-  }
-
-  function addFamily() {
-    if (!canEdit) return;
-    const name = newFamilyName.trim();
-    if (!name) return setMessage("กรอกชื่อประเภทสอบก่อนเพิ่ม");
-    if (
-      families.some(
-        (family) =>
-          family.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
-      )
-    )
-      return setMessage("มีประเภทสอบชื่อนี้แล้ว");
-    const family: CatalogFamily = {
-      id: makeId("family"),
-      name,
-      description: "ประเภทสอบใหม่ · รอเตรียมข้อมูล",
-      flow: newFlow,
-      status: "draft",
-      subjects: [],
-      sets: [],
-    };
-    save([...families, family], `เพิ่ม ${name} เป็นร่างแล้ว`);
-    chooseFamily(family.id);
-    setMessage(`เพิ่ม ${name} เป็นร่างแล้ว`);
-    setNewFamilyName("");
-  }
-
-  function saveEntryModal(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!entryModal || !selected || !canEdit) return;
-    const name = entryModal.name.trim();
-    if (!name)
-      return setEntryModal({
-        ...entryModal,
-        error:
-          entryModal.kind === "subject"
-            ? "กรอกชื่อวิชาย่อยก่อนบันทึก"
-            : "กรอกชื่อชุดสอบก่อนบันทึก",
-      });
-
-    if (entryModal.kind === "subject") {
-      const duplicate = selected.subjects.some(
-        (subject) =>
-          subject.id !== entryModal.id &&
-          subject.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
-      );
-      if (duplicate)
-        return setEntryModal({ ...entryModal, error: "มีวิชาย่อยชื่อนี้แล้ว" });
-      if (entryModal.mode === "add") {
-        const id = makeId("subject");
-        updateFamily(
-          (family) => ({
-            ...family,
-            subjects: [...family.subjects, { id, name, sets: [] }],
-          }),
-          `เพิ่ม ${name} แล้ว`,
-        );
-        setSubjectId(id);
-        setSetId("");
-      } else {
-        updateFamily(
-          (family) => ({
-            ...family,
-            subjects: family.subjects.map((subject) =>
-              subject.id === entryModal.id ? { ...subject, name } : subject,
-            ),
-          }),
-          `เปลี่ยนชื่อวิชาเป็น ${name} แล้ว`,
-        );
-      }
-    } else {
-      const duplicate = sets.some(
-        (set) =>
-          set.id !== entryModal.id &&
-          set.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
-      );
-      if (duplicate)
-        return setEntryModal({
-          ...entryModal,
-          error: "มีชุดสอบชื่อนี้ในระดับนี้แล้ว",
-        });
-      if (entryModal.mode === "add") {
-        if (selected.flow === "subject-first" && !selectedSubject)
-          return setEntryModal({
-            ...entryModal,
-            error: "เลือกหรือเพิ่มวิชาย่อยก่อนสร้างชุดสอบ",
-          });
-        const set: CatalogSet = {
-          id: makeId("set"),
-          name,
-          parts: [],
-          offers: [],
-        };
-        updateFamily(
-          (family) =>
-            family.flow === "set-first"
-              ? { ...family, sets: [...family.sets, set] }
-              : {
-                  ...family,
-                  subjects: family.subjects.map((subject) =>
-                    subject.id === selectedSubject?.id
-                      ? { ...subject, sets: [...subject.sets, set] }
-                      : subject,
-                  ),
-                },
-          `เพิ่มชุด ${name} แล้ว`,
-        );
-        setSetId(set.id);
-      } else {
-        updateFamily(
-          (family) =>
-            family.flow === "set-first"
-              ? {
-                  ...family,
-                  sets: family.sets.map((set) =>
-                    set.id === entryModal.id ? { ...set, name } : set,
-                  ),
-                }
-              : {
-                  ...family,
-                  subjects: family.subjects.map((subject) =>
-                    subject.id === selectedSubject?.id
-                      ? {
-                          ...subject,
-                          sets: subject.sets.map((set) =>
-                            set.id === entryModal.id ? { ...set, name } : set,
-                          ),
-                        }
-                      : subject,
-                  ),
-                },
-          `เปลี่ยนชื่อชุดเป็น ${name} แล้ว`,
-        );
-      }
-    }
-    closeEntryModal();
-  }
 
   function openPartModal(mode: PartModalState["mode"], part?: string) {
     const settings = part ? selectedSet?.partSettings?.[part] : undefined;
@@ -1136,13 +997,13 @@ export default function WebBExamCatalog({
           partSettings,
           ...(partModal.mode === "edit" && previousPart !== name
             ? {
-                offers: set.offers.map((offer) => ({
-                  ...offer,
-                  parts: offer.parts.map((part) =>
-                    part === previousPart ? name : part,
-                  ),
-                })),
-              }
+              offers: set.offers.map((offer) => ({
+                ...offer,
+                parts: offer.parts.map((part) =>
+                  part === previousPart ? name : part,
+                ),
+              })),
+            }
             : {}),
         };
       },
@@ -1240,7 +1101,7 @@ export default function WebBExamCatalog({
   }
 
   async function removeItem(
-    kind: "subject" | "set" | "part" | "offer",
+    kind: "part" | "offer",
     id: string,
   ) {
     if (!canEdit) return;
@@ -1251,36 +1112,7 @@ export default function WebBExamCatalog({
       danger: true,
     });
     if (!confirmed) return;
-    if (kind === "subject") {
-      updateFamily(
-        (family) => ({
-          ...family,
-          subjects: family.subjects.filter((subject) => subject.id !== id),
-        }),
-        "ลบวิชาย่อยแล้ว",
-      );
-      setSubjectId("");
-      setSetId("");
-    } else if (kind === "set") {
-      updateFamily(
-        (family) =>
-          family.flow === "set-first"
-            ? { ...family, sets: family.sets.filter((set) => set.id !== id) }
-            : {
-                ...family,
-                subjects: family.subjects.map((subject) =>
-                  subject.id === selectedSubject?.id
-                    ? {
-                        ...subject,
-                        sets: subject.sets.filter((set) => set.id !== id),
-                      }
-                    : subject,
-                ),
-              },
-        "ลบชุดสอบแล้ว",
-      );
-      setSetId("");
-    } else if (kind === "part") {
+    if (kind === "part") {
       updateSet((set) => {
         const partSettings = { ...set.partSettings };
         delete partSettings[id];
@@ -1316,15 +1148,14 @@ export default function WebBExamCatalog({
           }
         >
           <h1
-            className={`mt-1 text-2xl font-extrabold ${
-              isSetPage ? "shrink-0" : ""
-            }`}
+            className={`mt-1 text-2xl font-extrabold ${isSetPage ? "shrink-0" : ""
+              }`}
           >
             {isSetPage
               ? `${selected?.name || "ประเภทสอบ"} · ชุด ${selectedSet?.name || "..."}`
               : "คลังข้อสอบ"}
           </h1>
-        {/* {isSetPage ? (
+          {/* {isSetPage ? (
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
             <Link
               href="/webb/admin/exam-catalog"
@@ -1343,51 +1174,51 @@ export default function WebBExamCatalog({
             แล้วเลือกชุดที่ต้องการจัดการ
           </p>
         )} */}
-        {isSetPage && selected && selectedSet && (
-          <nav
-            aria-label={`เมนูจัดการ ${selected.name} ชุด ${selectedSet.name}`}
-            className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto py-1"
-          >
-            {setManagementTabs
-              .filter((tab) => !isTgatA || tab.id !== "offers")
-              .map((tab) => {
-                const warning = menuNeedsAttention(tab.id);
-                const active = managementTab === tab.id;
-                const TabIcon = managementTabIcons[tab.id];
-                const label =
-                  tab.id === "overview"
-                    ? `ภาพรวมชุด ${selectedSet.name}`
-                    : tab.label;
-                const warningHint =
-                  tab.id === "content"
-                    ? "ยังไม่มีพาร์ทหรือข้อมูลข้อสอบในชุดนี้"
-                    : tab.id === "access"
-                      ? "มีคำร้องล่าสุดรอการพิจารณา · เปิดเมนูและดำเนินการเพื่อเคลียร์แจ้งเตือน"
-                      : "";
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    aria-current={active ? "step" : undefined}
-                    title={warning ? warningHint : undefined}
-                    onClick={() => openManagementTab(tab.id)}
-                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-semibold ${active ? "bg-[#211d4f] text-white" : warning ? "border border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
-                  >
-                    <TabIcon aria-hidden="true" className="size-4 shrink-0" />
-                    {label}
-                    {warning && (
-                      <span
-                        aria-hidden="true"
-                        className="inline-flex min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[11px] font-extrabold leading-none text-white"
-                      >
-                        {tab.id === "access" ? unreadAccessCount : "!"}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-          </nav>
-        )}
+          {isSetPage && selected && selectedSet && (
+            <nav
+              aria-label={`เมนูจัดการ ${selected.name} ชุด ${selectedSet.name}`}
+              className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto py-1"
+            >
+              {setManagementTabs
+                .filter((tab) => !isTgatA || tab.id !== "offers")
+                .map((tab) => {
+                  const warning = menuNeedsAttention(tab.id);
+                  const active = managementTab === tab.id;
+                  const TabIcon = managementTabIcons[tab.id];
+                  const label =
+                    tab.id === "overview"
+                      ? `ภาพรวมชุด ${selectedSet.name}`
+                      : tab.label;
+                  const warningHint =
+                    tab.id === "content"
+                      ? "ยังไม่มีพาร์ทหรือข้อมูลข้อสอบในชุดนี้"
+                      : tab.id === "access"
+                        ? "มีคำร้องล่าสุดรอการพิจารณา · เปิดเมนูและดำเนินการเพื่อเคลียร์แจ้งเตือน"
+                        : "";
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      aria-current={active ? "step" : undefined}
+                      title={warning ? warningHint : undefined}
+                      onClick={() => openManagementTab(tab.id)}
+                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-semibold ${active ? "bg-[#211d4f] text-white" : warning ? "border border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+                    >
+                      <TabIcon aria-hidden="true" className="size-4 shrink-0" />
+                      {label}
+                      {warning && (
+                        <span
+                          aria-hidden="true"
+                          className="inline-flex min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[11px] font-extrabold leading-none text-white"
+                        >
+                          {tab.id === "access" ? unreadAccessCount : "!"}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+            </nav>
+          )}
         </div>
       </header>
 
@@ -1440,45 +1271,6 @@ export default function WebBExamCatalog({
         </section>
       )}
 
-      {!isSetPage && canEdit && (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            openerRef.current = event.currentTarget.querySelector(
-              "button[type='submit']",
-            );
-            addFamily();
-          }}
-          className="flex flex-wrap items-end gap-3 rounded-2xl border border-dashed border-slate-300 bg-white p-4"
-        >
-          <label className="min-w-48 flex-1 text-sm font-semibold">
-            เพิ่มประเภทสอบใหม่
-            <WebBAdminInput
-              value={newFamilyName}
-              onChange={(event) => setNewFamilyName(event.target.value)}
-              placeholder="เช่น วิชาใหม่ในอนาคต"
-              className={`mt-1 ${inputClass}`}
-            />
-          </label>
-          <label className="min-w-64 flex-1 text-sm font-semibold">
-            ลำดับการเลือก
-            <div className="mt-1">
-              <AdminSelect
-                value={newFlow}
-                onChange={(value) => setNewFlow(value as CatalogFlow)}
-                options={[
-                  { value: "subject-first", label: "วิชาย่อย → ชุด → แพ็กเกต" },
-                  { value: "set-first", label: "ชุด → พาร์ท/แพ็กเกต" },
-                ]}
-                ariaLabel="ลำดับการเลือก"
-              />
-            </div>
-          </label>
-          <button type="submit" className={primaryButton}>
-            ＋ เพิ่มเป็นร่าง
-          </button>
-        </form>
-      )}
 
       {isSetPage && loaded && (!selected || !selectedSet) && (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
@@ -1510,12 +1302,14 @@ export default function WebBExamCatalog({
                   {managementTab === "overview"
                     ? `ภาพรวมชุด ${selectedSet.name}`
                     : setManagementTabs.find((tab) => tab.id === managementTab)
-                        ?.label}
+                      ?.label}
                 </h2>
               </div>
-              <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">
-                ข้อมูลสำหรับการนำเสนอ
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">
+                  ข้อมูลสำหรับการนำเสนอ
+                </span>
+              </div>
             </div>
             {managementTab === "overview" && (
               <>
@@ -1547,8 +1341,8 @@ export default function WebBExamCatalog({
                         scopedPurchases.filter(
                           (purchase) => purchase.paymentStatus !== "refunded",
                         ).length +
-                          scopedRequests.length +
-                          (futureDemoRecord ? 2 : 0),
+                        scopedRequests.length +
+                        (futureDemoRecord ? 2 : 0),
                       ),
                       `${scopedPurchases.filter((purchase) => purchase.paymentStatus !== "refunded").length + (futureDemoRecord ? 1 : 0)} สิทธิ์ · ${scopedRequests.length + (futureDemoRecord ? 1 : 0)} คำร้อง`,
                     ],
@@ -1637,7 +1431,7 @@ export default function WebBExamCatalog({
                                 </td>
                                 <td className="px-4 py-3">
                                   {selected.id === "tgat" &&
-                                  offer.id === "tgat-a-full"
+                                    offer.id === "tgat-a-full"
                                     ? clientTgatOpen
                                       ? "เปิดซื้อ · ไฟล์พร้อม · ข้อมูลตัวอย่าง"
                                       : "ปิดชั่วคราว · ข้อมูลตัวอย่าง หลังบ้าน"
@@ -1661,7 +1455,7 @@ export default function WebBExamCatalog({
                     </div>
                   </section>
                 )}
-       
+
               </>
             )}
             {managementTab === "access" &&
@@ -2003,156 +1797,137 @@ export default function WebBExamCatalog({
         (!isSetPage ||
           (selectedSet &&
             (managementTab === "content" || managementTab === "offers"))) && (
-          <div
-            className={
-              isSetPage
-                ? "space-y-5"
-                : "fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-0 sm:p-4"
-            }
-            onMouseDown={(event) => {
-              if (!isSetPage && event.target === event.currentTarget)
-                closeModal();
-            }}
-          >
+          <WebBModalPortal enabled={!isSetPage}>
             <div
-              ref={dialogRef}
-              role={isSetPage ? undefined : "dialog"}
-              aria-modal={isSetPage ? undefined : true}
-              aria-labelledby={isSetPage ? undefined : "catalog-dialog-title"}
               className={
                 isSetPage
                   ? "space-y-5"
-                  : "flex h-full w-full max-w-6xl flex-col overflow-hidden bg-slate-50 shadow-2xl sm:h-[min(92vh,900px)] sm:rounded-2xl"
+                  : "fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 p-0 backdrop-blur-sm sm:p-4"
               }
+              onMouseDown={(event) => {
+                if (!isSetPage && event.target === event.currentTarget)
+                  closeModal();
+              }}
             >
-              {!isSetPage && (
-                <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-4">
-                  <div>
-                    <h2
-                      id="catalog-dialog-title"
-                      className="text-lg font-extrabold"
-                    >
-                      คลังข้อสอบ / {selected.name}
-                    </h2>
-                    <p className="mt-1 text-xs font-semibold text-slate-500">
-                      รูปแบบการเลือก · {flowText(selected.flow)}
-                    </p>
-                  </div>
-                  <button
-                    ref={closeButtonRef}
-                    type="button"
-                    onClick={closeModal}
-                    className={secondaryButton}
-                    aria-label={`ปิดรายละเอียด ${selected.name}`}
-                  >
-                    ปิด ×
-                  </button>
-                </div>
-              )}
               <div
+                ref={dialogRef}
+                role={isSetPage ? undefined : "dialog"}
+                aria-modal={isSetPage ? undefined : true}
+                aria-labelledby={isSetPage ? undefined : "catalog-dialog-title"}
                 className={
                   isSetPage
                     ? "space-y-5"
-                    : "min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-6"
+                    : "flex h-full w-full max-w-6xl flex-col overflow-hidden bg-slate-50 shadow-2xl sm:h-[min(92vh,900px)] sm:rounded-2xl"
                 }
               >
-                {message && !isSetPage && (
-                  <div
-                    role="status"
-                    className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900"
-                  >
-                    {message}
+                {!isSetPage && (
+                  <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-4">
+                    <div>
+                      <h2
+                        id="catalog-dialog-title"
+                        className="text-lg font-extrabold"
+                      >
+                        คลังข้อสอบ / {selected.name}
+                      </h2>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">
+                        รูปแบบการเลือก · {flowText(selected.flow)}
+                      </p>
+                    </div>
+                    <button
+                      ref={closeButtonRef}
+                      type="button"
+                      onClick={closeModal}
+                      className={secondaryButton}
+                      aria-label={`ปิดรายละเอียด ${selected.name}`}
+                    >
+                      ปิด ×
+                    </button>
                   </div>
                 )}
-
-                <section
-                  aria-label={`จัดการ ${selected.name}`}
-                  className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                <div
+                  className={
+                    isSetPage
+                      ? "space-y-5"
+                      : "min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-6"
+                  }
                 >
-                  {!isSetPage && selected.flow === "subject-first" && (
-                    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <h3 className="font-bold"> เลือกวิชาย่อย</h3>
-                          <p className="mt-1 text-xs text-slate-500">
-                            เลือกหนึ่งวิชาเพื่อดูชุดสอบที่อยู่ภายใน
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                            {selected.subjects.length} วิชา
-                          </span>
-                          {canEdit && (
-                            <button
-                              type="button"
-                              onClick={(event) =>
-                                openEntryModal(event, {
-                                  kind: "subject",
-                                  mode: "add",
-                                  name: "",
-                                })
-                              }
-                              className={`${primaryButton} inline-flex items-center`}
-                            >
-                              <LuPlus
-                                aria-hidden="true"
-                                className="mr-1.5 size-4"
-                              />
-                              เพิ่มวิชาย่อย
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                  {message && !isSetPage && (
+                    <div
+                      role="status"
+                      className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900"
+                    >
+                      {message}
+                    </div>
+                  )}
 
-                      <div className="overflow-x-auto rounded-xl border border-slate-200">
-                        <table className="w-full min-w-[600px] table-fixed text-left text-sm">
-                          <thead className="bg-slate-50 text-xs font-bold text-slate-500">
-                            <tr>
-                              <th className="w-[24%] px-3 py-3">วิชาย่อย</th>
-                              <th className="w-[17%] px-3 py-3">
-                                ชุด / แพ็กเกต
-                              </th>
-                              <th className="w-[22%] px-3 py-3">สถานะข้อมูล</th>
-                              <th className="w-[37%] px-3 py-3 text-right">
-                                การทำงาน
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {selected.subjects.map((subject) => {
-                              const active = selectedSubject?.id === subject.id;
-                              const offers = subject.sets.reduce(
-                                (count, set) => count + set.offers.length,
-                                0,
-                              );
-                              return (
-                                <tr
-                                  key={subject.id}
-                                  className={
-                                    active
-                                      ? "bg-indigo-50/70"
-                                      : "bg-white hover:bg-slate-50"
-                                  }
-                                >
-                                  <td className="px-3 py-3">
-                                    <span className="inline-flex max-w-full rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-800">
-                                      {subject.name}
-                                    </span>
-                                  </td>
-                                  <td className="px-3 py-3 text-xs text-slate-600">
-                                    {subject.sets.length} ชุด · {offers} แพ็กเกต
-                                  </td>
-                                  <td className="px-3 py-3">
-                                    <span
-                                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${subject.sets.length ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}
-                                    >
-                                      {subject.sets.length
-                                        ? "มีชุดสอบ"
-                                        : "ยังไม่มีชุด"}
-                                    </span>
-                                  </td>
-                                  <td className="px-3 py-3">
-                                    <div className="flex flex-wrap justify-end gap-1.5">
+                  <section
+                    aria-label={`จัดการ ${selected.name}`}
+                    className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                  >
+                    {!isSetPage && selected.flow === "subject-first" && (
+                      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <h3 className="font-bold"> เลือกวิชาย่อย</h3>
+                            <p className="mt-1 text-xs text-slate-500">
+                              เลือกหนึ่งวิชาเพื่อดูชุดสอบที่อยู่ภายใน
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                              {selected.subjects.length} วิชา
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="overflow-x-auto rounded-xl border border-slate-200">
+                          <table className="w-full min-w-[600px] table-fixed text-left text-sm">
+                            <thead className="bg-slate-50 text-xs font-bold text-slate-500">
+                              <tr>
+                                <th className="w-[30%] px-3 py-3">วิชามาตรฐาน</th>
+                                <th className="w-[25%] px-3 py-3">
+                                  ชุด / แพ็กเกต
+                                </th>
+                                <th className="w-[20%] px-3 py-3">สถานะข้อมูล</th>
+                                <th className="w-[25%] px-3 py-3 text-right">
+                                  การทำงาน
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {selected.subjects.map((subject) => {
+                                const active = selectedSubject?.id === subject.id;
+                                const offers = subject.sets.reduce(
+                                  (count, set) => count + set.offers.length,
+                                  0,
+                                );
+                                return (
+                                  <tr
+                                    key={subject.id}
+                                    className={
+                                      active
+                                        ? "bg-indigo-50/70"
+                                        : "bg-white hover:bg-slate-50"
+                                    }
+                                  >
+                                    <td className="px-3 py-3">
+                                      <span className="inline-flex max-w-full rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-800">
+                                        {subject.name}
+                                      </span>
+                                    </td>
+                                    <td className="px-3 py-3 text-xs text-slate-600">
+                                      {subject.sets.length} ชุด · {offers} แพ็กเกต
+                                    </td>
+                                    <td className="px-3 py-3">
+                                      <span
+                                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${subject.sets.length ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}
+                                      >
+                                        {subject.sets.length
+                                          ? "มีชุดสอบ"
+                                          : "ยังไม่มีชุด"}
+                                      </span>
+                                    </td>
+                                    <td className="px-3 py-3 text-right">
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -2168,232 +1943,17 @@ export default function WebBExamCatalog({
                                       >
                                         {active ? "เลือกแล้ว" : "ดูชุดสอบ"}
                                       </button>
-                                      {canEdit && (
-                                        <>
-                                          <button
-                                            type="button"
-                                            aria-label={`แก้ไข ${subject.name}`}
-                                            title={`แก้ไข ${subject.name}`}
-                                            onClick={(event) =>
-                                              openEntryModal(event, {
-                                                kind: "subject",
-                                                mode: "edit",
-                                                id: subject.id,
-                                                name: subject.name,
-                                              })
-                                            }
-                                            className="inline-flex size-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                                          >
-                                            <LuPencil
-                                              aria-hidden="true"
-                                              className="size-4"
-                                            />
-                                          </button>
-                                          <button
-                                            type="button"
-                                            aria-label={`ลบ ${subject.name}`}
-                                            title={`ลบ ${subject.name}`}
-                                            onClick={() =>
-                                              void removeItem(
-                                                "subject",
-                                                subject.id,
-                                              )
-                                            }
-                                            className="inline-flex size-10 items-center justify-center rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50"
-                                          >
-                                            <LuTrash2
-                                              aria-hidden="true"
-                                              className="size-4"
-                                            />
-                                          </button>
-                                        </>
-                                      )}
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                            {selected.subjects.length === 0 && (
-                              <tr>
-                                <td
-                                  colSpan={4}
-                                  className="px-4 py-8 text-center text-sm text-slate-500"
-                                >
-                                  ยังไม่มีวิชาย่อย กด “เพิ่มวิชาย่อย”
-                                  เพื่อเริ่มต้น
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {!isSetPage &&
-                    (selected.flow === "set-first" || selectedSubject) && (
-                      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div>
-                            <h3 className="font-bold">
-                              {" "}
-                              เลือกชุดสอบ
-                              {selectedSubject
-                                ? `ของ ${selectedSubject.name}`
-                                : ""}
-                            </h3>
-                            <p className="mt-1 text-xs text-slate-500">
-                              แต่ละแถวคือหนึ่งชุด กด “จัดการชุดนี้”
-                              เพื่อเปิดหน้าจัดการข้อสอบโดยตรง
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                              {sets.length} ชุด
-                            </span>
-                            <span
-                              className={`rounded-full px-3 py-1.5 text-xs font-bold ${selected.status === "open" ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}
-                            >
-                              {selected.status === "open"
-                                ? "หมวดเปิดขาย"
-                                : "หมวดยังไม่เปิดขาย"}
-                            </span>
-                            {canEdit && (
-                              <button
-                                type="button"
-                                onClick={(event) =>
-                                  openEntryModal(event, {
-                                    kind: "set",
-                                    mode: "add",
-                                    name: "",
-                                  })
-                                }
-                                className={`${primaryButton} inline-flex items-center`}
-                              >
-                                <LuPlus
-                                  aria-hidden="true"
-                                  className="mr-1.5 size-4"
-                                />
-                                เพิ่มชุดสอบ
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <div className="overflow-x-auto rounded-xl border border-slate-200">
-                          <table className="w-full min-w-[650px] table-fixed text-left text-sm">
-                            <thead className="bg-slate-50 text-xs font-bold text-slate-500">
-                              <tr>
-                                <th className="w-[13%] px-3 py-3">ชุดสอบ</th>
-                                <th className="w-[27%] px-3 py-3">
-                                  พาร์ท / รายวิชา
-                                </th>
-                                <th className="w-[10%] px-3 py-3">แพ็กเกต</th>
-                                <th className="w-[21%] px-3 py-3">สถานะ</th>
-                                <th className="w-[29%] px-3 py-3 text-right">
-                                  การทำงาน
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {sets.map((set) => {
-                                const openOffers = set.offers.filter(
-                                  (offer) => offer.status === "open",
-                                ).length;
-                                return (
-                                  <tr
-                                    key={set.id}
-                                    className="bg-white hover:bg-slate-50"
-                                  >
-                                    <td className="px-3 py-3">
-                                      <b>ชุด {set.name}</b>
-                                    </td>
-                                    <td className="px-3 py-3">
-                                      <div className="flex flex-wrap gap-1">
-                                        {set.parts.length ? (
-                                          set.parts.map((part) => (
-                                            <span
-                                              key={part}
-                                              className="inline-flex max-w-full rounded-full bg-violet-50 px-2 py-1 text-[11px] font-semibold leading-4 text-violet-800"
-                                            >
-                                              {part}
-                                            </span>
-                                          ))
-                                        ) : (
-                                          <span className="text-xs text-slate-400">
-                                            ไม่มีพาร์ทย่อย
-                                          </span>
-                                        )}
-                                      </div>
-                                    </td>
-                                    <td className="px-3 py-3 text-xs text-slate-600">
-                                      {set.offers.length} แพ็กเกต
-                                    </td>
-                                    <td className="px-3 py-3">
-                                      <span
-                                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${openOffers ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}
-                                      >
-                                        {openOffers
-                                          ? `เปิด ${openOffers} แพ็กเกต`
-                                          : "ยังไม่เปิดขาย"}
-                                      </span>
-                                    </td>
-                                    <td className="px-3 py-3">
-                                      <div className="flex flex-wrap justify-end gap-1.5">
-                                        <Link
-                                          href={`/webb/admin/exam-catalog/${encodeURIComponent(selected.id)}/${encodeURIComponent(set.id)}`}
-                                          className={primaryButton}
-                                        >
-                                          จัดการชุดนี้{" "}
-                                        </Link>
-                                        {canEdit && (
-                                          <>
-                                            <button
-                                              type="button"
-                                              aria-label={`แก้ไขชื่อชุด ${set.name}`}
-                                              title={`แก้ไขชื่อชุด ${set.name}`}
-                                              onClick={(event) =>
-                                                openEntryModal(event, {
-                                                  kind: "set",
-                                                  mode: "edit",
-                                                  id: set.id,
-                                                  name: set.name,
-                                                })
-                                              }
-                                              className="inline-flex size-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                                            >
-                                              <LuPencil
-                                                aria-hidden="true"
-                                                className="size-4"
-                                              />
-                                            </button>
-                                            <button
-                                              type="button"
-                                              aria-label={`ลบชุดสอบ ${set.name}`}
-                                              title={`ลบชุดสอบ ${set.name}`}
-                                              onClick={() =>
-                                                void removeItem("set", set.id)
-                                              }
-                                              className="inline-flex size-10 items-center justify-center rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50"
-                                            >
-                                              <LuTrash2
-                                                aria-hidden="true"
-                                                className="size-4"
-                                              />
-                                            </button>
-                                          </>
-                                        )}
-                                      </div>
                                     </td>
                                   </tr>
                                 );
                               })}
-                              {sets.length === 0 && (
+                              {selected.subjects.length === 0 && (
                                 <tr>
                                   <td
-                                    colSpan={5}
+                                    colSpan={4}
                                     className="px-4 py-8 text-center text-sm text-slate-500"
                                   >
-                                    ยังไม่มีชุดสอบ กด “เพิ่มชุดสอบ”
+                                    ยังไม่มีวิชาย่อย กด “เพิ่มวิชาย่อย”
                                     เพื่อเริ่มต้น
                                   </td>
                                 </tr>
@@ -2404,104 +1964,416 @@ export default function WebBExamCatalog({
                       </div>
                     )}
 
-                  {isSetPage && selectedSet && (
-                    <div className="space-y-4">
-                      {managementTab === "content" && (
-                        <div className="rounded-xl border border-slate-200 p-4">
-                          <h3 className="font-bold">
-                            เนื้อหาในชุด {selectedSet.name}
-                          </h3>
-                          <>
-                            <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">
-                              <table className="w-full min-w-[760px] text-left text-sm">
-                                <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
-                                  <tr>
-                                    <th className="px-4 py-3">พาร์ท / วิชา</th>
-                                    <th className="px-4 py-3">
-                                      โครงสร้างข้อสอบ
-                                    </th>
-                                    <th className="px-4 py-3">ไฟล์และสถานะ</th>
-                                    <th className="px-4 py-3">อยู่ในแพ็กเกต</th>
-                                    <th className="px-4 py-3 text-right">
-                                      จัดการ
-                                    </th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                  {selectedSet.parts.map((part) => {
-                                    const settings =
-                                      selectedSet.partSettings?.[part];
-                                    const structure = [
-                                      settings?.questionCount
-                                        ? `${settings.questionCount} ข้อ`
-                                        : "จำนวนข้อยังไม่ตั้งค่า",
-                                      settings?.durationMinutes
-                                        ? `${settings.durationMinutes} นาที`
-                                        : "เวลาไม่ระบุ",
-                                      settings?.choiceCount
-                                        ? `${settings.choiceCount} ตัวเลือก`
-                                        : "รูปแบบตัวเลือกไม่ระบุ",
-                                      settings?.scoreMaximum
-                                        ? `${settings.scoreMaximum} คะแนน`
-                                        : "คะแนนไม่ระบุ",
-                                    ].join(" · ");
-                                    const files = [
-                                      settings?.examFileName,
-                                      settings?.answerFileName,
-                                    ]
-                                      .filter(Boolean)
-                                      .join(" · ");
-                                    return (
-                                      <tr key={part}>
-                                        <td className="px-4 py-3 font-semibold">
-                                          {part}
-                                        </td>
-                                        <td className="px-4 py-3 text-xs leading-5 text-slate-600">
-                                          {isTgatA
-                                            ? "ตั้งค่ารายพาร์ทในหน้าจัดการข้อสอบ"
-                                            : structure}
-                                        </td>
-                                        <td className="px-4 py-3 text-xs leading-5 text-slate-600">
-                                          <span className="block">
-                                            {isTgatA
-                                              ? "จัดการไฟล์ในหน้ารายละเอียด"
-                                              : files || "ยังไม่มีไฟล์"}
-                                          </span>
-                                          {!isTgatA && (
-                                            <span className="text-slate-400">
-                                              {settings?.contentStatus ||
-                                                "Draft"}
+                    {!isSetPage &&
+                      (selected.flow === "set-first" || selectedSubject) && (
+                        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <h3 className="font-bold">
+                                {" "}
+                                เลือกชุดสอบ
+                                {selectedSubject
+                                  ? `ของ ${selectedSubject.name}`
+                                  : ""}
+                              </h3>
+                              <p className="mt-1 text-xs text-slate-500">
+                                แต่ละแถวคือหนึ่งชุด กด “จัดการชุดนี้”
+                                เพื่อเปิดหน้าจัดการข้อสอบโดยตรง
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const headers = ["ชื่อชุด", "พาร์ท/วิชาย่อย", "จำนวนแพ็กเกต", "สถานะขาย"];
+                                  const rows = sets.map((s) => {
+                                    const openOffers = s.offers.filter((o) => o.status === "open").length;
+                                    return [
+                                      `ชุด ${s.name}`,
+                                      s.parts.join(" · ") || "ไม่มีพาร์ทย่อย",
+                                      `${s.offers.length} แพ็กเกต`,
+                                      openOffers ? `เปิด ${openOffers} แพ็กเกต` : "ยังไม่เปิดขาย",
+                                    ];
+                                  });
+                                  downloadCsvData(`exam_sets_${selected.id}_${new Date().toISOString().slice(0, 10)}`, headers, rows);
+                                }}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                                title="ดาวน์โหลด CSV รายการชุดสอบ"
+                              >
+                                <LuDownload className="size-3.5 text-slate-500" />
+                                <span>ดาวน์โหลด CSV</span>
+                              </button>
+                              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                                {sets.length} ชุด
+                              </span>
+                              <span
+                                className={`rounded-full px-3 py-1.5 text-xs font-bold ${selected.status === "open" ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}
+                              >
+                                {selected.status === "open"
+                                  ? "หมวดเปิดขาย"
+                                  : "หมวดยังไม่เปิดขาย"}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="overflow-x-auto rounded-xl border border-slate-200">
+                            <table className="w-full min-w-[650px] table-fixed text-left text-sm">
+                              <thead className="bg-slate-50 text-xs font-bold text-slate-500">
+                                <tr>
+                                  <th className="w-[15%] px-3 py-3">ชุดสอบ</th>
+                                  <th className="w-[35%] px-3 py-3">
+                                    พาร์ท / รายวิชา
+                                  </th>
+                                  <th className="w-[15%] px-3 py-3">แพ็กเกต</th>
+                                  <th className="w-[15%] px-3 py-3">สถานะ</th>
+                                  <th className="w-[20%] px-3 py-3 text-right">
+                                    การทำงาน
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {sets.map((set) => {
+                                  const openOffers = set.offers.filter(
+                                    (offer) => offer.status === "open",
+                                  ).length;
+                                  return (
+                                    <tr
+                                      key={set.id}
+                                      className="bg-white hover:bg-slate-50"
+                                    >
+                                      <td className="px-3 py-3">
+                                        <b>ชุด {set.name}</b>
+                                      </td>
+                                      <td className="px-3 py-3">
+                                        <div className="flex flex-wrap gap-1">
+                                          {set.parts.length ? (
+                                            set.parts.map((part) => (
+                                              <span
+                                                key={part}
+                                                className="inline-flex max-w-full rounded-full bg-violet-50 px-2 py-1 text-[11px] font-semibold leading-4 text-violet-800"
+                                              >
+                                                {part}
+                                              </span>
+                                            ))
+                                          ) : (
+                                            <span className="text-xs text-slate-400">
+                                              ไม่มีพาร์ทย่อย
                                             </span>
                                           )}
+                                        </div>
+                                      </td>
+                                      <td className="px-3 py-3 text-xs text-slate-600">
+                                        {set.offers.length} แพ็กเกต
+                                      </td>
+                                      <td className="px-3 py-3">
+                                        <span
+                                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${openOffers ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}
+                                        >
+                                          {openOffers
+                                            ? `เปิด ${openOffers} แพ็กเกต`
+                                            : "ยังไม่เปิดขาย"}
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-3 text-right">
+                                        <div className="flex items-center justify-end gap-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => openTutorModal(set.name, selected.id)}
+                                            className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                                            title={`แก้ไขชุด ${set.name} และข้อมูลติวเตอร์`}
+                                          >
+                                            <LuPencil className="size-3.5" />
+                                            แก้ไข
+                                          </button>
+                                          <Link
+                                            href={`/webb/admin/exam-catalog/${encodeURIComponent(selected.id)}/${encodeURIComponent(set.id)}`}
+                                            className={primaryButton}
+                                          >
+                                            จัดการชุดนี้
+                                          </Link>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                                {sets.length === 0 && (
+                                  <tr>
+                                    <td
+                                      colSpan={5}
+                                      className="px-4 py-8 text-center text-sm text-slate-500"
+                                    >
+                                      ยังไม่มีชุดสอบ กด “เพิ่มชุดสอบ”
+                                      เพื่อเริ่มต้น
+                                    </td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                    {isSetPage && selectedSet && (
+                      <div className="space-y-4">
+                        {managementTab === "content" && (
+                          <div className="rounded-xl border border-slate-200 p-4">
+                            <h3 className="font-bold">
+                              เนื้อหาในชุด {selectedSet.name}
+                            </h3>
+                            <>
+                              <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">
+                                <table className="w-full min-w-[760px] text-left text-sm">
+                                  <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                                    <tr>
+                                      <th className="px-4 py-3">พาร์ท / วิชา</th>
+                                      <th className="px-4 py-3">
+                                        โครงสร้างข้อสอบ
+                                      </th>
+                                      <th className="px-4 py-3">ไฟล์และสถานะ</th>
+                                      <th className="px-4 py-3">อยู่ในแพ็กเกต</th>
+                                      <th className="px-4 py-3 text-right">
+                                        จัดการ
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    {selectedSet.parts.map((part, pIdx) => {
+                                      const settings =
+                                        selectedSet.partSettings?.[part];
+                                      const structure = [
+                                        settings?.questionCount
+                                          ? `${settings.questionCount} ข้อ`
+                                          : "จำนวนข้อยังไม่ตั้งค่า",
+                                        settings?.durationMinutes
+                                          ? `${settings.durationMinutes} นาที`
+                                          : "เวลาไม่ระบุ",
+                                        settings?.choiceCount
+                                          ? `${settings.choiceCount} ตัวเลือก`
+                                          : "รูปแบบตัวเลือกไม่ระบุ",
+                                        settings?.scoreMaximum
+                                          ? `${settings.scoreMaximum} คะแนน`
+                                          : "คะแนนไม่ระบุ",
+                                      ].join(" · ");
+                                      const files = [
+                                        settings?.examFileName,
+                                        settings?.answerFileName,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(" · ");
+                                      return (
+                                        <tr key={part}>
+                                          <td className="px-4 py-3 font-semibold">
+                                            {part}
+                                          </td>
+                                          <td className="px-4 py-3 text-xs leading-5 text-slate-600">
+                                            {isTgatA
+                                              ? "ตั้งค่ารายพาร์ทในหน้าจัดการข้อสอบ"
+                                              : structure}
+                                          </td>
+                                          <td className="px-4 py-3 text-xs leading-5 text-slate-600">
+                                            <span className="block">
+                                              {isTgatA
+                                                ? "จัดการไฟล์ในหน้ารายละเอียด"
+                                                : files || "ยังไม่มีไฟล์"}
+                                            </span>
+                                            {!isTgatA && (
+                                              <span className="text-slate-400">
+                                                {settings?.contentStatus ||
+                                                  "Draft"}
+                                              </span>
+                                            )}
+                                          </td>
+                                          <td className="px-4 py-3 text-xs text-slate-600">
+                                            {selectedSet.offers
+                                              .filter((offer) =>
+                                                offer.parts.includes(part),
+                                              )
+                                              .map((offer) => offer.name)
+                                              .join(" · ") || "ยังไม่ผูกแพ็กเกต"}
+                                          </td>
+                                          <td className="px-4 py-3">
+                                            <div className="flex justify-end gap-2">
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  openPartModal("manage", part)
+                                                }
+                                                className={primaryButton}
+                                              >
+                                                จัดการ
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  openTutorModal(selectedSet.name, selected.id, pIdx, part)
+                                                }
+                                                className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                                                title={`แก้ไขติวเตอร์สำหรับ ${part}`}
+                                              >
+                                                <LuUser className="size-3.5" />
+                                                แก้ไขติวเตอร์
+                                              </button>
+                                              {canEdit && (
+                                                <>
+                                                  <button
+                                                    type="button"
+                                                    aria-label={`แก้ไข ${part}`}
+                                                    title={`แก้ไข ${part}`}
+                                                    onClick={() =>
+                                                      openPartModal("edit", part)
+                                                    }
+                                                    className="inline-flex size-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                                                  >
+                                                    <LuPencil
+                                                      aria-hidden="true"
+                                                      className="size-4"
+                                                    />
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    aria-label={`ลบ ${part}`}
+                                                    title={`ลบ ${part}`}
+                                                    onClick={() =>
+                                                      void removeItem(
+                                                        "part",
+                                                        part,
+                                                      )
+                                                    }
+                                                    className="inline-flex size-10 items-center justify-center rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50"
+                                                  >
+                                                    <LuTrash2
+                                                      aria-hidden="true"
+                                                      className="size-4"
+                                                    />
+                                                  </button>
+                                                </>
+                                              )}
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                    {selectedSet.parts.length === 0 && (
+                                      <tr>
+                                        <td
+                                          colSpan={5}
+                                          className="px-4 py-6 text-center text-slate-500"
+                                        >
+                                          ยังไม่มีพาร์ทข้อสอบ
                                         </td>
-                                        <td className="px-4 py-3 text-xs text-slate-600">
-                                          {selectedSet.offers
-                                            .filter((offer) =>
-                                              offer.parts.includes(part),
-                                            )
-                                            .map((offer) => offer.name)
-                                            .join(" · ") || "ยังไม่ผูกแพ็กเกต"}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                          <div className="flex justify-end gap-2">
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                openPartModal("manage", part)
-                                              }
-                                              className={primaryButton}
-                                            >
-                                              จัดการ
-                                            </button>
-                                            {canEdit && (
-                                              <>
+                                      </tr>
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  onClick={() => openPartModal("add")}
+                                  className={`${primaryButton} mt-4`}
+                                >
+                                  <LuPlus
+                                    aria-hidden="true"
+                                    className="mr-1 inline size-4"
+                                  />
+                                  สร้างพาร์ท / วิชา
+                                </button>
+                              )}
+                              {isTgatA && (
+                                <div className="mt-6 border-t border-slate-200 pt-5">
+                                  <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <h3 className="font-bold">
+                                        สินค้าและแพ็กเกตของชุด {selectedSet.name}
+                                      </h3>
+                                      <p className="mt-1 text-xs text-slate-500">
+                                        เลือกพาร์ทจากเนื้อหาด้านบน
+                                        แล้วกำหนดราคาและสถานะขายในหน้าต่างเดียว
+                                      </p>
+                                    </div>
+                                    {canEdit && (
+                                      <button
+                                        type="button"
+                                        onClick={addOffer}
+                                        className={`${primaryButton} inline-flex items-center`}
+                                      >
+                                        <LuPlus
+                                          aria-hidden="true"
+                                          className="mr-1 size-4"
+                                        />
+                                        สร้างแพ็กเกต
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">
+                                    <table className="w-full min-w-[740px] text-left text-sm">
+                                      <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                                        <tr>
+                                          <th className="px-4 py-3">
+                                            สินค้า / แพ็กเกต
+                                          </th>
+                                          <th className="px-4 py-3">
+                                            เนื้อหาที่รวม
+                                          </th>
+                                          <th className="px-4 py-3">
+                                            ราคาสินค้าจริง / ยอดรวม Payso
+                                          </th>
+                                          <th className="px-4 py-3">สถานะ</th>
+                                          <th className="px-4 py-3 text-right">
+                                            จัดการ
+                                          </th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-100">
+                                        {selectedSet.offers.map((offer) => (
+                                          <tr key={offer.id}>
+                                            <td className="px-4 py-3 font-semibold">
+                                              {offer.name}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                              <div className="flex flex-wrap gap-1">
+                                                {offer.parts.map((part) => (
+                                                  <span
+                                                    key={part}
+                                                    className="rounded-full bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-800"
+                                                  >
+                                                    {part.split(" ")[0]}
+                                                  </span>
+                                                ))}
+                                                {offer.parts.length === 0 && (
+                                                  <span className="text-xs text-slate-400">
+                                                    ยังไม่เลือกเนื้อหา
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                              <b>
+                                                {formatPrice(
+                                                  offer.payPrice ??
+                                                  samplePayPrice(offer.price),
+                                                )}
+                                              </b>
+                                              <small className="mt-1 block text-xs text-slate-500">
+                                                ราคาสินค้า{" "}
+                                                {formatPrice(offer.price)}
+                                              </small>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                              <span
+                                                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${offer.status === "open" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}
+                                              >
+                                                {offer.status === "open"
+                                                  ? "เปิดขาย"
+                                                  : "ยังไม่เปิดขาย"}
+                                              </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                              <div className="flex justify-end gap-2">
                                                 <button
                                                   type="button"
-                                                  aria-label={`แก้ไข ${part}`}
-                                                  title={`แก้ไข ${part}`}
-                                                  onClick={() =>
-                                                    openPartModal("edit", part)
-                                                  }
+                                                  aria-label={`แก้ไข ${offer.name}`}
+                                                  title={`แก้ไข ${offer.name}`}
+                                                  onClick={() => editOffer(offer)}
                                                   className="inline-flex size-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                                                 >
                                                   <LuPencil
@@ -2511,14 +2383,14 @@ export default function WebBExamCatalog({
                                                 </button>
                                                 <button
                                                   type="button"
-                                                  aria-label={`ลบ ${part}`}
-                                                  title={`ลบ ${part}`}
                                                   onClick={() =>
                                                     void removeItem(
-                                                      "part",
-                                                      part,
+                                                      "offer",
+                                                      offer.id,
                                                     )
                                                   }
+                                                  aria-label={`ลบแพ็กเกต ${offer.name}`}
+                                                  title={`ลบแพ็กเกต ${offer.name}`}
                                                   className="inline-flex size-10 items-center justify-center rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50"
                                                 >
                                                   <LuTrash2
@@ -2526,130 +2398,118 @@ export default function WebBExamCatalog({
                                                     className="size-4"
                                                   />
                                                 </button>
-                                              </>
-                                            )}
-                                          </div>
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                  {selectedSet.parts.length === 0 && (
-                                    <tr>
-                                      <td
-                                        colSpan={5}
-                                        className="px-4 py-6 text-center text-slate-500"
-                                      >
-                                        ยังไม่มีพาร์ทข้อสอบ
-                                      </td>
-                                    </tr>
-                                  )}
-                                </tbody>
-                              </table>
-                            </div>
-                            {canEdit && (
-                              <button
-                                type="button"
-                                onClick={() => openPartModal("add")}
-                                className={`${primaryButton} mt-4`}
-                              >
-                                <LuPlus
-                                  aria-hidden="true"
-                                  className="mr-1 inline size-4"
-                                />
-                                สร้างพาร์ท / วิชา
-                              </button>
-                            )}
-                            {isTgatA && (
-                              <div className="mt-6 border-t border-slate-200 pt-5">
-                                <div className="flex flex-wrap items-center justify-between gap-3">
-                                  <div>
-                                    <h3 className="font-bold">
-                                      สินค้าและแพ็กเกตของชุด {selectedSet.name}
-                                    </h3>
-                                    <p className="mt-1 text-xs text-slate-500">
-                                      เลือกพาร์ทจากเนื้อหาด้านบน
-                                      แล้วกำหนดราคาและสถานะขายในหน้าต่างเดียว
-                                    </p>
-                                  </div>
-                                  {canEdit && (
-                                    <button
-                                      type="button"
-                                      onClick={addOffer}
-                                      className={`${primaryButton} inline-flex items-center`}
-                                    >
-                                      <LuPlus
-                                        aria-hidden="true"
-                                        className="mr-1 size-4"
-                                      />
-                                      สร้างแพ็กเกต
-                                    </button>
-                                  )}
-                                </div>
-                                <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">
-                                  <table className="w-full min-w-[740px] text-left text-sm">
-                                    <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
-                                      <tr>
-                                        <th className="px-4 py-3">
-                                          สินค้า / แพ็กเกต
-                                        </th>
-                                        <th className="px-4 py-3">
-                                          เนื้อหาที่รวม
-                                        </th>
-                                        <th className="px-4 py-3">
-                                          ราคาสินค้าจริง / ยอดรวม Payso
-                                        </th>
-                                        <th className="px-4 py-3">สถานะ</th>
-                                        <th className="px-4 py-3 text-right">
-                                          จัดการ
-                                        </th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                      {selectedSet.offers.map((offer) => (
-                                        <tr key={offer.id}>
-                                          <td className="px-4 py-3 font-semibold">
-                                            {offer.name}
-                                          </td>
-                                          <td className="px-4 py-3">
-                                            <div className="flex flex-wrap gap-1">
-                                              {offer.parts.map((part) => (
-                                                <span
-                                                  key={part}
-                                                  className="rounded-full bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-800"
-                                                >
-                                                  {part.split(" ")[0]}
-                                                </span>
-                                              ))}
-                                              {offer.parts.length === 0 && (
-                                                <span className="text-xs text-slate-400">
-                                                  ยังไม่เลือกเนื้อหา
-                                                </span>
-                                              )}
-                                            </div>
-                                          </td>
-                                          <td className="px-4 py-3">
-                                            <b>
-                                              {formatPrice(
-                                                offer.payPrice ??
-                                                  samplePayPrice(offer.price),
-                                              )}
-                                            </b>
-                                            <small className="mt-1 block text-xs text-slate-500">
-                                              ราคาสินค้า{" "}
-                                              {formatPrice(offer.price)}
-                                            </small>
-                                          </td>
-                                          <td className="px-4 py-3">
-                                            <span
-                                              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${offer.status === "open" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                        {selectedSet.offers.length === 0 && (
+                                          <tr>
+                                            <td
+                                              colSpan={5}
+                                              className="px-4 py-6 text-center text-slate-500"
                                             >
-                                              {offer.status === "open"
-                                                ? "เปิดขาย"
-                                                : "ยังไม่เปิดขาย"}
+                                              ยังไม่มีสินค้าและแพ็กเกตในชุดนี้
+                                            </td>
+                                          </tr>
+                                        )}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          </div>
+                        )}
+
+                        {managementTab === "offers" && (
+                          <div className="rounded-xl border border-slate-200 p-4">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <h3 className="font-bold">
+                                  แพ็กเกตของชุด {selectedSet.name}
+                                </h3>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  จัดการชื่อ เนื้อหาที่รวม ราคา
+                                  และสถานะในหน้าต่างเดียว · สถานะ Draft
+                                  จะยังไม่แสดงให้ผู้เรียนเลือก
+                                </p>
+                              </div>
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  onClick={addOffer}
+                                  className={`${primaryButton} inline-flex items-center`}
+                                >
+                                  <LuPlus
+                                    aria-hidden="true"
+                                    className="mr-1.5 size-4"
+                                  />
+                                  เพิ่มแพ็กเกต
+                                </button>
+                              )}
+                            </div>
+                            <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+                              <table className="w-full min-w-[760px] text-left text-sm">
+                                <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                                  <tr>
+                                    <th className="px-4 py-3">ชื่อแพ็กเกต</th>
+                                    <th className="px-4 py-3">เนื้อหาที่รวม</th>
+                                    <th className="px-4 py-3">
+                                      ราคาสินค้าจริง / ยอดรวม Payso
+                                    </th>
+                                    <th className="px-4 py-3">สถานะ</th>
+                                    <th className="px-4 py-3 text-right">
+                                      จัดการ
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {selectedSet.offers.map((offer) => (
+                                    <tr key={offer.id}>
+                                      <td className="px-4 py-3 font-semibold">
+                                        {offer.name}
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        <div className="flex flex-wrap gap-1">
+                                          {offer.parts.map((part) => (
+                                            <span
+                                              key={part}
+                                              className="rounded-full bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-800"
+                                            >
+                                              {part}
                                             </span>
-                                          </td>
-                                          <td className="px-4 py-3">
-                                            <div className="flex justify-end gap-2">
+                                          ))}
+                                          {offer.parts.length === 0 && (
+                                            <span className="text-xs text-slate-400">
+                                              ยังไม่เลือกเนื้อหา
+                                            </span>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        <b>
+                                          {formatPrice(
+                                            offer.payPrice ??
+                                            samplePayPrice(offer.price),
+                                          )}
+                                        </b>
+                                        <small className="mt-1 block text-xs text-slate-500">
+                                          ราคาสินค้า {formatPrice(offer.price)}
+                                        </small>
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        <span
+                                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${offer.status === "open" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}
+                                        >
+                                          {offer.status === "open"
+                                            ? "เปิดขาย"
+                                            : "ยังไม่เปิดขาย"}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        <div className="flex justify-end gap-2">
+                                          {canEdit && (
+                                            <>
                                               <button
                                                 type="button"
                                                 aria-label={`แก้ไข ${offer.name}`}
@@ -2664,14 +2524,14 @@ export default function WebBExamCatalog({
                                               </button>
                                               <button
                                                 type="button"
+                                                aria-label={`ลบแพ็กเกต ${offer.name}`}
+                                                title={`ลบแพ็กเกต ${offer.name}`}
                                                 onClick={() =>
                                                   void removeItem(
                                                     "offer",
                                                     offer.id,
                                                   )
                                                 }
-                                                aria-label={`ลบแพ็กเกต ${offer.name}`}
-                                                title={`ลบแพ็กเกต ${offer.name}`}
                                                 className="inline-flex size-10 items-center justify-center rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50"
                                               >
                                                 <LuTrash2
@@ -2679,319 +2539,73 @@ export default function WebBExamCatalog({
                                                   className="size-4"
                                                 />
                                               </button>
-                                            </div>
-                                          </td>
-                                        </tr>
-                                      ))}
-                                      {selectedSet.offers.length === 0 && (
-                                        <tr>
-                                          <td
-                                            colSpan={5}
-                                            className="px-4 py-6 text-center text-slate-500"
-                                          >
-                                            ยังไม่มีสินค้าและแพ็กเกตในชุดนี้
-                                          </td>
-                                        </tr>
-                                      )}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </div>
-                            )}
-                          </>
-                        </div>
-                      )}
-
-                      {managementTab === "offers" && (
-                        <div className="rounded-xl border border-slate-200 p-4">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                              <h3 className="font-bold">
-                                แพ็กเกตของชุด {selectedSet.name}
-                              </h3>
-                              <p className="mt-1 text-xs text-slate-500">
-                                จัดการชื่อ เนื้อหาที่รวม ราคา
-                                และสถานะในหน้าต่างเดียว · สถานะ Draft
-                                จะยังไม่แสดงให้ผู้เรียนเลือก
-                              </p>
-                            </div>
-                            {canEdit && (
-                              <button
-                                type="button"
-                                onClick={addOffer}
-                                className={`${primaryButton} inline-flex items-center`}
-                              >
-                                <LuPlus
-                                  aria-hidden="true"
-                                  className="mr-1.5 size-4"
-                                />
-                                เพิ่มแพ็กเกต
-                              </button>
-                            )}
-                          </div>
-                          <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
-                            <table className="w-full min-w-[760px] text-left text-sm">
-                              <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
-                                <tr>
-                                  <th className="px-4 py-3">ชื่อแพ็กเกต</th>
-                                  <th className="px-4 py-3">เนื้อหาที่รวม</th>
-                                  <th className="px-4 py-3">
-                                    ราคาสินค้าจริง / ยอดรวม Payso
-                                  </th>
-                                  <th className="px-4 py-3">สถานะ</th>
-                                  <th className="px-4 py-3 text-right">
-                                    จัดการ
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-100">
-                                {selectedSet.offers.map((offer) => (
-                                  <tr key={offer.id}>
-                                    <td className="px-4 py-3 font-semibold">
-                                      {offer.name}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      <div className="flex flex-wrap gap-1">
-                                        {offer.parts.map((part) => (
-                                          <span
-                                            key={part}
-                                            className="rounded-full bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-800"
-                                          >
-                                            {part}
-                                          </span>
-                                        ))}
-                                        {offer.parts.length === 0 && (
-                                          <span className="text-xs text-slate-400">
-                                            ยังไม่เลือกเนื้อหา
-                                          </span>
-                                        )}
-                                      </div>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      <b>
-                                        {formatPrice(
-                                          offer.payPrice ??
-                                            samplePayPrice(offer.price),
-                                        )}
-                                      </b>
-                                      <small className="mt-1 block text-xs text-slate-500">
-                                        ราคาสินค้า {formatPrice(offer.price)}
-                                      </small>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      <span
-                                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${offer.status === "open" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}
+                                            </>
+                                          )}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                  {selectedSet.offers.length === 0 && (
+                                    <tr>
+                                      <td
+                                        colSpan={5}
+                                        className="px-4 py-6 text-center text-slate-500"
                                       >
-                                        {offer.status === "open"
-                                          ? "เปิดขาย"
-                                          : "ยังไม่เปิดขาย"}
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      <div className="flex justify-end gap-2">
-                                        {canEdit && (
-                                          <>
-                                            <button
-                                              type="button"
-                                              aria-label={`แก้ไข ${offer.name}`}
-                                              title={`แก้ไข ${offer.name}`}
-                                              onClick={() => editOffer(offer)}
-                                              className="inline-flex size-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                                            >
-                                              <LuPencil
-                                                aria-hidden="true"
-                                                className="size-4"
-                                              />
-                                            </button>
-                                            <button
-                                              type="button"
-                                              aria-label={`ลบแพ็กเกต ${offer.name}`}
-                                              title={`ลบแพ็กเกต ${offer.name}`}
-                                              onClick={() =>
-                                                void removeItem(
-                                                  "offer",
-                                                  offer.id,
-                                                )
-                                              }
-                                              className="inline-flex size-10 items-center justify-center rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50"
-                                            >
-                                              <LuTrash2
-                                                aria-hidden="true"
-                                                className="size-4"
-                                              />
-                                            </button>
-                                          </>
-                                        )}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                ))}
-                                {selectedSet.offers.length === 0 && (
-                                  <tr>
-                                    <td
-                                      colSpan={5}
-                                      className="px-4 py-6 text-center text-slate-500"
-                                    >
-                                      ยังไม่มีแพ็กเกตในชุดนี้
-                                    </td>
-                                  </tr>
-                                )}
-                              </tbody>
-                            </table>
+                                        ยังไม่มีแพ็กเกตในชุดนี้
+                                      </td>
+                                    </tr>
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {!isSetPage && (
-                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-4">
-                      <div>
-                        <b className="text-sm">สถานะหมวด {selected.name}</b>
-                        <p className="mt-1 text-xs text-slate-500">
-                          เปิดหมวดได้เมื่อมีแพ็กเกตที่เปิดอย่างน้อยหนึ่งรายการ ·
-                          แพ็กเกตที่เป็นร่างยังเลือกไม่ได้
-                        </p>
-                      </div>
-                      {canEdit && (
-                        <button
-                          type="button"
-                          disabled={
-                            selected.status === "draft" &&
-                            !familyCanOpen(selected)
-                          }
-                          onClick={() =>
-                            updateFamily(
-                              (family) => ({
-                                ...family,
-                                status:
-                                  family.status === "open" ? "draft" : "open",
-                              }),
-                              "ปรับสถานะหมวดแล้ว",
-                            )
-                          }
-                          className={
-                            selected.status === "open"
-                              ? secondaryButton
-                              : primaryButton
-                          }
-                        >
-                          {selected.status === "open"
-                            ? "พักการขายทั้งหมวด"
-                            : "เปิดการขาย"}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </section>
-
-                {entryModal && (
-                  <div
-                    className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/50 p-4"
-                    onMouseDown={(event) => {
-                      if (event.target === event.currentTarget)
-                        closeEntryModal();
-                    }}
-                  >
-                    <section
-                      ref={entryDialogRef}
-                      role="dialog"
-                      aria-modal="true"
-                      aria-labelledby="catalog-entry-modal-title"
-                      className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="text-xs font-bold text-amber-700">
-                            {selected.name} · จัดการโครงสร้าง
-                          </p>
-                          <h3
-                            id="catalog-entry-modal-title"
-                            className="mt-1 text-lg font-extrabold"
-                          >
-                            {entryModal.mode === "add" ? "เพิ่ม" : "แก้ไขชื่อ"}
-                            {entryModal.kind === "subject"
-                              ? "วิชาย่อย"
-                              : "ชุดสอบ"}
-                          </h3>
-                          <p className="mt-1 text-sm text-slate-500">
-                            {entryModal.kind === "subject"
-                              ? "วิชาย่อยจะใช้เป็นระดับก่อนเลือกชุดสอบ"
-                              : selected.flow === "subject-first"
-                                ? `ชุดสอบของ ${selectedSubject?.name || "วิชาย่อยที่เลือก"}`
-                                : "ชุดสอบในหมวดนี้"}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={closeEntryModal}
-                          className="rounded-lg px-2 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100"
-                          aria-label="ปิดหน้าต่าง"
-                        >
-                          ปิด ×
-                        </button>
-                      </div>
-                      <form
-                        onSubmit={saveEntryModal}
-                        className="mt-5 space-y-4"
-                      >
-                        <label className="block text-sm font-semibold text-slate-700">
-                          {entryModal.kind === "subject"
-                            ? "ชื่อวิชาย่อย"
-                            : "ชื่อชุดสอบ"}
-                          <WebBAdminInput
-                            ref={entryInputRef}
-                            value={entryModal.name}
-                            onChange={(event) =>
-                              setEntryModal({
-                                ...entryModal,
-                                name: event.target.value,
-                                error: undefined,
-                              })
-                            }
-                            placeholder={
-                              entryModal.kind === "subject"
-                                ? "เช่น TPAT5"
-                                : "เช่น A หรือ Mock 1"
-                            }
-                            className={`mt-1.5 ${inputClass}`}
-                          />
-                        </label>
-                        {entryModal.error && (
-                          <p
-                            role="alert"
-                            className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700"
-                          >
-                            {entryModal.error}
-                          </p>
                         )}
-                        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                      </div>
+                    )}
+
+                    {!isSetPage && (
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-4">
+                        <div>
+                          <b className="text-sm">สถานะหมวด {selected.name}</b>
+                          <p className="mt-1 text-xs text-slate-500">
+                            เปิดหมวดได้เมื่อมีแพ็กเกตที่เปิดอย่างน้อยหนึ่งรายการ ·
+                            แพ็กเกตที่เป็นร่างยังเลือกไม่ได้
+                          </p>
+                        </div>
+                        {canEdit && (
                           <button
                             type="button"
-                            onClick={closeEntryModal}
-                            className={secondaryButton}
+                            disabled={
+                              selected.status === "draft" &&
+                              !familyCanOpen(selected)
+                            }
+                            onClick={() =>
+                              updateFamily(
+                                (family) => ({
+                                  ...family,
+                                  status:
+                                    family.status === "open" ? "draft" : "open",
+                                }),
+                                "ปรับสถานะหมวดแล้ว",
+                              )
+                            }
+                            className={
+                              selected.status === "open"
+                                ? secondaryButton
+                                : primaryButton
+                            }
                           >
-                            ยกเลิก
+                            {selected.status === "open"
+                              ? "พักการขายทั้งหมวด"
+                              : "เปิดการขาย"}
                           </button>
-                          <button
-                            type="submit"
-                            className={`${primaryButton} inline-flex items-center`}
-                          >
-                            <LuPencil
-                              aria-hidden="true"
-                              className="mr-1.5 size-4"
-                            />
-                            {entryModal.mode === "add"
-                              ? "เพิ่มรายการ"
-                              : "บันทึกชื่อ"}
-                          </button>
-                        </div>
-                      </form>
-                    </section>
-                  </div>
-                )}
+                        )}
+                      </div>
+                    )}
+                  </section>
 
-                {/* {!isSetPage && <section aria-label="ตัวอย่างเส้นทางผู้สมัคร" className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+
+                  {/* {!isSetPage && <section aria-label="ตัวอย่างเส้นทางผู้สมัคร" className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
         <p className="text-xs font-bold text-amber-800">PREVIEW · ตัวอย่างใน Admin</p>
         <h2 className="mt-1 text-xl font-bold">ผู้สมัครจะเลือกอะไรตามลำดับ</h2>
         <p className="mt-1 text-sm text-slate-600">กดวิชาย่อยและชุดด้านบนเพื่อดูแพ็กเกตของเส้นทางนั้น สถานะสีเทาแสดงรายการที่ยังเลือกซื้อไม่ได้</p>
@@ -3029,9 +2643,10 @@ export default function WebBExamCatalog({
         </div>
         <p className="mt-4 text-xs leading-5 text-slate-600">ภาพนี้ใช้ประกอบการนำเสนอในหลังบ้าน ข้อมูลการสมัครและราคาบนหน้า Client ยังคงใช้ข้อมูลเดิมที่ตรวจผ่านแล้ว</p>
       </section>} */}
+                </div>
               </div>
             </div>
-          </div>
+          </WebBModalPortal>
         )}
 
       {isTgatA &&
@@ -3068,500 +2683,757 @@ export default function WebBExamCatalog({
         )}
 
       {partModal && (
-        <div
-          className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/60 p-3 sm:p-6"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setPartModal(null);
-          }}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="catalog-part-modal-title"
-            className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        <WebBModalPortal>
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 p-3 backdrop-blur-sm sm:p-6"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setPartModal(null);
+            }}
           >
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
-              <div>
-                <p className="text-xs font-semibold text-indigo-700">
-                  {selected?.name}
-                  {selectedSubject ? ` · ${selectedSubject.name}` : ""} · ชุด{" "}
-                  {selectedSet?.name}
-                </p>
-                <h2
-                  id="catalog-part-modal-title"
-                  className="mt-1 text-lg font-bold"
-                >
-                  {partModal.mode === "manage"
-                    ? `จัดการ ${partModal.part}`
-                    : partModal.mode === "add"
-                      ? "สร้างพาร์ท / วิชา"
-                      : `แก้ไข ${partModal.part}`}
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPartModal(null)}
-                className={secondaryButton}
-              >
-                ปิด ×
-              </button>
-            </div>
-            <div className="min-h-0 overflow-y-auto p-4">
-              {isTgatA && partModal.mode === "manage" ? (
-                managedPartProductId ? (
-                  <WebBAdminDemo
-                    key={managedPartProductId}
-                    activeScreen="exam-management"
-                    initialExamTab="content"
-                    initialProductId={managedPartProductId}
-                    embedded
-                    hideProductSelector
-                  />
-                ) : (
-                  <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
-                    พาร์ทที่เพิ่มใหม่ยังไม่มีสินค้าและไฟล์ข้อสอบใน Client
-                    จัดการชื่อได้จากปุ่มแก้ไขในตาราง
-                  </p>
-                )
-              ) : (
-                <form onSubmit={savePartModal} className="space-y-4">
-                  {partModal.mode !== "manage" && (
-                    <label className="block text-sm font-semibold">
-                      ชื่อพาร์ท / วิชา
-                      <WebBAdminInput
-                        autoFocus
-                        value={partModal.name}
-                        onChange={(event) =>
-                          setPartModal({
-                            ...partModal,
-                            name: event.target.value,
-                            error: undefined,
-                          })
-                        }
-                        className={`mt-2 ${inputClass}`}
-                        placeholder="เช่น พาร์ทการคิดวิเคราะห์"
-                      />
-                    </label>
-                  )}
-                  {!isTgatA && (
-                    <>
-                      <p className="rounded-lg bg-indigo-50 px-3 py-2 text-xs leading-5 text-indigo-900">
-                        ข้อมูลตัวอย่างสำหรับโครงสร้างอนาคต ตั้งค่าข้อสอบ ไฟล์
-                        และสถานะได้โดยไม่เปิดบริการฝั่งผู้เรียน
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="catalog-part-modal-title"
+              className={`flex ${partModal.mode === "manage" ? "h-[94vh] max-h-[94vh] w-full max-w-[96vw] xl:max-w-[1600px] 2xl:max-w-[1720px]" : "max-h-[94vh] w-full max-w-5xl"} flex-col overflow-hidden rounded-2xl bg-white shadow-2xl`}
+            >
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+                <div>
+                  {partModal.mode === "manage" ? (
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-bold text-indigo-700">
+                          {selected?.name}
+                          {selectedSubject ? ` · ${selectedSubject.name}` : ""} · ชุด {selectedSet?.name}
+                          {partModal.part ? ` · ${partModal.part}` : ""}
+                        </span>
+                      </div>
+                      <h2
+                        id="catalog-part-modal-title"
+                        className="mt-1 text-lg font-bold text-slate-900"
+                      >
+                        คลังข้อสอบและเฉลยคำตอบ
+                      </h2>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        จัดการไฟล์ข้อสอบ เวอร์ชัน และเฉลยคำตอบที่ใช้ตรวจคะแนนก่อนเผยแพร่
                       </p>
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        {(
-                          [
-                            ["questionCount", "จำนวนข้อ"],
-                            ["durationMinutes", "เวลาสอบ (นาที)"],
-                            ["choiceCount", "จำนวนตัวเลือก"],
-                            ["scoreMaximum", "คะแนนเต็ม"],
-                          ] as const
-                        ).map(([key, label]) => (
-                          <label key={key} className="text-sm font-semibold">
-                            {label}
-                            <WebBAdminInput
-                              type="number"
-                              min="1"
-                              step="1"
-                              value={partModal[key]}
-                              onChange={(event) =>
-                                setPartModal({
-                                  ...partModal,
-                                  [key]: event.target.value,
-                                  error: undefined,
-                                })
-                              }
-                              className={`mt-1 ${inputClass}`}
-                              placeholder="ยังไม่กำหนด"
-                            />
-                          </label>
-                        ))}
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <label className="text-sm font-semibold">
-                          ไฟล์ข้อสอบ
-                          <WebBAdminInput
-                            value={partModal.examFileName}
-                            onChange={(event) =>
-                              setPartModal({
-                                ...partModal,
-                                examFileName: event.target.value,
-                              })
-                            }
-                            className={`mt-1 ${inputClass}`}
-                            placeholder="เช่น TPAT1-set-A.pdf"
-                          />
-                        </label>
-                        <label className="text-sm font-semibold">
-                          ไฟล์เฉลย
-                          <WebBAdminInput
-                            value={partModal.answerFileName}
-                            onChange={(event) =>
-                              setPartModal({
-                                ...partModal,
-                                answerFileName: event.target.value,
-                              })
-                            }
-                            className={`mt-1 ${inputClass}`}
-                            placeholder="เช่น TPAT1-set-A-solution.pdf"
-                          />
-                        </label>
-                      </div>
-                      <label className="block max-w-sm text-sm font-semibold">
-                        สถานะเนื้อหา
-                        <div className="mt-1">
-                          <AdminSelect
-                            value={partModal.contentStatus}
-                            onChange={(value) =>
-                              setPartModal({
-                                ...partModal,
-                                contentStatus:
-                                  value as PartModalState["contentStatus"],
-                              })
-                            }
-                            options={["Draft", "รอตรวจ", "เผยแพร่"].map(
-                              (value) => ({ value, label: value }),
-                            )}
-                            ariaLabel="สถานะเนื้อหา"
-                          />
-                        </div>
-                      </label>
-                      <section className="space-y-3 rounded-xl border border-slate-200 p-4">
-                        <div>
-                          <h3 className="font-bold">เฉลยรายข้อ</h3>
-                          <p className="mt-1 text-xs text-slate-500">
-                            เพิ่มคำตอบและคะแนนของแต่ละข้อ ·
-                            บันทึกเป็นข้อมูลจำลองของประเภทสอบนี้
-                          </p>
-                        </div>
-                        <div className="overflow-x-auto rounded-lg border border-slate-200">
-                          <table className="w-full min-w-[520px] text-left text-sm">
-                            <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
-                              <tr>
-                                <th className="px-3 py-2.5">ข้อ</th>
-                                <th className="px-3 py-2.5">คำตอบ</th>
-                                <th className="px-3 py-2.5">คะแนน</th>
-                                <th className="px-3 py-2.5 text-right">
-                                  จัดการ
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {partModal.answers.map((answer, index) => (
-                                <tr key={index}>
-                                  <td className="px-3 py-2.5 font-semibold">
-                                    {index + 1}
-                                  </td>
-                                  <td className="px-3 py-2.5">
-                                    <WebBAdminInput
-                                      aria-label={`เฉลยข้อ ${index + 1}`}
-                                      value={answer.value}
-                                      onChange={(event) =>
-                                        setPartModal({
-                                          ...partModal,
-                                          answers: partModal.answers.map(
-                                            (item, itemIndex) =>
-                                              itemIndex === index
-                                                ? {
-                                                    ...item,
-                                                    value: event.target.value,
-                                                  }
-                                                : item,
-                                          ),
-                                          error: undefined,
-                                        })
-                                      }
-                                      className={inputClass}
-                                      placeholder="กรอกคำตอบ"
-                                    />
-                                  </td>
-                                  <td className="px-3 py-2.5">
-                                    <WebBAdminInput
-                                      aria-label={`คะแนนข้อ ${index + 1}`}
-                                      type="number"
-                                      min="0"
-                                      step="0.25"
-                                      value={answer.score}
-                                      onChange={(event) =>
-                                        setPartModal({
-                                          ...partModal,
-                                          answers: partModal.answers.map(
-                                            (item, itemIndex) =>
-                                              itemIndex === index
-                                                ? {
-                                                    ...item,
-                                                    score: event.target.value,
-                                                  }
-                                                : item,
-                                          ),
-                                          error: undefined,
-                                        })
-                                      }
-                                      className="w-24 rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
-                                    />
-                                  </td>
-                                  <td className="px-3 py-2.5 text-right">
-                                    <button
-                                      type="button"
-                                      aria-label={`ลบเฉลยข้อ ${index + 1}`}
-                                      title={`ลบเฉลยข้อ ${index + 1}`}
-                                      onClick={() =>
-                                        setPartModal({
-                                          ...partModal,
-                                          answers: partModal.answers.filter(
-                                            (_, itemIndex) =>
-                                              itemIndex !== index,
-                                          ),
-                                        })
-                                      }
-                                      className="inline-flex size-10 items-center justify-center rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50"
-                                    >
-                                      <LuTrash2
-                                        aria-hidden="true"
-                                        className="size-4"
-                                      />
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                              {partModal.answers.length === 0 && (
-                                <tr>
-                                  <td
-                                    colSpan={4}
-                                    className="px-3 py-5 text-center text-xs text-slate-500"
-                                  >
-                                    ยังไม่มีเฉลยรายข้อ
-                                  </td>
-                                </tr>
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() =>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-xs font-semibold text-indigo-700">
+                        {selected?.name}
+                        {selectedSubject ? ` · ${selectedSubject.name}` : ""} · ชุด{" "}
+                        {selectedSet?.name}
+                      </p>
+                      <h2
+                        id="catalog-part-modal-title"
+                        className="mt-1 text-lg font-bold"
+                      >
+                        {partModal.mode === "add"
+                          ? "สร้างพาร์ท / วิชา"
+                          : `แก้ไข ${partModal.part}`}
+                      </h2>
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPartModal(null)}
+                  className={secondaryButton}
+                >
+                  ปิด ×
+                </button>
+              </div>
+              <div className={partModal.mode === "manage" ? "flex-1 min-h-0 overflow-hidden flex flex-col p-4 sm:p-5" : "min-h-0 overflow-y-auto p-4"}>
+                {isTgatA && partModal.mode === "manage" ? (
+                  managedPartProductId ? (
+                    <WebBAdminDemo
+                      key={managedPartProductId}
+                      activeScreen="exam-management"
+                      initialExamTab="content"
+                      initialProductId={managedPartProductId}
+                      embedded
+                      hideProductSelector
+                    />
+                  ) : (
+                    <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
+                      พาร์ทที่เพิ่มใหม่ยังไม่มีสินค้าและไฟล์ข้อสอบใน Client
+                      จัดการชื่อได้จากปุ่มแก้ไขในตาราง
+                    </p>
+                  )
+                ) : (
+                  <form onSubmit={savePartModal} className="space-y-4">
+                    {partModal.mode !== "manage" && (
+                      <label className="block text-sm font-semibold">
+                        ชื่อพาร์ท / วิชา
+                        <WebBAdminInput
+                          autoFocus
+                          value={partModal.name}
+                          onChange={(event) =>
                             setPartModal({
                               ...partModal,
-                              answers: [
-                                ...partModal.answers,
-                                { value: "", score: "1" },
-                              ],
+                              name: event.target.value,
                               error: undefined,
                             })
                           }
-                          className={secondaryButton}
-                        >
-                          <LuPlus
-                            aria-hidden="true"
-                            className="mr-1.5 inline size-4"
-                          />
-                          เพิ่มเฉลยรายข้อ
-                        </button>
-                      </section>
-                    </>
-                  )}
-                  {partModal.error && (
-                    <p
-                      role="alert"
-                      className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700"
-                    >
-                      {partModal.error}
-                    </p>
-                  )}
-                  <div className="flex justify-end border-t border-slate-100 pt-4">
-                    <button type="submit" className={primaryButton}>
-                      บันทึกข้อมูล
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
-          </section>
-        </div>
+                          className={`mt-2 ${inputClass}`}
+                          placeholder="เช่น พาร์ทการคิดวิเคราะห์"
+                        />
+                      </label>
+                    )}
+                    {!isTgatA && (
+                      <>
+                        <p className="rounded-lg bg-indigo-50 px-3 py-2 text-xs leading-5 text-indigo-900">
+                          ข้อมูลตัวอย่างสำหรับโครงสร้างอนาคต ตั้งค่าข้อสอบ ไฟล์
+                          และสถานะได้โดยไม่เปิดบริการฝั่งผู้เรียน
+                        </p>
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                          {(
+                            [
+                              ["questionCount", "จำนวนข้อ"],
+                              ["durationMinutes", "เวลาสอบ (นาที)"],
+                              ["choiceCount", "จำนวนตัวเลือก"],
+                              ["scoreMaximum", "คะแนนเต็ม"],
+                            ] as const
+                          ).map(([key, label]) => (
+                            <label key={key} className="text-sm font-semibold">
+                              {label}
+                              <WebBAdminInput
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={partModal[key]}
+                                onChange={(event) =>
+                                  setPartModal({
+                                    ...partModal,
+                                    [key]: event.target.value,
+                                    error: undefined,
+                                  })
+                                }
+                                className={`mt-1 ${inputClass}`}
+                                placeholder="ยังไม่กำหนด"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="text-sm font-semibold">
+                            ไฟล์ข้อสอบ
+                            <WebBAdminInput
+                              value={partModal.examFileName}
+                              onChange={(event) =>
+                                setPartModal({
+                                  ...partModal,
+                                  examFileName: event.target.value,
+                                })
+                              }
+                              className={`mt-1 ${inputClass}`}
+                              placeholder="เช่น TPAT1-set-A.pdf"
+                            />
+                          </label>
+                          <label className="text-sm font-semibold">
+                            ไฟล์เฉลย
+                            <WebBAdminInput
+                              value={partModal.answerFileName}
+                              onChange={(event) =>
+                                setPartModal({
+                                  ...partModal,
+                                  answerFileName: event.target.value,
+                                })
+                              }
+                              className={`mt-1 ${inputClass}`}
+                              placeholder="เช่น TPAT1-set-A-solution.pdf"
+                            />
+                          </label>
+                        </div>
+                        <label className="block max-w-sm text-sm font-semibold">
+                          สถานะเนื้อหา
+                          <div className="mt-1">
+                            <AdminSelect
+                              value={partModal.contentStatus}
+                              onChange={(value) =>
+                                setPartModal({
+                                  ...partModal,
+                                  contentStatus:
+                                    value as PartModalState["contentStatus"],
+                                })
+                              }
+                              options={["Draft", "รอตรวจ", "เผยแพร่"].map(
+                                (value) => ({ value, label: value }),
+                              )}
+                              ariaLabel="สถานะเนื้อหา"
+                            />
+                          </div>
+                        </label>
+                        <section className="space-y-3 rounded-xl border border-slate-200 p-4">
+                          <div>
+                            <h3 className="font-bold">เฉลยรายข้อ</h3>
+                            <p className="mt-1 text-xs text-slate-500">
+                              เพิ่มคำตอบและคะแนนของแต่ละข้อ ·
+                              บันทึกเป็นข้อมูลจำลองของประเภทสอบนี้
+                            </p>
+                          </div>
+                          <div className="overflow-x-auto rounded-lg border border-slate-200">
+                            <table className="w-full min-w-[520px] text-left text-sm">
+                              <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                                <tr>
+                                  <th className="px-3 py-2.5">ข้อ</th>
+                                  <th className="px-3 py-2.5">คำตอบ</th>
+                                  <th className="px-3 py-2.5">คะแนน</th>
+                                  <th className="px-3 py-2.5 text-right">
+                                    จัดการ
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {partModal.answers.map((answer, index) => (
+                                  <tr key={index}>
+                                    <td className="px-3 py-2.5 font-semibold">
+                                      {index + 1}
+                                    </td>
+                                    <td className="px-3 py-2.5">
+                                      <WebBAdminInput
+                                        aria-label={`เฉลยข้อ ${index + 1}`}
+                                        value={answer.value}
+                                        onChange={(event) =>
+                                          setPartModal({
+                                            ...partModal,
+                                            answers: partModal.answers.map(
+                                              (item, itemIndex) =>
+                                                itemIndex === index
+                                                  ? {
+                                                    ...item,
+                                                    value: event.target.value,
+                                                  }
+                                                  : item,
+                                            ),
+                                            error: undefined,
+                                          })
+                                        }
+                                        className={inputClass}
+                                        placeholder="กรอกคำตอบ"
+                                      />
+                                    </td>
+                                    <td className="px-3 py-2.5">
+                                      <WebBAdminInput
+                                        aria-label={`คะแนนข้อ ${index + 1}`}
+                                        type="number"
+                                        min="0"
+                                        step="0.25"
+                                        value={answer.score}
+                                        onChange={(event) =>
+                                          setPartModal({
+                                            ...partModal,
+                                            answers: partModal.answers.map(
+                                              (item, itemIndex) =>
+                                                itemIndex === index
+                                                  ? {
+                                                    ...item,
+                                                    score: event.target.value,
+                                                  }
+                                                  : item,
+                                            ),
+                                            error: undefined,
+                                          })
+                                        }
+                                        className="w-24 rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+                                      />
+                                    </td>
+                                    <td className="px-3 py-2.5 text-right">
+                                      <button
+                                        type="button"
+                                        aria-label={`ลบเฉลยข้อ ${index + 1}`}
+                                        title={`ลบเฉลยข้อ ${index + 1}`}
+                                        onClick={() =>
+                                          setPartModal({
+                                            ...partModal,
+                                            answers: partModal.answers.filter(
+                                              (_, itemIndex) =>
+                                                itemIndex !== index,
+                                            ),
+                                          })
+                                        }
+                                        className="inline-flex size-10 items-center justify-center rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50"
+                                      >
+                                        <LuTrash2
+                                          aria-hidden="true"
+                                          className="size-4"
+                                        />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                                {partModal.answers.length === 0 && (
+                                  <tr>
+                                    <td
+                                      colSpan={4}
+                                      className="px-3 py-5 text-center text-xs text-slate-500"
+                                    >
+                                      ยังไม่มีเฉลยรายข้อ
+                                    </td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPartModal({
+                                ...partModal,
+                                answers: [
+                                  ...partModal.answers,
+                                  { value: "", score: "1" },
+                                ],
+                                error: undefined,
+                              })
+                            }
+                            className={secondaryButton}
+                          >
+                            <LuPlus
+                              aria-hidden="true"
+                              className="mr-1.5 inline size-4"
+                            />
+                            เพิ่มเฉลยรายข้อ
+                          </button>
+                        </section>
+                      </>
+                    )}
+                    {partModal.error && (
+                      <p
+                        role="alert"
+                        className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700"
+                      >
+                        {partModal.error}
+                      </p>
+                    )}
+                    <div className="flex justify-end border-t border-slate-100 pt-4">
+                      <button type="submit" className={primaryButton}>
+                        บันทึกข้อมูล
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </section>
+          </div>
+        </WebBModalPortal>
       )}
 
       <hr className="text-red-500" />
 
       {offerModal && (
-        <div
-          className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/60 p-3 sm:p-6"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setOfferModal(null);
-          }}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="catalog-offer-modal-title"
-            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl"
+        <WebBModalPortal>
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 p-3 backdrop-blur-sm sm:p-6"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setOfferModal(null);
+            }}
           >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-bold text-indigo-700">
-                  {selected?.name}
-                  {selectedSubject ? ` · ${selectedSubject.name}` : ""} · ชุด{" "}
-                  {selectedSet?.name} · แพ็กเกต
-                </p>
-                <h2
-                  id="catalog-offer-modal-title"
-                  className="mt-1 text-xl font-extrabold"
-                >
-                  {offerModal.id ? "แก้ไขแพ็กเกต" : "สร้างแพ็กเกต"}
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  กำหนดชื่อ เนื้อหา ราคาสินค้าจริง และยอดเรียกเก็บ
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOfferModal(null)}
-                className={secondaryButton}
-              >
-                ปิด ×
-              </button>
-            </div>
-            <form onSubmit={saveOfferModal} className="mt-5 space-y-4">
-              <label className="block text-sm font-semibold">
-                ชื่อสินค้า / แพ็กเกต
-                <WebBAdminInput
-                  autoFocus
-                  value={offerModal.name}
-                  onChange={(event) =>
-                    setOfferModal({
-                      ...offerModal,
-                      name: event.target.value,
-                      error: undefined,
-                    })
-                  }
-                  placeholder={
-                    selected?.id === "tgat"
-                      ? "เช่น Full TGAT หรือ TGAT2 + TGAT3"
-                      : "เช่น แพ็กเกตครบทุกพาร์ท"
-                  }
-                  className={`mt-1.5 ${inputClass}`}
-                />
-              </label>
-              <fieldset>
-                <legend className="text-sm font-semibold">
-                  เนื้อหาที่รวมในแพ็กเกต
-                </legend>
-                <p className="mt-1 text-xs text-slate-500">
-                  เลือกพาร์ทหรือวิชาที่ผู้เรียนจะได้รับ
-                </p>
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  {selectedSet?.parts.map((part) => (
-                    <label
-                      key={part}
-                      className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-sm"
-                    >
-                      <WebBAdminInput
-                        type="checkbox"
-                        checked={offerModal.parts.includes(part)}
-                        onChange={() =>
-                          setOfferModal({
-                            ...offerModal,
-                            parts: offerModal.parts.includes(part)
-                              ? offerModal.parts.filter((item) => item !== part)
-                              : [...offerModal.parts, part],
-                          })
-                        }
-                        className="mt-0.5"
-                      />
-                      <span>{part}</span>
-                    </label>
-                  ))}
-                </div>
-                {selectedSet?.parts.length === 0 && (
-                  <p className="mt-2 text-xs text-amber-800">
-                    เพิ่มพาร์ท / วิชาในเมนูข้อสอบและเฉลยก่อน
-                    แล้วกลับมาเลือกเนื้อหาได้
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="catalog-offer-modal-title"
+              className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-bold text-indigo-700">
+                    {selected?.name}
+                    {selectedSubject ? ` · ${selectedSubject.name}` : ""} · ชุด{" "}
+                    {selectedSet?.name} · แพ็กเกต
                   </p>
-                )}
-              </fieldset>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block text-sm font-semibold">
-                  ราคาสินค้าจริง (บาท)
-                  <WebBAdminInput
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={offerModal.price}
-                    onChange={(event) =>
-                      setOfferModal({
-                        ...offerModal,
-                        price: event.target.value,
-                        error: undefined,
-                      })
-                    }
-                    className={`mt-1.5 ${inputClass}`}
-                  />
-                </label>
-                <label className="block text-sm font-semibold">
-                  ยอดเรียกเก็บรวม Payso (บาท)
-                  <WebBAdminInput
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={offerModal.payPrice}
-                    onChange={(event) =>
-                      setOfferModal({
-                        ...offerModal,
-                        payPrice: event.target.value,
-                        error: undefined,
-                      })
-                    }
-                    className={`mt-1.5 ${inputClass}`}
-                  />
-                </label>
-              </div>
-              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-                ยอดเรียกเก็บตั้งแยกจากราคาสินค้าได้ · ค่าบริการ PromptPay QR และ
-                VAT ของ Payso แสดงแยกตามรายงาน
-              </p>
-              <label className="block max-w-sm text-sm font-semibold">
-                สถานะขาย
-                <div className="mt-1.5">
-                  <AdminSelect
-                    value={offerModal.status}
-                    onChange={(value) =>
-                      setOfferModal({
-                        ...offerModal,
-                        status: value as CatalogStatus,
-                      })
-                    }
-                    options={[
-                      { value: "draft", label: "ยังไม่เปิดขาย" },
-                      { value: "open", label: "เปิดขาย" },
-                    ]}
-                    ariaLabel="สถานะขาย"
-                  />
+                  <h2
+                    id="catalog-offer-modal-title"
+                    className="mt-1 text-xl font-extrabold"
+                  >
+                    {offerModal.id ? "แก้ไขแพ็กเกต" : "สร้างแพ็กเกต"}
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    กำหนดชื่อ เนื้อหา ราคาสินค้าจริง และยอดเรียกเก็บ
+                  </p>
                 </div>
-              </label>
-              {offerModal.error && (
-                <p
-                  role="alert"
-                  className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700"
-                >
-                  {offerModal.error}
-                </p>
-              )}
-              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
                 <button
                   type="button"
                   onClick={() => setOfferModal(null)}
                   className={secondaryButton}
                 >
-                  ยกเลิก
-                </button>
-                <button type="submit" className={primaryButton}>
-                  บันทึกแพ็กเกต
+                  ปิด ×
                 </button>
               </div>
-            </form>
-          </section>
-        </div>
+              <form onSubmit={saveOfferModal} className="mt-5 space-y-4">
+                <label className="block text-sm font-semibold">
+                  ชื่อสินค้า / แพ็กเกต
+                  <WebBAdminInput
+                    autoFocus
+                    value={offerModal.name}
+                    onChange={(event) =>
+                      setOfferModal({
+                        ...offerModal,
+                        name: event.target.value,
+                        error: undefined,
+                      })
+                    }
+                    placeholder={
+                      selected?.id === "tgat"
+                        ? "เช่น Full TGAT หรือ TGAT2 + TGAT3"
+                        : "เช่น แพ็กเกตครบทุกพาร์ท"
+                    }
+                    className={`mt-1.5 ${inputClass}`}
+                  />
+                </label>
+                <fieldset>
+                  <legend className="text-sm font-semibold">
+                    เนื้อหาที่รวมในแพ็กเกต
+                  </legend>
+                  <p className="mt-1 text-xs text-slate-500">
+                    เลือกพาร์ทหรือวิชาที่ผู้เรียนจะได้รับ
+                  </p>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {selectedSet?.parts.map((part) => (
+                      <label
+                        key={part}
+                        className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-sm"
+                      >
+                        <WebBAdminInput
+                          type="checkbox"
+                          checked={offerModal.parts.includes(part)}
+                          onChange={() =>
+                            setOfferModal({
+                              ...offerModal,
+                              parts: offerModal.parts.includes(part)
+                                ? offerModal.parts.filter((item) => item !== part)
+                                : [...offerModal.parts, part],
+                            })
+                          }
+                          className="mt-0.5"
+                        />
+                        <span>{part}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {selectedSet?.parts.length === 0 && (
+                    <p className="mt-2 text-xs text-amber-800">
+                      เพิ่มพาร์ท / วิชาในเมนูข้อสอบและเฉลยก่อน
+                      แล้วกลับมาเลือกเนื้อหาได้
+                    </p>
+                  )}
+                </fieldset>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block text-sm font-semibold">
+                    ราคาสินค้าจริง (บาท)
+                    <WebBAdminInput
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={offerModal.price}
+                      onChange={(event) =>
+                        setOfferModal({
+                          ...offerModal,
+                          price: event.target.value,
+                          error: undefined,
+                        })
+                      }
+                      className={`mt-1.5 ${inputClass}`}
+                    />
+                  </label>
+                  <label className="block text-sm font-semibold">
+                    ยอดเรียกเก็บรวม Payso (บาท)
+                    <WebBAdminInput
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={offerModal.payPrice}
+                      onChange={(event) =>
+                        setOfferModal({
+                          ...offerModal,
+                          payPrice: event.target.value,
+                          error: undefined,
+                        })
+                      }
+                      className={`mt-1.5 ${inputClass}`}
+                    />
+                  </label>
+                </div>
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                  ยอดเรียกเก็บตั้งแยกจากราคาสินค้าได้ · ค่าบริการ PromptPay QR และ
+                  VAT ของ Payso แสดงแยกตามรายงาน
+                </p>
+                <label className="block max-w-sm text-sm font-semibold">
+                  สถานะขาย
+                  <div className="mt-1.5">
+                    <AdminSelect
+                      value={offerModal.status}
+                      onChange={(value) =>
+                        setOfferModal({
+                          ...offerModal,
+                          status: value as CatalogStatus,
+                        })
+                      }
+                      options={[
+                        { value: "draft", label: "ยังไม่เปิดขาย" },
+                        { value: "open", label: "เปิดขาย" },
+                      ]}
+                      ariaLabel="สถานะขาย"
+                    />
+                  </div>
+                </label>
+                {offerModal.error && (
+                  <p
+                    role="alert"
+                    className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700"
+                  >
+                    {offerModal.error}
+                  </p>
+                )}
+                <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setOfferModal(null)}
+                    className={secondaryButton}
+                  >
+                    ยกเลิก
+                  </button>
+                  <button type="submit" className={primaryButton}>
+                    บันทึกแพ็กเกต
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>
+        </WebBModalPortal>
       )}
+
+      {tutorModal && tutorModal.isOpen && (() => {
+        const activeIdx = Math.max(0, Math.min(tutorModal.selectedIndex ?? 0, tutorModal.tutors.length - 1));
+        const currentTutor = tutorModal.tutors[activeIdx];
+        if (!currentTutor) return null;
+
+        return (
+        <WebBModalPortal>
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 p-3 backdrop-blur-sm sm:p-6"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setTutorModal(null);
+            }}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="tutor-modal-title"
+              className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            >
+              <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-6 py-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-bold text-indigo-700">
+                      {tutorModal.setName ? `ชุด ${tutorModal.setName} · ` : ""}{currentTutor.title}
+                    </span>
+                  </div>
+                  <h2 id="tutor-modal-title" className="mt-1 text-lg font-bold text-slate-900">
+                    แก้ไขข้อมูลติวเตอร์
+                  </h2>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    จัดการข้อมูลติวเตอร์และประวัติผู้ออกข้อสอบประจำวิชานี้ (1 รายการ ต่อ 1 ติวเตอร์)
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTutorModal(null)}
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  aria-label="ปิดหน้าต่าง"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="flex-1 space-y-4 overflow-y-auto p-6">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
+                    <div>
+                      <span className="text-sm font-bold text-slate-900">{currentTutor.title}</span>
+                      <span className="ml-2 text-xs text-slate-500">ผู้ออกข้อสอบ: {currentTutor.tutor}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-600">
+                        ชื่อวิชา / พาร์ท
+                      </label>
+                      <WebBAdminInput
+                        value={currentTutor.title}
+                        onChange={(e) => {
+                          const updated = [...tutorModal.tutors];
+                          updated[activeIdx] = { ...updated[activeIdx], title: e.target.value };
+                          setTutorModal({ ...tutorModal, tutors: updated });
+                        }}
+                        placeholder="เช่น TGAT 1 การสื่อสารภาษาอังกฤษ"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-600">
+                        ชื่อติวเตอร์ / ผู้ออกข้อสอบ
+                      </label>
+                      <WebBAdminInput
+                        value={currentTutor.tutor}
+                        onChange={(e) => {
+                          const updated = [...tutorModal.tutors];
+                          updated[activeIdx] = { ...updated[activeIdx], tutor: e.target.value };
+                          setTutorModal({ ...tutorModal, tutors: updated });
+                        }}
+                        placeholder="เช่น ติวเตอร์แมว"
+                      />
+                    </div>
+                  </div>
+
+                  {/* รูปโปรไฟล์ติวเตอร์: เบราซ์ไฟล์มาลง */}
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">
+                      รูปโปรไฟล์ติวเตอร์ (เบราซ์ไฟล์รูปภาพ)
+                    </label>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 shadow-sm">
+                        {currentTutor.image ? (
+                          <img
+                            src={currentTutor.image}
+                            alt={currentTutor.tutor || "ติวเตอร์"}
+                            className="size-full object-cover"
+                          />
+                        ) : (
+                          <LuImage className="size-6 text-slate-400" />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors">
+                          <LuUpload className="size-4 text-indigo-600" />
+                          <span>เบราซ์ไฟล์รูป...</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                const base64 = event.target?.result as string;
+                                if (base64) {
+                                  const updated = [...tutorModal.tutors];
+                                  updated[activeIdx] = { ...updated[activeIdx], image: base64 };
+                                  setTutorModal({ ...tutorModal, tutors: updated });
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }}
+                          />
+                        </label>
+                        {currentTutor.image && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = [...tutorModal.tutors];
+                              updated[activeIdx] = { ...updated[activeIdx], image: "" };
+                              setTutorModal({ ...tutorModal, tutors: updated });
+                            }}
+                            className="rounded-lg p-2 text-xs text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                            title="ลบรูปภาพ"
+                          >
+                            <LuTrash2 className="size-4" />
+                          </button>
+                        )}
+                        <span className="text-[11px] text-slate-400">
+                          (รองรับ PNG, JPG, WebP)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* วุฒิการศึกษา และ ประสบการณ์ */}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-600">
+                        วุฒิการศึกษา / มหาวิทยาลัย
+                      </label>
+                      <WebBAdminInput
+                        value={currentTutor.education || ""}
+                        onChange={(e) => {
+                          const updated = [...tutorModal.tutors];
+                          updated[activeIdx] = { ...updated[activeIdx], education: e.target.value };
+                          setTutorModal({ ...tutorModal, tutors: updated });
+                        }}
+                        placeholder="เช่น จบ ครุศาสตร์ จุฬาลงกรณ์มหาวิทยาลัย"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-600">
+                        ประสบการณ์
+                      </label>
+                      <WebBAdminInput
+                        value={currentTutor.experience || ""}
+                        onChange={(e) => {
+                          const updated = [...tutorModal.tutors];
+                          updated[activeIdx] = { ...updated[activeIdx], experience: e.target.value };
+                          setTutorModal({ ...tutorModal, tutors: updated });
+                        }}
+                        placeholder="เช่น ประสบการณ์ 5 ปี"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">
+                      หัวข้อไฮไลต์ / ประสบการณ์ (3 รายการ)
+                    </label>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {[0, 1, 2].map((bIndex) => (
+                        <WebBAdminInput
+                          key={bIndex}
+                          value={currentTutor.bullets[bIndex] || ""}
+                          onChange={(e) => {
+                            const updated = [...tutorModal.tutors];
+                            const bullets = [...(updated[activeIdx].bullets || [])];
+                            bullets[bIndex] = e.target.value;
+                            updated[activeIdx] = { ...updated[activeIdx], bullets };
+                            setTutorModal({ ...tutorModal, tutors: updated });
+                          }}
+                          placeholder={`จุดเด่นที่ ${bIndex + 1}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 items-center justify-between border-t border-slate-200 bg-slate-50 px-6 py-4">
+                <span className="text-xs text-slate-500">
+                  กดบันทึกเพื่ออัปเดตข้อมูลติวเตอร์ที่จะปรากฏในหน้าเว็บทันที
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTutorModal(null)}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      saveTutorsForCategory(tutorModal.category, tutorModal.tutors);
+                      setTutorModal(null);
+                      setMessage(`บันทึกข้อมูลชุด ${tutorModal.setName} และข้อมูลติวเตอร์เรียบร้อย ข้อมูลจะปรากฏบนหน้า /webb/${tutorModal.category}`);
+                    }}
+                    className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-bold text-white shadow hover:bg-indigo-700"
+                  >
+                    บันทึกข้อมูลติวเตอร์
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+        </WebBModalPortal>
+        );
+      })()}
 
       {!isSetPage && (
         <section

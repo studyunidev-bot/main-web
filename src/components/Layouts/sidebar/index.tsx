@@ -18,6 +18,8 @@ import {
   LuChartNoAxesCombined,
   LuClipboardCheck,
   LuLayoutDashboard,
+  LuPanelLeftClose,
+  LuPanelLeftOpen,
   LuScrollText,
   LuSettings,
   LuShoppingCart,
@@ -252,78 +254,170 @@ export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
 
       <aside
         className={cn(
-          "max-w-[270px] shrink-0 overflow-hidden border-r border-gray-200 bg-white transition-[width] duration-300 ease-linear dark:border-gray-800 dark:bg-gray-dark",
-          isMobile ? "fixed bottom-0 top-0 z-50" : "sticky top-0 h-screen",
-          isOpen ? "w-full" : "w-0",
+          "shrink-0 overflow-hidden border-r border-gray-200 bg-white transition-[width] duration-300 ease-[cubic-bezier(0.2,0,0,1)] dark:border-gray-800 dark:bg-gray-dark",
+          demoSite === "webb"
+            ? isMobile
+              ? cn(
+                  "fixed bottom-0 top-0 z-50 shadow-xl",
+                  isOpen ? "w-[240px]" : "w-0 pointer-events-none border-r-0",
+                )
+              : cn(
+                  "sticky top-0 h-screen",
+                  isOpen ? "w-[240px]" : "w-[68px]",
+                )
+            : cn(
+                "max-w-[270px]",
+                isMobile ? "fixed bottom-0 top-0 z-50 shadow-xl" : "sticky top-0 h-screen",
+                isOpen ? "w-full" : "w-0 border-r-0 pointer-events-none",
+              ),
         )}
         aria-label="Main navigation"
-        aria-hidden={!isOpen}
-        inert={!isOpen}
+        aria-hidden={isMobile && !isOpen}
+        inert={isMobile && !isOpen}
       >
-        <div className="flex h-full flex-col py-6 pl-[25px] pr-[7px]">
-          <div className="relative pr-4.5">
-            <Link
-              href={demoSite === "webb" ? "/webb" : "/"}
-              onClick={() => isMobile && toggleSidebar()}
-              className="px-0 py-2.5 min-[850px]:py-0 text-lg text-dark-2 dark:text-dark-8"
-            >
-              {demoSite === "webb"
-                ? "ระบบจัดการ Web B"
-                : "ระบบจัดการหลังบ้าน"}
-            </Link>
-
-            {isMobile && (
+        <div
+          className={cn(
+            "flex h-full flex-col overflow-hidden transition-[padding] duration-300 ease-[cubic-bezier(0.2,0,0,1)]",
+            demoSite === "webb"
+              ? isOpen
+                ? "w-[240px] px-3.5 py-4"
+                : "w-[68px] px-2 py-4"
+              : "py-6 pl-[25px] pr-[7px]",
+          )}
+        >
+          <div
+            className={cn(
+              "flex items-center pb-3 border-b border-gray-100 dark:border-gray-800 transition-all duration-200",
+              demoSite === "webb"
+                ? isOpen
+                  ? "justify-between px-1"
+                  : "justify-center px-0"
+                : "justify-between pr-1",
+            )}
+          >
+            {!isOpen && demoSite === "webb" ? (
               <button
+                id="webb-sidebar-expand-btn"
+                type="button"
                 onClick={toggleSidebar}
-                className="absolute left-3/4 right-4.5 top-1/2 -translate-y-1/2 text-right"
+                className="inline-flex items-center justify-center rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-[#FFFFFF1A] transition-colors"
+                title="ขยายเมนูด้านข้าง"
+                aria-label="Expand sidebar"
               >
-                <span className="sr-only">Close Menu</span>
-
-                <ArrowLeftIcon className="ml-auto size-7" />
+                <LuPanelLeftOpen className="size-5" />
               </button>
+            ) : (
+              <>
+                <Link
+                  href={demoSite === "webb" ? "/webb/admin/dashboard" : "/"}
+                  onClick={() => isMobile && toggleSidebar()}
+                  className={cn(
+                    "truncate font-bold text-dark-2 dark:text-dark-8 whitespace-nowrap",
+                    demoSite === "webb" ? "text-sm tracking-tight" : "text-lg",
+                  )}
+                >
+                  {demoSite === "webb"
+                    ? "ระบบจัดการ Web B"
+                    : "ระบบจัดการหลังบ้าน"}
+                </Link>
+
+                <button
+                  id="webb-sidebar-close-btn"
+                  type="button"
+                  onClick={toggleSidebar}
+                  className="inline-flex items-center justify-center rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-[#FFFFFF1A] transition-colors"
+                  title="ย่อเมนูด้านข้าง (เหลือเฉพาะไอคอน)"
+                  aria-label="Collapse sidebar"
+                >
+                  <LuPanelLeftClose className="size-4.5" />
+                </button>
+              </>
             )}
           </div>
 
           {/* Navigation */}
-          <div className="custom-scrollbar mt-6 flex-1 overflow-y-auto pr-3 min-[850px]:mt-5">
+          <div className="custom-scrollbar mt-4 flex-1 overflow-y-auto pr-0.5">
             {filteredNav.map((section) => (
-              <div key={section.label} className="mb-6">
-                <h2 className="mb-2 text-sm font-medium text-dark-6 dark:text-dark-5">
-                  {section.label}
-                </h2>
+              <div
+                key={section.label}
+                className={demoSite === "webb" ? (isOpen ? "mb-4" : "mb-3") : "mb-6"}
+              >
+                {demoSite === "webb" ? (
+                  isOpen ? (
+                    <h2 className="mb-1.5 px-2 text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 truncate transition-opacity duration-200">
+                      {section.label}
+                    </h2>
+                  ) : (
+                    <div className="my-2 mx-auto w-6 border-t border-gray-200 dark:border-gray-800" />
+                  )
+                ) : (
+                  <h2 className="mb-2 text-sm text-dark-6 dark:text-dark-5 font-medium">
+                    {section.label}
+                  </h2>
+                )}
 
                 <nav role="navigation" aria-label={section.label}>
-                  <ul className="space-y-2">
+                  <ul className={demoSite === "webb" ? "space-y-1" : "space-y-2"}>
                     {section.items.map((item) => (
                       <li key={item.title}>
                         {item.items.length ? (
                           <div>
                             <MenuItem
+                              className={cn(
+                                "flex items-center transition-all duration-200",
+                                demoSite === "webb"
+                                  ? isOpen
+                                    ? "gap-3 px-3 py-2 text-xs font-medium rounded-lg justify-start"
+                                    : "justify-center px-0 py-2.5 rounded-lg w-full"
+                                  : "gap-3 py-2.5 px-3.5",
+                              )}
                               isActive={item.items.some(({ url }) =>
                                 isLinkActive(url),
                               )}
-                              onClick={() => toggleExpanded(item.title)}
+                              title={!isOpen && demoSite === "webb" ? item.title : undefined}
+                              onClick={() => {
+                                if (!isOpen) toggleSidebar();
+                                toggleExpanded(item.title);
+                              }}
                             >
                               <item.icon
-                                className="size-6 shrink-0"
-                                aria-hidden="true"
-                              />
-
-                              <span>{item.title} </span>
-
-                              <ChevronUp
                                 className={cn(
-                                  "ml-auto rotate-180 transition-transform duration-200",
-                                  expandedItems.includes(item.title) &&
-                                    "rotate-0",
+                                  "shrink-0 transition-transform duration-200",
+                                  demoSite === "webb" ? "size-5" : "size-6",
                                 )}
                                 aria-hidden="true"
                               />
+
+                              {demoSite === "webb" ? (
+                                <span
+                                  className={cn(
+                                    "whitespace-nowrap transition-all duration-200 overflow-hidden",
+                                    isOpen
+                                      ? "opacity-100 max-w-[150px]"
+                                      : "opacity-0 max-w-0 pointer-events-none",
+                                  )}
+                                >
+                                  {item.title}
+                                </span>
+                              ) : (
+                                <span className="truncate">{item.title} </span>
+                              )}
+
+                              {isOpen && (
+                                <ChevronUp
+                                  className={cn(
+                                    "ml-auto rotate-180 transition-transform duration-200",
+                                    expandedItems.includes(item.title) &&
+                                      "rotate-0",
+                                  )}
+                                  aria-hidden="true"
+                                />
+                              )}
                             </MenuItem>
 
-                            {expandedItems.includes(item.title) && (
+                            {isOpen && expandedItems.includes(item.title) && (
                               <ul
-                                className="ml-9 mr-0 space-y-1.5 pb-[15px] pr-0 pt-2"
+                                className="ml-7 mr-0 space-y-1 pb-2 pr-0 pt-1.5"
                                 role="menu"
                               >
                                 {item.items.map((subItem) => (
@@ -331,16 +425,15 @@ export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
                                     <MenuItemList
                                       as="link"
                                       href={subItem.url}
-                                      // isActive={pathname === subItem.url}
                                       isActive={isLinkActive(subItem.url)}
-                                      className="flex items-center gap-1"
+                                      className="flex items-center gap-1.5 py-1 text-xs"
                                     >
                                       {isLinkActive(subItem.url) ? (
-                                        <GoDotFill className="text-primary" />
+                                        <GoDotFill className="text-primary size-3.5" />
                                       ) : (
-                                        <GoDot />
+                                        <GoDot className="size-3.5" />
                                       )}
-                                      <span>{subItem.title}</span>
+                                      <span className="truncate">{subItem.title}</span>
                                     </MenuItemList>
                                   </li>
                                 ))}
@@ -350,13 +443,20 @@ export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
                         ) : (
                           (() => {
                             const href = "url" in item ? item.url + "" : "/";
-                            // item.title.toLowerCase().split(" ").join("-");
 
                             return (
                               <MenuItem
-                                className="flex items-center gap-3 py-2.5"
+                                className={cn(
+                                  "flex items-center transition-all duration-200",
+                                  demoSite === "webb"
+                                    ? isOpen
+                                      ? "gap-3 px-3 py-2 text-xs font-medium rounded-lg justify-start"
+                                      : "justify-center px-0 py-2.5 rounded-lg w-full"
+                                    : "gap-3 py-2.5 px-3.5",
+                                )}
                                 as="link"
                                 href={href}
+                                title={!isOpen && demoSite === "webb" ? item.title : undefined}
                                 isActive={
                                   href === "/admins" || href === "/"
                                     ? pathname === href
@@ -364,11 +464,27 @@ export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
                                 }
                               >
                                 <item.icon
-                                  className="size-6 shrink-0"
+                                  className={cn(
+                                    "shrink-0 transition-transform duration-200",
+                                    demoSite === "webb" ? "size-5" : "size-6",
+                                  )}
                                   aria-hidden="true"
                                 />
 
-                                <span>{item.title} </span>
+                                {demoSite === "webb" ? (
+                                  <span
+                                    className={cn(
+                                      "whitespace-nowrap transition-all duration-200 overflow-hidden",
+                                      isOpen
+                                        ? "opacity-100 max-w-[170px]"
+                                        : "opacity-0 max-w-0 pointer-events-none",
+                                    )}
+                                  >
+                                    {item.title}
+                                  </span>
+                                ) : (
+                                  <span className="truncate">{item.title}</span>
+                                )}
                               </MenuItem>
                             );
                           })()

@@ -48,96 +48,179 @@ export type CatalogFamily = {
 };
 
 export const catalogStorageKey = "webb-admin-mock:exam-catalog-v2";
-const legacyStorageKey = "webb-admin-demo:exam-catalog";
+
 const tgatParts = [
   "TGAT1 การสื่อสารภาษาอังกฤษ",
   "TGAT2 การคิดอย่างมีเหตุผล",
   "TGAT3 สมรรถนะการทำงาน",
 ];
 
-const tpatSubjects = [
-  ["TPAT1", "ความถนัดแพทย์"],
-  ["TPAT2", "ความถนัดศิลปกรรมศาสตร์"],
-  ["TPAT3", "ความถนัดด้านวิทยาศาสตร์ เทคโนโลยี และวิศวกรรมศาสตร์"],
-  ["TPAT4", "ความถนัดทางสถาปัตยกรรมศาสตร์"],
-  ["TPAT5", "ความถนัดครุศาสตร์-ศึกษาศาสตร์"],
+type HardcodedPartSpec = {
+  name: string;
+  questionCount: number;
+  durationMinutes: number;
+  choiceCount: number;
+  scoreMaximum: number;
+};
+
+const tgatPartSettings: Record<string, CatalogPartSettings> = {
+  [tgatParts[0]]: {
+    questionCount: 60,
+    durationMinutes: 60,
+    choiceCount: 4,
+    scoreMaximum: 100,
+    examFileName: "tgat1-set-04-exam.pdf",
+    answerFileName: "tgat1-set-04-answer-key.pdf",
+    contentStatus: "Draft",
+    answers: Array.from({ length: 60 }, (_, i) => ({
+      value: ["B", "A", "D", "C"][i % 4],
+      score: 1.67,
+    })),
+  },
+  [tgatParts[1]]: {
+    questionCount: 80,
+    durationMinutes: 60,
+    choiceCount: 5,
+    scoreMaximum: 100,
+    examFileName: "tgat2-set-04-exam.pdf",
+    answerFileName: "tgat2-set-04-answer-key.pdf",
+    contentStatus: "Draft",
+    answers: Array.from({ length: 80 }, (_, i) => ({
+      value: ["A", "C", "B", "E", "D"][i % 5],
+      score: 1.25,
+    })),
+  },
+  [tgatParts[2]]: {
+    questionCount: 60,
+    durationMinutes: 60,
+    choiceCount: 4,
+    scoreMaximum: 100,
+    examFileName: "tgat3-set-04-exam.pdf",
+    answerFileName: "tgat3-set-04-answer-key.pdf",
+    contentStatus: "Draft",
+    answers: Array.from({ length: 60 }, (_, i) => ({
+      value: ["C", "B", "A", "D"][i % 4],
+      score: 1.67,
+    })),
+  },
+};
+
+const tpatSubjectSpecs: {
+  id: string;
+  code: string;
+  name: string;
+  price: number;
+  parts: HardcodedPartSpec[];
+}[] = [
+  {
+    id: "tpat1",
+    code: "TPAT1",
+    name: "TPAT1 ความถนัดแพทย์ (กสพท)",
+    price: 249,
+    parts: [
+      { name: "TPAT1.1 เชาวน์ปัญญา (วิเคราะห์ข้อมูลและเงื่อนไข)", questionCount: 45, durationMinutes: 75, choiceCount: 4, scoreMaximum: 100 },
+      { name: "TPAT1.2 จริยธรรมทางการแพทย์", questionCount: 60, durationMinutes: 60, choiceCount: 4, scoreMaximum: 100 },
+      { name: "TPAT1.3 ความคิดเชื่อมโยง", questionCount: 20, durationMinutes: 60, choiceCount: 4, scoreMaximum: 100 },
+    ],
+  },
+  {
+    id: "tpat2",
+    code: "TPAT2",
+    name: "TPAT2 ความถนัดศิลปกรรมศาสตร์",
+    price: 179,
+    parts: [
+      { name: "TPAT2.1 ทัศนศิลป์", questionCount: 50, durationMinutes: 60, choiceCount: 4, scoreMaximum: 33.33 },
+      { name: "TPAT2.2 ดนตรี", questionCount: 50, durationMinutes: 60, choiceCount: 4, scoreMaximum: 33.33 },
+      { name: "TPAT2.3 นาฏศิลป์", questionCount: 50, durationMinutes: 60, choiceCount: 4, scoreMaximum: 33.34 },
+    ],
+  },
+  {
+    id: "tpat3",
+    code: "TPAT3",
+    name: "TPAT3 ความถนัดด้านวิทยาศาสตร์ เทคโนโลยี และวิศวกรรมศาสตร์",
+    price: 179,
+    parts: [
+      { name: "TPAT3.1 การทดสอบความถนัดเชิงตัวเลขและมิติสัมพันธ์", questionCount: 30, durationMinutes: 60, choiceCount: 5, scoreMaximum: 40 },
+      { name: "TPAT3.2 ความคิดเชิงวิทยาศาสตร์และเทคโนโลยี", questionCount: 40, durationMinutes: 90, choiceCount: 5, scoreMaximum: 60 },
+    ],
+  },
+  {
+    id: "tpat4",
+    code: "TPAT4",
+    name: "TPAT4 ความถนัดทางสถาปัตยกรรมศาสตร์",
+    price: 179,
+    parts: [
+      { name: "TPAT4.1 ความรู้ทั่วไปและการรับรู้เชิงพื้นที่", questionCount: 40, durationMinutes: 90, choiceCount: 4, scoreMaximum: 50 },
+      { name: "TPAT4.2 การออกแบบและการคิดสร้างสรรค์", questionCount: 30, durationMinutes: 90, choiceCount: 4, scoreMaximum: 50 },
+    ],
+  },
+  {
+    id: "tpat5",
+    code: "TPAT5",
+    name: "TPAT5 ความถนัดครุศาสตร์-ศึกษาศาสตร์",
+    price: 179,
+    parts: [
+      { name: "TPAT5.1 ความรู้ทั่วไปในบริบทความเป็นครู", questionCount: 50, durationMinutes: 60, choiceCount: 4, scoreMaximum: 50 },
+      { name: "TPAT5.2 สมรรถนะและจิตวิญญาณความเป็นครู", questionCount: 50, durationMinutes: 60, choiceCount: 4, scoreMaximum: 50 },
+    ],
+  },
 ];
 
-const alevelSubjects = [
-  "คณิตศาสตร์ประยุกต์ 1", "คณิตศาสตร์ประยุกต์ 2", "วิทยาศาสตร์ประยุกต์", "ฟิสิกส์", "เคมี", "ชีววิทยา",
-  "สังคมศึกษา", "ภาษาไทย", "ภาษาอังกฤษ", "ภาษาฝรั่งเศส", "ภาษาเยอรมัน", "ภาษาญี่ปุ่น", "ภาษาเกาหลี",
-  "ภาษาจีน", "ภาษาบาลี", "ภาษาสเปน",
+const alevelSubjectSpecs: { id: string; name: string; questionCount: number; choiceCount: number }[] = [
+  { id: "alevel-1", name: "คณิตศาสตร์ประยุกต์ 1", questionCount: 30, choiceCount: 5 },
+  { id: "alevel-2", name: "คณิตศาสตร์ประยุกต์ 2", questionCount: 30, choiceCount: 5 },
+  { id: "alevel-3", name: "วิทยาศาสตร์ประยุกต์", questionCount: 30, choiceCount: 5 },
+  { id: "alevel-4", name: "ฟิสิกส์", questionCount: 30, choiceCount: 5 },
+  { id: "alevel-5", name: "เคมี", questionCount: 45, choiceCount: 5 },
+  { id: "alevel-6", name: "ชีววิทยา", questionCount: 40, choiceCount: 5 },
+  { id: "alevel-7", name: "สังคมศึกษา", questionCount: 50, choiceCount: 5 },
+  { id: "alevel-8", name: "ภาษาไทย", questionCount: 50, choiceCount: 5 },
+  { id: "alevel-9", name: "ภาษาอังกฤษ", questionCount: 80, choiceCount: 4 },
+  { id: "alevel-10", name: "ภาษาฝรั่งเศส", questionCount: 50, choiceCount: 4 },
+  { id: "alevel-11", name: "ภาษาเยอรมัน", questionCount: 50, choiceCount: 4 },
+  { id: "alevel-12", name: "ภาษาญี่ปุ่น", questionCount: 50, choiceCount: 4 },
+  { id: "alevel-13", name: "ภาษาเกาหลี", questionCount: 50, choiceCount: 4 },
+  { id: "alevel-14", name: "ภาษาจีน", questionCount: 50, choiceCount: 4 },
+  { id: "alevel-15", name: "ภาษาบาลี", questionCount: 50, choiceCount: 4 },
+  { id: "alevel-16", name: "ภาษาสเปน", questionCount: 50, choiceCount: 4 },
 ];
 
-const netsatSubjects = [
-  "ความฉลาดรู้ทั่วไปด้านภาษา: ภาษาไทย",
-  "ความฉลาดรู้ทั่วไปด้านภาษา: ภาษาอังกฤษ",
-  "ความฉลาดรู้ทั่วไปด้านคณิตศาสตร์",
-  "ความฉลาดรู้เฉพาะด้าน: วิทยาศาสตร์และเทคโนโลยี",
-  "ความฉลาดรู้เฉพาะด้าน: ฟิสิกส์",
-  "ความฉลาดรู้เฉพาะด้าน: เคมี",
-  "ความฉลาดรู้เฉพาะด้าน: ชีววิทยา",
+const netsatSubjectSpecs: { id: string; name: string }[] = [
+  { id: "netsat-1", name: "ความฉลาดรู้ทั่วไปด้านภาษา: ภาษาไทย" },
+  { id: "netsat-2", name: "ความฉลาดรู้ทั่วไปด้านภาษา: ภาษาอังกฤษ" },
+  { id: "netsat-3", name: "ความฉลาดรู้ทั่วไปด้านคณิตศาสตร์" },
+  { id: "netsat-4", name: "ความฉลาดรู้เฉพาะด้าน: วิทยาศาสตร์และเทคโนโลยี" },
+  { id: "netsat-5", name: "ความฉลาดรู้เฉพาะด้าน: ฟิสิกส์" },
+  { id: "netsat-6", name: "ความฉลาดรู้เฉพาะด้าน: เคมี" },
+  { id: "netsat-7", name: "ความฉลาดรู้เฉพาะด้าน: ชีววิทยา" },
 ];
 
-const tpat1SampleParts = [
-  "TPAT1 · วิเคราะห์ข้อมูลและเงื่อนไข",
-  "TPAT1 · เชื่อมโยงเหตุผล",
-  "TPAT1 · ประยุกต์ใช้ความรู้",
-];
-const alevelSampleParts = [
-  "A-Level คณิตศาสตร์ประยุกต์ 1 · จำนวนและพีชคณิต",
-  "A-Level คณิตศาสตร์ประยุกต์ 1 · การวัดและเรขาคณิต",
-  "A-Level คณิตศาสตร์ประยุกต์ 1 · สถิติและความน่าจะเป็น",
-];
-const netsatSampleParts = [
-  "NETSAT ภาษาไทย · การอ่านจับใจความ",
-  "NETSAT ภาษาไทย · การใช้ภาษา",
-  "NETSAT ภาษาไทย · การคิดวิเคราะห์",
-];
-
-function samplePartSettings(
-  familyCode: string,
-  parts: string[],
+function buildPartSettingsFromSpecs(
+  filePrefix: string,
+  parts: HardcodedPartSpec[],
 ): Record<string, CatalogPartSettings> {
-  return Object.fromEntries(parts.map((part, index) => {
-    const partNumber = String(index + 1).padStart(2, "0");
-    const filePrefix = `${familyCode}-A-part-${partNumber}`;
-    return [part, {
-      questionCount: 20,
-      durationMinutes: 20,
-      choiceCount: 4,
-      scoreMaximum: 20,
-      examFileName: `${filePrefix}-exam.pdf`,
-      answerFileName: `${filePrefix}-answer-key.pdf`,
-      contentStatus: "Draft",
-      answers: Array.from({ length: 20 }, (_, questionIndex) => ({
-        value: ["B", "A", "D", "C"][((questionIndex + index) % 4)],
-        score: 1,
-      })),
-    }];
-  }));
-}
-
-function draftSubject(
-  id: string,
-  name: string,
-  parts: string[] = [],
-): CatalogSubject {
-  const setId = `${id}-a`;
-  return {
-    id,
-    name,
-    sets: [{
-      id: setId,
-      name: "A",
-      parts,
-      ...(parts.length ? { partSettings: samplePartSettings(id, parts) } : {}),
-      offers: [{
-        ...exampleOffer(`${setId}-basic`, parts.length ? "แพ็กเกตครบทุกพาร์ท" : "แพ็กเกตมาตรฐาน", parts.length ? 249 : 179),
-        parts,
-      }],
-    }],
-  };
+  return Object.fromEntries(
+    parts.map((partSpec, index) => {
+      const partNum = String(index + 1).padStart(2, "0");
+      const partPoints = +(partSpec.scoreMaximum / partSpec.questionCount).toFixed(2);
+      return [
+        partSpec.name,
+        {
+          questionCount: partSpec.questionCount,
+          durationMinutes: partSpec.durationMinutes,
+          choiceCount: partSpec.choiceCount,
+          scoreMaximum: partSpec.scoreMaximum,
+          examFileName: `${filePrefix}-part-${partNum}-exam.pdf`,
+          answerFileName: `${filePrefix}-part-${partNum}-key.pdf`,
+          contentStatus: "Draft" as const,
+          answers: Array.from({ length: partSpec.questionCount }, (_, qIdx) => ({
+            value: ["A", "B", "C", "D", "E"][qIdx % partSpec.choiceCount],
+            score: partPoints,
+          })),
+        },
+      ];
+    }),
+  );
 }
 
 function mergeSeedSubject(seed: CatalogSubject, saved: CatalogSubject): CatalogSubject {
@@ -149,7 +232,7 @@ function mergeSeedSubject(seed: CatalogSubject, saved: CatalogSubject): CatalogS
       return {
         ...seedOffer,
         ...savedOffer,
-        parts: savedOffer?.parts.length ? savedOffer.parts : seedOffer.parts,
+        parts: savedOffer?.parts?.length ? savedOffer.parts : seedOffer.parts,
       };
     });
     const partSettings = { ...seedSet.partSettings };
@@ -159,7 +242,7 @@ function mergeSeedSubject(seed: CatalogSubject, saved: CatalogSubject): CatalogS
     return {
       ...seedSet,
       ...savedSet,
-      parts: savedSet.parts.length ? savedSet.parts : seedSet.parts,
+      parts: savedSet.parts?.length ? savedSet.parts : seedSet.parts,
       partSettings,
       offers: [
         ...offers,
@@ -189,7 +272,7 @@ export const initialCatalog: CatalogFamily[] = [
   {
     id: "tgat",
     name: "TGAT",
-    description: "Client เปิดซื้อและสอบเมื่อชุดพร้อม · เปิดใช้เฉพาะชุด A แบบ Full TGAT รวม TGAT1–3",
+    description: "ระบบ TGAT วัดสมรรถนะทั่วไป · ชุด A (เปิดขายและสอบได้), ชุด B–D (ร่างเตรียมพร้อม)",
     flow: "set-first",
     status: "open",
     subjects: [],
@@ -198,6 +281,7 @@ export const initialCatalog: CatalogFamily[] = [
         id: "tgat-a",
         name: "A",
         parts: tgatParts,
+        partSettings: tgatPartSettings,
         offers: [
           { id: "tgat-a-tgat1", productId: "tgat1", name: "TGAT1 · การสื่อสารภาษาอังกฤษ", price: 100, payPrice: 110, status: "draft", parts: [tgatParts[0]] },
           { id: "tgat-a-tgat2", productId: "tgat2", name: "TGAT2 · การคิดอย่างมีเหตุผล", price: 100, payPrice: 110, status: "draft", parts: [tgatParts[1]] },
@@ -210,88 +294,110 @@ export const initialCatalog: CatalogFamily[] = [
         id: `tgat-${name.toLowerCase()}`,
         name,
         parts: tgatParts,
-        offers: [exampleOffer(`tgat-${name.toLowerCase()}-179`, `ชุด ${name} ตามภาพสมัคร`)],
+        partSettings: tgatPartSettings,
+        offers: [exampleOffer(`tgat-${name.toLowerCase()}-179`, `ชุด ${name} Full TGAT`)],
       })),
     ],
   },
   {
     id: "tpat",
     name: "TPAT",
-    description: "Client แสดง TPAT1–5 แต่ปิดบริการ · โครงสร้างหลังบ้านเตรียมไว้สำหรับเปิดบริการในอนาคต ยังไม่มีการซื้อ สิทธิ์ หรือการสอบ",
+    description: "ระบบ TPAT วัดความถนัดวิชาชีพ (TPAT1–5) · ไส้ในและพาร์ทแบ่งตามมาตรฐาน ทปอ.",
     flow: "subject-first",
     status: "draft",
     sets: [],
-    subjects: tpatSubjects.map(([code, label]): CatalogSubject => ({
-      id: code.toLowerCase(),
-      name: `${code} ${label}`,
-      sets: code === "TPAT1" ? ["A", "B", "C", "D"].map((name): CatalogSet => {
-        const parts = name === "A" ? tpat1SampleParts : [];
+    subjects: tpatSubjectSpecs.map((spec): CatalogSubject => ({
+      id: spec.id,
+      name: spec.name,
+      sets: (spec.id === "tpat1" ? ["A", "B", "C", "D"] : ["A", "B"]).map((setName): CatalogSet => {
+        const setId = `${spec.id}-${setName.toLowerCase()}`;
+        const partNames = spec.parts.map((p) => p.name);
         return {
-          id: `${code.toLowerCase()}-${name.toLowerCase()}`,
-          name,
-          parts,
-          ...(parts.length ? { partSettings: samplePartSettings(`${code}-${name}`, parts) } : {}),
+          id: setId,
+          name: setName,
+          parts: partNames,
+          partSettings: buildPartSettingsFromSpecs(`${spec.id}-${setName.toLowerCase()}`, spec.parts),
           offers: [{
             ...exampleOffer(
-              `${code.toLowerCase()}-${name.toLowerCase()}-basic`,
-              parts.length ? "แพ็กเกตครบทุกพาร์ท" : "แพ็กเกตมาตรฐาน",
-              parts.length ? 249 : 179,
+              `${setId}-basic`,
+              `${spec.code} แพ็กเกตชุด ${setName}`,
+              spec.price,
             ),
-            parts,
+            parts: partNames,
           }],
         };
-      }) : [],
+      }),
     })),
   },
   {
     id: "alevel",
     name: "A-Level",
-    description: "วิชา A-Level ที่แสดงใน Client · บริการยังไม่เปิด จึงไม่มีการซื้อ สิทธิ์ หรือการสอบ",
+    description: "ข้อสอบความรู้เชิงวิชาการ A-Level (16 วิชาเดี่ยว ทปอ.) · ข้อสอบฉบับเดียว 90 นาที 100 คะแนน",
     flow: "subject-first",
     status: "draft",
     sets: [],
-    subjects: alevelSubjects.map((name, index) =>
-      draftSubject(
-        `alevel-${index + 1}`,
-        name,
-        index === 0 ? alevelSampleParts : [],
-      ),
-    ),
+    subjects: alevelSubjectSpecs.map((spec): CatalogSubject => {
+      const partSpec: HardcodedPartSpec = {
+        name: `A-Level ${spec.name}`,
+        questionCount: spec.questionCount,
+        durationMinutes: 90,
+        choiceCount: spec.choiceCount,
+        scoreMaximum: 100,
+      };
+      return {
+        id: spec.id,
+        name: `A-Level ${spec.name}`,
+        sets: ["A", "B"].map((setName): CatalogSet => {
+          const setId = `${spec.id}-${setName.toLowerCase()}`;
+          return {
+            id: setId,
+            name: setName,
+            parts: [partSpec.name],
+            partSettings: buildPartSettingsFromSpecs(setId, [partSpec]),
+            offers: [{
+              ...exampleOffer(`${setId}-basic`, `A-Level ${spec.name} ฉบับเดี่ยว (ชุด ${setName})`, 179),
+              parts: [partSpec.name],
+            }],
+          };
+        }),
+      };
+    }),
   },
   {
     id: "netsat",
     name: "NETSAT",
-    description: "วิชา NETSAT ที่แสดงใน Client · บริการยังไม่เปิด จึงไม่มีการซื้อ สิทธิ์ หรือการสอบ",
+    description: "ข้อสอบวัดความฉลาดรู้ทั่วไปและความฉลาดรู้เฉพาะด้าน (ม.ขอนแก่น 7 วิชา) · ข้อสอบฉบับเดียว 90 นาที 100 คะแนน",
     flow: "subject-first",
     status: "draft",
-    subjects: netsatSubjects.map((name, index) =>
-      draftSubject(
-        `netsat-${index + 1}`,
-        name,
-        index === 0 ? netsatSampleParts : [],
-      ),
-    ),
     sets: [],
+    subjects: netsatSubjectSpecs.map((spec): CatalogSubject => {
+      const partSpec: HardcodedPartSpec = {
+        name: spec.name,
+        questionCount: 40,
+        durationMinutes: 90,
+        choiceCount: 4,
+        scoreMaximum: 100,
+      };
+      return {
+        id: spec.id,
+        name: spec.name,
+        sets: ["A", "B"].map((setName): CatalogSet => {
+          const setId = `${spec.id}-${setName.toLowerCase()}`;
+          return {
+            id: setId,
+            name: setName,
+            parts: [partSpec.name],
+            partSettings: buildPartSettingsFromSpecs(setId, [partSpec]),
+            offers: [{
+              ...exampleOffer(`${setId}-basic`, `${spec.name} ฉบับเดี่ยว (ชุด ${setName})`, 179),
+              parts: [partSpec.name],
+            }],
+          };
+        }),
+      };
+    }),
   },
 ];
-
-type LegacyFamily = {
-  id: string;
-  name: string;
-  description?: string;
-  status: CatalogStatus;
-  parts: string[];
-  sets: string[];
-};
-
-function isLegacyFamily(value: unknown): value is LegacyFamily {
-  if (!value || typeof value !== "object") return false;
-  const item = value as Partial<LegacyFamily>;
-  return typeof item.id === "string" && typeof item.name === "string" &&
-    (item.status === "open" || item.status === "draft") &&
-    Array.isArray(item.parts) && item.parts.every((part) => typeof part === "string") &&
-    Array.isArray(item.sets) && item.sets.every((set) => typeof set === "string");
-}
 
 function isCatalogFamily(value: unknown): value is CatalogFamily {
   if (!value || typeof value !== "object") return false;
@@ -314,137 +420,50 @@ function isCatalogFamily(value: unknown): value is CatalogFamily {
 export function readCatalog(): CatalogFamily[] {
   try {
     const current = localStorage.getItem(catalogStorageKey);
-    if (current) {
-      const parsed: unknown = JSON.parse(current);
-      if (Array.isArray(parsed) && parsed.every(isCatalogFamily)) {
-        const normalized: CatalogFamily[] = parsed.map((family) => {
-          if (family.id === "tgat") {
-            const seed = initialCatalog.find((item) => item.id === "tgat")!;
-            const currentA = family.sets.find((set) => set.id === "tgat-a");
-            return {
-              ...family,
-              description: seed.description,
-              sets: [...seed.sets.map((seedSet) => {
-                const savedSet = family.sets.find((set) => set.id === seedSet.id);
-                if (seedSet.id !== "tgat-a") return savedSet || seedSet;
-                const legacyOfferIds = new Set(["tgat-a-179", "tgat-a-1", "tgat-a-23"]);
-                return {
-                  ...seedSet,
-                  ...(savedSet || {}),
-                  parts: savedSet?.parts || tgatParts,
-                  offers: [...seedSet.offers.map((seedOffer) => {
-                    const savedOffer = savedSet?.offers.find((offer) => offer.productId === seedOffer.productId || offer.id === seedOffer.id || (seedOffer.productId === "tgat-full" && offer.name.toLocaleLowerCase() === "full tgat"));
-                    return { ...seedOffer, ...savedOffer, id: seedOffer.id, productId: seedOffer.productId, status: savedOffer?.status || seedOffer.status };
-                  }), ...(savedSet?.offers || []).filter((offer) => !seedSet.offers.some((seedOffer) => seedOffer.id === offer.id || seedOffer.productId === offer.productId) && !legacyOfferIds.has(offer.id))],
-                };
-              }), ...family.sets.filter((set) => !seed.sets.some((seedSet) => seedSet.id === set.id))],
-            };
-          }
-          if (family.id === "tpat") {
-            const seed = initialCatalog.find((item) => item.id === "tpat")!;
-            const subjects = seed.subjects.map((seedSubject) => {
-              const savedSubject = family.subjects.find((subject) => subject.id.toLocaleLowerCase() === seedSubject.id);
-              if (!savedSubject) return seedSubject;
-              const mergedSubject = mergeSeedSubject(seedSubject, savedSubject);
-              return {
-                ...mergedSubject,
-                sets: mergedSubject.sets.map((set) => ({
-                  ...set,
-                  offers: set.offers.map((offer) => ({ ...offer, status: "draft" as const })),
-                })),
-              };
-            });
-            return { ...family, ...seed, status: "draft", subjects: [...subjects, ...family.subjects.filter((subject) => !seed.subjects.some((item) => item.id === subject.id))] };
-          }
-          if (family.id === "alevel") {
-            const seed = initialCatalog.find((item) => item.id === "alevel")!;
-            const subjects = seed.subjects.map((seedSubject) => {
-              const savedSubject = family.subjects.find((subject) => subject.name === seedSubject.name || subject.id === seedSubject.id);
-              if (!savedSubject) return seedSubject;
-              const mergedSubject = mergeSeedSubject(seedSubject, savedSubject);
-              return {
-                ...mergedSubject,
-                sets: mergedSubject.sets.map((set) => ({
-                  ...set,
-                  offers: set.offers.map((offer) => ({ ...offer, status: "draft" as const })),
-                })),
-              };
-            });
-            return { ...family, ...seed, status: "draft", subjects: [...subjects, ...family.subjects.filter((subject) => !seed.subjects.some((item) => item.id === subject.id || item.name === subject.name))] };
-          }
-          if (family.id === "netsat") {
-            const seed = initialCatalog.find((item) => item.id === "netsat")!;
-            const subjects = seed.subjects.map((seedSubject) => {
-              const savedSubject = family.subjects.find((subject) => subject.name === seedSubject.name || subject.id === seedSubject.id);
-              if (!savedSubject) return seedSubject;
-              const mergedSubject = mergeSeedSubject(seedSubject, savedSubject);
-              return {
-                ...mergedSubject,
-                sets: mergedSubject.sets.map((set) => ({
-                  ...set,
-                  offers: set.offers.map((offer) => ({ ...offer, status: "draft" as const })),
-                })),
-              };
-            });
-            return { ...family, ...seed, status: "draft", subjects: [...subjects, ...family.subjects.filter((subject) => !seed.subjects.some((item) => item.id === subject.id || item.name === subject.name))] };
-          }
-          return family;
-        });
-        if (JSON.stringify(normalized) !== JSON.stringify(parsed)) {
-          try {
-            localStorage.setItem(catalogStorageKey, JSON.stringify(normalized));
-          } catch {
-            // Keep the normalized Sample visible for this session if storage is unavailable.
-          }
-        }
-        return normalized;
-      }
-    }
-    const old = localStorage.getItem(legacyStorageKey);
-    if (!old) return initialCatalog;
-    const parsed: unknown = JSON.parse(old);
-    if (!Array.isArray(parsed)) return initialCatalog;
-    const legacy = parsed.filter(isLegacyFamily);
-    const seeds = initialCatalog.map((family) => {
-      const previous = legacy.find((item) => item.id === family.id);
-      if (!previous) return family;
-      if (family.id === "alevel") {
-        const legacySubjects = previous.parts.length ? previous.parts : previous.sets.length ? ["รายวิชาที่รอกำหนด"] : [];
+    if (!current) return initialCatalog;
+    const parsed: unknown = JSON.parse(current);
+    if (!Array.isArray(parsed) || !parsed.every(isCatalogFamily)) return initialCatalog;
+
+    const normalized: CatalogFamily[] = initialCatalog.map((seedFamily) => {
+      const savedFamily = parsed.find((f) => f.id === seedFamily.id);
+      if (!savedFamily) return seedFamily;
+
+      if (seedFamily.flow === "set-first") {
         return {
-          ...family,
-          status: previous.status,
-          subjects: [...legacySubjects.map((name, index): CatalogSubject => ({
-            id: `alevel-legacy-${index}`,
-            name,
-            sets: previous.sets.map((set, setIndex) => ({
-              id: `alevel-legacy-${index}-${setIndex}`,
-              name: set,
-              parts: [],
-              offers: [],
-            })),
-          })), ...family.subjects.filter((subject) => !legacySubjects.includes(subject.name))],
+          ...seedFamily,
+          status: savedFamily.status || seedFamily.status,
+          sets: seedFamily.sets.map((seedSet) => {
+            const savedSet = savedFamily.sets.find((s) => s.id === seedSet.id);
+            if (!savedSet) return seedSet;
+            const partSettings = { ...seedSet.partSettings };
+            for (const [part, settings] of Object.entries(savedSet.partSettings || {})) {
+              partSettings[part] = { ...partSettings[part], ...settings };
+            }
+            return {
+              ...seedSet,
+              parts: savedSet.parts?.length ? savedSet.parts : seedSet.parts,
+              partSettings,
+              offers: seedSet.offers.map((seedOffer) => {
+                const savedOffer = savedSet.offers.find((o) => o.id === seedOffer.id || o.productId === seedOffer.productId);
+                return savedOffer ? { ...seedOffer, ...savedOffer } : seedOffer;
+              }),
+            };
+          }),
         };
       }
-      return { ...family, status: family.id === "tgat" ? "open" as const : "draft" as const };
+
+      return {
+        ...seedFamily,
+        status: savedFamily.status || seedFamily.status,
+        subjects: seedFamily.subjects.map((seedSubject) => {
+          const savedSubject = savedFamily.subjects.find((s) => s.id === seedSubject.id || s.name === seedSubject.name);
+          if (!savedSubject) return seedSubject;
+          return mergeSeedSubject(seedSubject, savedSubject);
+        }),
+      };
     });
-    const custom = legacy.filter((item) => !seeds.some((seed) => seed.id === item.id)).map((item): CatalogFamily => ({
-      id: item.id,
-      name: item.name,
-      description: item.description || "ประเภทสอบที่เพิ่มไว้ก่อนปรับโครงสร้าง",
-      flow: item.parts.length ? "subject-first" : "set-first",
-      status: item.status,
-      subjects: item.parts.map((name, index) => ({
-        id: `${item.id}-subject-${index}`,
-        name,
-        sets: item.sets.map((set, setIndex) => ({ id: `${item.id}-${index}-${setIndex}`, name: set, parts: [], offers: [] })),
-      })),
-      sets: item.parts.length ? [] : item.sets.map((name, index) => ({ id: `${item.id}-set-${index}`, name, parts: [], offers: [] })),
-    }));
-    return ([...seeds, ...custom] as CatalogFamily[]).map((family) =>
-      family.status === "open" && !familyCanOpen(family)
-        ? { ...family, status: "draft" }
-        : family,
-    );
+
+    return normalized;
   } catch {
     return initialCatalog;
   }

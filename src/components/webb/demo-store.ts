@@ -478,24 +478,33 @@ export function recordDemoRankingResult(productId: string, score: number, examSe
 }
 
 export function calculateDemoScore(answers: Record<number, string | string[]>, productId = "tgat1", examSet = "A") {
-  const defaultAnswerKey = ["A", "C", "B", "D", "A"];
+  const defaultAnswerKey = ["1", "3", "2", "4", "1"];
   const setAnswerKey = safeRead<string[] | null>(`webb-admin-demo:answer-key:${productId}:${encodeURIComponent(examSet)}`, null);
   const legacyAnswerKey = safeRead<string[] | null>(`webb-admin-demo:answer-key:${productId}`, null);
   const answerKey = setAnswerKey || (examSet === "A" ? legacyAnswerKey || (productId === "tgat1" ? safeRead("webb-admin-demo:answer-key", defaultAnswerKey) : defaultAnswerKey) : defaultAnswerKey);
   if (!answerKey.length) return 0;
+  const normalizeChoice = (c: string) => {
+    const val = c.trim().toUpperCase();
+    if (val === "A") return "1";
+    if (val === "B") return "2";
+    if (val === "C") return "3";
+    if (val === "D") return "4";
+    if (val === "E") return "5";
+    return val;
+  };
   const correct = answerKey.reduce((total, expected, index) => {
     const answer = answers[index];
     const choices = Array.isArray(answer) ? answer : answer === undefined ? [] : [answer];
     const actual = choices
       .map(Number)
       .filter(Number.isInteger)
-      .map((choice) => String.fromCharCode(65 + choice))
+      .map((choice) => String(choice + 1))
       .sort()
       .join(",");
     const expectedPattern = expected
-      .split(/[,+\s]+/)
+      .split(/[,+\s/]+/)
       .filter(Boolean)
-      .map((choice) => choice.toUpperCase())
+      .map(normalizeChoice)
       .sort()
       .join(",");
     return total + (actual === expectedPattern ? 1 : 0);
@@ -503,8 +512,20 @@ export function calculateDemoScore(answers: Record<number, string | string[]>, p
   return Math.round((correct / answerKey.length) * 1000) / 10;
 }
 
-export function areDemoResultsPublished() {
+export function areDemoResultsPublished(): boolean {
+  const adminMock = safeRead<boolean | null>("webb-admin-mock:mock-published-results", null);
+  if (adminMock !== null) return adminMock;
   return safeRead<boolean>("webb-admin-demo:published-results", true);
+}
+
+export function setDemoResultsPublished(published: boolean) {
+  safeWrite("webb-admin-demo:published-results", published);
+  safeWrite("webb-admin-mock:mock-published-results", published);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("webb-admin-demo-updated"));
+    window.dispatchEvent(new Event("webb-admin-mock-updated"));
+    window.dispatchEvent(new Event("storage"));
+  }
 }
 
 export function isDemoSolutionPublished(productId: string) {

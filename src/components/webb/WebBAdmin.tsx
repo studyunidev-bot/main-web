@@ -272,10 +272,32 @@ export default function WebBAdmin() {
         </article>
       </section>
       <section id="products" className="scroll-mt-24">
-        <h2 className="text-xl font-bold">ชุดฝึกสอบและราคา</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          ราคาและจำนวนครั้งเป็นข้อมูลจำลองเพื่อการนำเสนอ
-        </p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold">ชุดฝึกสอบและราคา</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              ราคาและจำนวนครั้งเป็นข้อมูลจำลองเพื่อการนำเสนอ
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              const csv = [
+                "สินค้า,พาร์ท,ราคาจำลอง,สิทธิ์สอบ",
+                ...WEBB_PRODUCTS.map((p) => `"${p.name}","${p.parts}","${p.price}","1 ครั้ง"`),
+              ].join("\n");
+              const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `webb-products-${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+          >
+            ดาวน์โหลด CSV
+          </button>
+        </div>
         <article className={`${card} mt-4 overflow-x-auto`}>
           <table className="w-full min-w-[650px] text-left text-sm">
             <thead className="text-xs text-slate-500">

@@ -26,6 +26,7 @@ export function MenuItem(
     className?: string;
     children: React.ReactNode;
     isActive: boolean;
+    title?: string;
   } & ({ as?: "button"; onClick: () => void } | { as: "link"; href: string }),
 ) {
   const { toggleSidebar, isMobile } = useSidebarContext();
@@ -34,6 +35,7 @@ export function MenuItem(
     return (
       <Link
         href={props.href}
+        title={props.title}
         // Close sidebar on clicking link if it's mobile
         onClick={() => isMobile && toggleSidebar()}
         className={cn(
@@ -52,6 +54,7 @@ export function MenuItem(
   return (
     <button
       onClick={props.onClick}
+      title={props.title}
       aria-expanded={props.isActive}
       className={menuItemBaseStyles({
         isActive: props.isActive,
@@ -88,6 +91,7 @@ export function MenuItemList(
     className?: string;
     children: React.ReactNode;
     isActive: boolean;
+    title?: string;
   } & ({ as?: "button"; onClick: () => void } | { as: "link"; href: string }),
 ) {
   const { toggleSidebar, isMobile } = useSidebarContext();
@@ -96,6 +100,7 @@ export function MenuItemList(
     return (
       <Link
         href={props.href}
+        title={props.title}
         // Close sidebar on clicking link if it's mobile
         onClick={() => isMobile && toggleSidebar()}
         className={cn(
@@ -114,6 +119,7 @@ export function MenuItemList(
   return (
     <button
       onClick={props.onClick}
+      title={props.title}
       aria-expanded={props.isActive}
       className={menuItemBaseStyles({
         isActive: props.isActive,

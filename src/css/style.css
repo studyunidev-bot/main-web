@@ -26,6 +26,17 @@
   }
 }
 
+/* Webb Admin: Ensure open modals cover the sticky Navbar completely */
+body:has([role="dialog"]) header,
+body:has([aria-modal="true"]) header {
+  z-index: 10 !important;
+}
+
+main:has([role="dialog"]),
+main:has([aria-modal="true"]) {
+  z-index: 100 !important;
+}
+
 @layer utilities {
   /* Chrome, Safari and Opera */
   .no-scrollbar::-webkit-scrollbar {

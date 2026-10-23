@@ -63,37 +63,14 @@ export type ExamPlan = {
 
 export type ExamResponseType = "single" | "multiple" | "linked";
 
-export function getExamResponseDetails(plan: ExamPlan, answerIndex: number) {
+export function getExamResponseDetails(plan: ExamPlan, answerIndex: number): { responseType: ExamResponseType; linkedQuestionNumber?: number } {
   const section = plan.sections.find(
     (item) =>
       answerIndex >= item.answerIndexStart &&
       answerIndex < item.answerIndexStart + item.questionCount,
   );
-  if (section?.id !== "tgat3") {
-    return { responseType: "single" as const, linkedQuestionNumber: undefined };
-  }
-
-  const localIndex = answerIndex - section.answerIndexStart;
-  if (localIndex < 15) {
-    const position = localIndex % 5;
-    if (position === 2 || position === 3) {
-      return {
-        responseType: "linked" as const,
-        linkedQuestionNumber: section.questionStart + localIndex + (position === 2 ? 1 : -1),
-      };
-    }
-    return {
-      responseType: position === 1 || position === 4 ? "multiple" as const : "single" as const,
-      linkedQuestionNumber: undefined,
-    };
-  }
-
-  if (localIndex < 30) {
-    const position = (localIndex - 15) % 4;
-    return {
-      responseType: position === 0 || position === 3 ? "multiple" as const : "single" as const,
-      linkedQuestionNumber: undefined,
-    };
+  if (section?.id === "tgat3") {
+    return { responseType: "multiple" as const, linkedQuestionNumber: undefined };
   }
 
   return { responseType: "single" as const, linkedQuestionNumber: undefined };

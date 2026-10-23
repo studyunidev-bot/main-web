@@ -72,9 +72,7 @@ export default function WebBCheckout({ product }: { product: ExamProduct }) {
       return;
     }
     setCheckoutRef(pending.ref);
-    setPaymentDeadline(pending.expiresAt);
-    setRemainingSeconds(Math.ceil((pending.expiresAt - Date.now()) / 1000));
-    setShowPaymentQR(true);
+    finishPayment(pending.ref);
   }, [account?.username, product.id]);
 
   useEffect(() => {
@@ -122,9 +120,7 @@ export default function WebBCheckout({ product }: { product: ExamProduct }) {
     const existingPending = readDemoOrders().find((order) => order.status === "รอชำระ" && order.profileSnapshot.username.toLowerCase() === account.username.toLowerCase() && order.items.some((item) => item.productId === product.id));
     if (existingPending && existingPending.expiresAt > now.getTime()) {
       setCheckoutRef(existingPending.ref);
-      setPaymentDeadline(existingPending.expiresAt);
-      setRemainingSeconds(Math.ceil((existingPending.expiresAt - now.getTime()) / 1000));
-      setShowPaymentQR(true);
+      finishPayment(existingPending.ref);
       return;
     }
     if (existingPending) setDemoOrderStatus(existingPending.ref, "หมดอายุ");
@@ -152,12 +148,6 @@ export default function WebBCheckout({ product }: { product: ExamProduct }) {
       expiresAt: now.getTime() + (59 * 60 + 24) * 1000,
     });
     setCheckoutRef(order.ref);
-    setPaymentDeadline(order.expiresAt);
-    setRemainingSeconds(Math.max(0, Math.ceil((order.expiresAt - Date.now()) / 1000)));
-    if (payment === "qr") {
-      setShowPaymentQR(true);
-      return;
-    }
     finishPayment(order.ref);
   }
 

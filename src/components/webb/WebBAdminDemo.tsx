@@ -41,11 +41,17 @@ import {
   getExamQuestionDetails,
   getExamResponseDetails,
 } from "./exam-documents";
+import WebBTGAT3AnswerKeyManager from "./WebBTGAT3AnswerKeyManager";
+import {
+  type TGAT3AnswerRule,
+  getTGAT3BlueprintPreset,
+} from "./tgat3-scoring";
 import {
   defaultSocialSettings,
   productsOverlap,
   safeRead,
   safeWrite,
+  setDemoResultsPublished,
   type DemoPurchase,
   type SocialSettings,
 } from "./demo-store";
@@ -54,6 +60,7 @@ import WebBAdminTable, {
   adminTableCellClass,
   adminTableHeadClass,
 } from "./WebBAdminTable";
+import WebBModalPortal from "./WebBModalPortal";
 import WebBAdminClientReference from "./WebBAdminClientReference";
 import { TOTAL_MOCK_QUESTIONS } from "./mock-exam-questions";
 import { Badge, Button, Panel } from "./WebBAdminPrimitives";
@@ -698,6 +705,7 @@ function Section({
     examView,
     examTab,
     rolePermissions,
+    embedded,
   } = useContext(AdminScreenContext);
   const role = useContext(WebBAdminRoleContext);
   const examTableSections = ["products"];
@@ -767,28 +775,39 @@ function Section({
     role === "Super Admin" ||
     Boolean(access && (access.add || access.edit || access.approve));
   return (
-    <section id={id} className="scroll-mt-24 space-y-4">
-      <div
-        className={`flex flex-wrap items-end justify-between gap-3 ${
-          headerNoWrap ? "2xl:flex-nowrap" : ""
-        }`}
-      >
-        <div>
-          <h2 className="text-xl font-bold text-slate-900">{title}</h2>
-          {detail && <p className="mt-1 text-sm text-slate-500">{detail}</p>}
+    <section id={id} className={embedded ? "h-full flex flex-col min-h-0" : "scroll-mt-24 space-y-4"}>
+      {!embedded ? (
+        <div
+          className={`shrink-0 flex flex-wrap items-end justify-between gap-3 ${
+            headerNoWrap ? "2xl:flex-nowrap" : ""
+          }`}
+        >
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">{title}</h2>
+            {detail && <p className="mt-1 text-sm text-slate-500">{detail}</p>}
+          </div>
+          {action && (
+            <fieldset
+              disabled={!canEdit && !actionEnabledWhenReadOnly}
+              className="m-0 min-w-0 border-0 p-0"
+            >
+              {action}
+            </fieldset>
+          )}
         </div>
-        {action && (
+      ) : action ? (
+        <div className="shrink-0 flex justify-end pb-2">
           <fieldset
             disabled={!canEdit && !actionEnabledWhenReadOnly}
             className="m-0 min-w-0 border-0 p-0"
           >
             {action}
           </fieldset>
-        )}
-      </div>
+        </div>
+      ) : null}
       <fieldset
         disabled={!canEdit}
-        className="m-0 min-w-0 space-y-4 border-0 p-0"
+        className={embedded ? "m-0 min-w-0 border-0 p-0 flex-1 min-h-0 flex flex-col mt-2" : "m-0 min-w-0 space-y-4 border-0 p-0"}
       >
         <legend className="sr-only">{title}</legend>
         {children}
@@ -876,6 +895,7 @@ const AdminScreenContext = createContext({
   examView: "table" as "table" | "detail",
   examTab: "overview" as ExamTab,
   rolePermissions: defaultRolePermissions,
+  embedded: false,
 });
 function downloadCsv(
   filename: string,
@@ -1296,7 +1316,7 @@ export default function WebBAdminDemo({
   const answerKeyStorageSet = encodeURIComponent(answerKeySetName);
   const [answerKey, setAnswerKey, answerKeyLoaded] = useDemoData<string[]>(
     `answer-key:${answerKeyProductId}:${answerKeyStorageSet}`,
-    ["A", "C", "B", "D", "A"],
+    ["1", "3", "2", "4", "1"],
   );
   const answerKeyPlan = getManagedExamPlan(
     answerKeyProductId,
@@ -1327,21 +1347,28 @@ export default function WebBAdminDemo({
           )
         : {},
     );
-  const answerReviewComplete =
-    answerKeyLoaded &&
-    reviewedAnswersLoaded &&
-    answerScoringRulesLoaded &&
-    answerKey.length === expectedAnswerCount &&
-    answerScoringRules.length === expectedAnswerCount &&
-    answerKey.every((answer, index) =>
-      Boolean(answer.trim()) &&
-      reviewedAnswers[index] &&
-      Number.isFinite(answerScoringRules[index]?.maxScore) &&
-      answerScoringRules[index].maxScore > 0 &&
-      Number.isFinite(answerScoringRules[index]?.partialScore) &&
-      answerScoringRules[index].partialScore >= 0 &&
-      answerScoringRules[index].partialScore < answerScoringRules[index].maxScore,
-    );
+  const isTgat3Product = answerKeyProductId === "tgat3";
+  const [tgat3Rules, setTgat3Rules, tgat3RulesLoaded] = useDemoData<TGAT3AnswerRule[]>(
+    `tgat3-dynamic-rules:${answerKeyStorageSet}`,
+    getTGAT3BlueprintPreset(),
+  );
+  const answerReviewComplete = isTgat3Product
+    ? tgat3RulesLoaded && tgat3Rules.length > 0 && tgat3Rules.every((r) => r.isReviewed)
+    : answerKeyLoaded &&
+      reviewedAnswersLoaded &&
+      answerScoringRulesLoaded &&
+      answerKey.length === expectedAnswerCount &&
+      answerScoringRules.length === expectedAnswerCount &&
+      answerKey.every(
+        (answer, index) =>
+          Boolean(answer && typeof answer === "string" ? answer.trim() : answer) &&
+          reviewedAnswers[index] &&
+          Number.isFinite(answerScoringRules[index]?.maxScore) &&
+          answerScoringRules[index].maxScore > 0 &&
+          Number.isFinite(answerScoringRules[index]?.partialScore) &&
+          answerScoringRules[index].partialScore >= 0 &&
+          answerScoringRules[index].partialScore < answerScoringRules[index].maxScore,
+      );
   useEffect(() => {
     if (!answerKeyLoaded || !answerScoringRulesLoaded) return;
     const expectedCount = getManagedExamPlan(
@@ -1399,6 +1426,7 @@ export default function WebBAdminDemo({
   ]);
   useEffect(() => {
     if (!answerScoringRulesLoaded || !answerKeyLoaded) return;
+    if (answerKeyProductId === "tgat3") return;
     const hasTgat3 = answerKeyPlan.sections.some(
       (section) => section.id === "tgat3",
     );
@@ -2599,9 +2627,10 @@ export default function WebBAdminDemo({
         examView,
         examTab,
         rolePermissions,
+        embedded,
       }}
     >
-      <div className="space-y-7 text-slate-900">
+      <div className={embedded ? "flex-1 min-h-0 flex flex-col h-full text-slate-900" : "space-y-7 text-slate-900"}>
         {activeScreen === "real-exams" && initialFamilyId === "tpat" && (
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
             <Link
@@ -2903,12 +2932,13 @@ export default function WebBAdminDemo({
             </header>
           )}
         {detail && (
-          <div
-            className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/45 p-4"
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget) setDetail(null);
-            }}
-          >
+          <WebBModalPortal>
+            <div
+              className="fixed inset-0 z-[9999] grid place-items-center bg-slate-950/75 p-4 backdrop-blur-sm"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) setDetail(null);
+              }}
+            >
             <section
               role="dialog"
               aria-modal="true"
@@ -3076,15 +3106,17 @@ export default function WebBAdminDemo({
               </div>
             </section>
           </div>
-        )}
+        </WebBModalPortal>
+      )}
         {entitlementModalOpen && (
-          <div
-            className="fixed inset-0 z-[110] grid place-items-center bg-slate-950/50 p-4"
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget)
-                setEntitlementModalOpen(false);
-            }}
-          >
+          <WebBModalPortal>
+            <div
+              className="fixed inset-0 z-[9999] grid place-items-center bg-slate-950/75 p-4 backdrop-blur-sm"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget)
+                  setEntitlementModalOpen(false);
+              }}
+            >
             <section
               role="dialog"
               aria-modal="true"
@@ -3194,7 +3226,8 @@ export default function WebBAdminDemo({
               </div>
             </section>
           </div>
-        )}
+        </WebBModalPortal>
+      )}
         <Section
           id="overview"
           title="ภาพรวมแพลตฟอร์มฝึกสอบ"
@@ -3645,15 +3678,6 @@ export default function WebBAdminDemo({
                         ? "จัดการชุดขายจริงและเนื้อหาตั้งแต่สินค้าไปจนถึงเฉลย"
                         : "จัดการสินค้า เวอร์ชัน ราคา และชุดทดลอง"
               }
-              action={
-                examView === "table" &&
-                activeScreen !== "trial-exams" &&
-                !offerTable ? (
-                  <Button onClick={() => createProduct()}>
-                    ＋ เพิ่มชุดจริง
-                  </Button>
-                ) : undefined
-              }
             >
               <Panel>
                 {(activeScreen === "trial-exams" ||
@@ -4099,14 +4123,8 @@ export default function WebBAdminDemo({
           id="content"
           title="คลังข้อสอบและเฉลยคำตอบ"
           detail="จัดการไฟล์ข้อสอบ เวอร์ชัน และเฉลยคำตอบที่ใช้ตรวจคะแนนก่อนเผยแพร่"
-          action={
-            activeScreen !== "trial-exams" &&
-            activeScreen !== "exam-management" ? (
-              <Button onClick={createContentDraft}>＋ สร้างชุดข้อสอบ</Button>
-            ) : undefined
-          }
         >
-          <div className="space-y-4">
+          <div className={embedded ? "flex-1 min-h-0 flex flex-col h-full" : "space-y-4"}>
             {selectedExamProduct && !embedded && (
               <WebBAdminClientReference
                 productId={selectedExamProduct.id}
@@ -4115,7 +4133,7 @@ export default function WebBAdminDemo({
                 section="content"
               />
             )}
-            {embedded && sectionSettingsDraft && (
+            {!embedded && sectionSettingsDraft && (
               <Panel>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -4208,20 +4226,362 @@ export default function WebBAdminDemo({
                 </div>
               </Panel>
             )}
-              {selectedExamProduct &&
-                hasActiveAttempt(selectedExamProduct.name) && (
-                  <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
-                    มีผู้เข้าสอบอยู่ ·
-                    ล็อกการแก้เฉลยและเผยแพร่ชั่วคราวสำหรับผู้ดูแลทั่วไป · Super
-                    Admin ยังแก้เฉลยรายข้อได้
-                  </p>
-                )}
+            {!embedded && selectedExamProduct &&
+              hasActiveAttempt(selectedExamProduct.name) && (
+                <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
+                  มีผู้เข้าสอบอยู่ ·
+                  ล็อกการแก้เฉลยและเผยแพร่ชั่วคราวสำหรับผู้ดูแลทั่วไป · Super
+                  Admin ยังแก้เฉลยรายข้อได้
+                </p>
+              )}
             <div
-              className={`grid gap-4 ${
-                embedded ? "grid-cols-1" : "xl:grid-cols-[1.1fr_.9fr]"
-              }`}
+              className={
+                embedded
+                  ? "flex-1 min-h-0 flex flex-col lg:flex-row gap-5 overflow-hidden"
+                  : "grid gap-4 xl:grid-cols-[1.1fr_.9fr]"
+              }
             >
-              {activeScreen !== "trial-exams" && (
+              {embedded && (
+                <div className="w-full lg:w-[460px] xl:w-[480px] shrink-0 h-full overflow-y-auto space-y-4 pr-1.5">
+                  {sectionSettingsDraft && (
+                    <Panel>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <h3 className="font-bold">
+                            ตั้งค่าโครงสร้าง {sectionSettingsDraft.title}
+                          </h3>
+                          <p className="mt-1 text-xs text-slate-500">
+                            ใช้กำหนดจำนวนข้อ เวลา รูปแบบตอบ และคะแนนในชุด A
+                          </p>
+                        </div>
+                        <Button onClick={saveSectionSettings}>
+                          บันทึกการตั้งค่า
+                        </Button>
+                      </div>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <label className="grid gap-1 text-xs font-semibold">
+                          จำนวนข้อ
+                          <WebBAdminInput
+                            type="number"
+                            min="1"
+                            value={sectionSettingsDraft.questionCount}
+                            onChange={(event) =>
+                              setSectionSettingsDraft({
+                                ...sectionSettingsDraft,
+                                questionCount: Number(event.target.value),
+                              })
+                            }
+                            className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal"
+                          />
+                        </label>
+                        <label className="grid gap-1 text-xs font-semibold">
+                          เวลาสอบ (นาที)
+                          <WebBAdminInput
+                            type="number"
+                            min="1"
+                            value={sectionSettingsDraft.durationMinutes}
+                            onChange={(event) =>
+                              setSectionSettingsDraft({
+                                ...sectionSettingsDraft,
+                                durationMinutes: Number(event.target.value),
+                              })
+                            }
+                            className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal"
+                          />
+                        </label>
+                        <label className="grid gap-1 text-xs font-semibold">
+                          จำนวนตัวเลือก
+                          <WebBAdminInput
+                            type="number"
+                            min="2"
+                            max="10"
+                            value={sectionSettingsDraft.choiceCount}
+                            onChange={(event) =>
+                              setSectionSettingsDraft({
+                                ...sectionSettingsDraft,
+                                choiceCount: Number(event.target.value),
+                              })
+                            }
+                            className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal"
+                          />
+                        </label>
+                        <label className="grid gap-1 text-xs font-semibold">
+                          คะแนนเต็ม
+                          <WebBAdminInput
+                            type="number"
+                            min="1"
+                            value={sectionSettingsDraft.scoreMaximum}
+                            onChange={(event) =>
+                              setSectionSettingsDraft({
+                                ...sectionSettingsDraft,
+                                scoreMaximum: Number(event.target.value),
+                              })
+                            }
+                            className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal"
+                          />
+                        </label>
+                        <label className="grid gap-1 text-xs font-semibold sm:col-span-2">
+                          รูปแบบคำตอบและการให้คะแนน
+                          <WebBAdminInput
+                            value={sectionSettingsDraft.responseMode}
+                            onChange={(event) =>
+                              setSectionSettingsDraft({
+                                ...sectionSettingsDraft,
+                                responseMode: event.target.value,
+                              })
+                            }
+                            className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal"
+                          />
+                        </label>
+                      </div>
+                    </Panel>
+                  )}
+
+                  {selectedExamProduct &&
+                    hasActiveAttempt(selectedExamProduct.name) && (
+                      <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
+                        มีผู้เข้าสอบอยู่ ·
+                        ล็อกการแก้เฉลยและเผยแพร่ชั่วคราวสำหรับผู้ดูแลทั่วไป · Super
+                        Admin ยังแก้เฉลยรายข้อได้
+                      </p>
+                    )}
+
+                  {activeScreen !== "trial-exams" && (
+                    <Panel>
+                      <div className="mt-2 grid gap-3 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-4">
+                        <div>
+                          <b className="text-sm">
+                            ชุด {selectedExamSet?.name || "A"} · เพิ่มเอกสารข้อสอบ
+                            PDF
+                          </b>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {selectedExamProduct?.name || "เลือกชุดข้อสอบ"} ·
+                            เลือกไฟล์เพื่อบันทึกเข้าคิวตรวจ
+                          </p>
+                        </div>
+                        <div className="grid gap-1 text-xs font-semibold text-slate-600">
+                          ชุดข้อสอบ
+                          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal text-slate-800">
+                            {selectedExamProduct?.name || "—"} · ชุด{" "}
+                            {selectedExamSet?.name || "A"}
+                          </div>
+                        </div>
+                        {selectedExamProduct &&
+                          getManagedExamPlan(selectedExamProduct.id, "A").sections
+                            .length > 0 && (
+                            <div className="grid gap-1 text-xs font-semibold text-slate-600">
+                              <span>พาร์ทที่ใช้เอกสารนี้</span>
+                              {getManagedExamPlan(selectedExamProduct.id, "A")
+                                .sections.length === 1 ? (
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-normal text-slate-800">
+                                  {
+                                    getManagedExamPlan(selectedExamProduct.id, "A")
+                                      .sections[0].title
+                                  }{" "}
+                                  · ข้อ{" "}
+                                  {
+                                    getManagedExamPlan(selectedExamProduct.id, "A")
+                                      .sections[0].questionStart
+                                  }
+                                  –
+                                  {getManagedExamPlan(selectedExamProduct.id, "A")
+                                    .sections[0].questionStart +
+                                    getManagedExamPlan(selectedExamProduct.id, "A")
+                                      .sections[0].questionCount -
+                                    1}
+                                  <span className="ml-2 text-xs text-slate-500">
+                                    เอกสารของพาร์ทนี้โดยตรง
+                                  </span>
+                                </div>
+                              ) : (
+                                <AdminSelect
+                                  value={
+                                    getManagedExamPlan(
+                                      selectedExamProduct.id,
+                                      "A",
+                                    ).sections.some(
+                                      (part) => part.id === selectedDocumentPartId,
+                                    )
+                                      ? selectedDocumentPartId
+                                      : getManagedExamPlan(
+                                          selectedExamProduct.id,
+                                          "A",
+                                        ).sections[0].id
+                                  }
+                                  onChange={setSelectedDocumentPartId}
+                                  options={getManagedExamPlan(
+                                    selectedExamProduct.id,
+                                    "A",
+                                  ).sections.map((part) => ({
+                                    value: part.id,
+                                    label: `${part.title} · ข้อ ${part.questionStart}–${part.questionStart + part.questionCount - 1}`,
+                                  }))}
+                                  ariaLabel="เลือกพาร์ทของไฟล์ข้อสอบ"
+                                />
+                              )}
+                            </div>
+                          )}
+                        <label className="grid gap-2 rounded-lg bg-white p-3 text-sm">
+                          <span className="font-semibold">
+                            เลือกไฟล์ PDF ข้อสอบ
+                          </span>
+                          <WebBAdminInput
+                            type="file"
+                            accept="application/pdf,.pdf"
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              if (!file) return;
+                              if (
+                                file.type !== "application/pdf" &&
+                                !file.name.toLowerCase().endsWith(".pdf")
+                              ) {
+                                toast.error("รองรับเฉพาะไฟล์ PDF");
+                                event.target.value = "";
+                                return;
+                              }
+                              setPendingExamFile(file);
+                              toast.info(`เลือกไฟล์ ${file.name} แล้ว`);
+                            }}
+                            className="max-w-full text-xs"
+                          />
+                          {pendingExamFile && (
+                            <small className="text-emerald-700">
+                              พร้อมบันทึก: {pendingExamFile.name} ·{" "}
+                              {(pendingExamFile.size / 1024).toFixed(0)} KB
+                            </small>
+                          )}
+                        </label>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <p className="text-xs text-slate-500">
+                            หน้าจอนี้บันทึกชื่อไฟล์และสถานะไว้ในเบราว์เซอร์นี้
+                          </p>
+                          <Button
+                            disabled={!pendingExamFile}
+                            onClick={saveExamDocument}
+                          >
+                            บันทึกเอกสาร
+                          </Button>
+                        </div>
+                        {examDocuments.filter(
+                          (document) =>
+                            document.productId === selectedExamProduct?.id &&
+                            document.examSet === selectedExamSet?.name,
+                        ).length > 0 && (
+                          <div className="space-y-2 border-t border-slate-200 pt-3">
+                            <b className="text-xs text-slate-600">เอกสารในรายการ</b>
+                            {examDocuments
+                              .filter(
+                                (document) =>
+                                  document.productId === selectedExamProduct?.id &&
+                                  document.examSet === selectedExamSet?.name,
+                              )
+                              .map((document) => (
+                                <div
+                                  key={document.id}
+                                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white p-3 text-sm"
+                                >
+                                  <div className="min-w-0">
+                                    <b className="block truncate">
+                                      {document.name}
+                                    </b>
+                                    <small className="text-slate-500">
+                                      {document.productName} · ชุด{" "}
+                                      {document.examSet}
+                                      {document.sectionTitle
+                                        ? ` · ${document.sectionTitle}`
+                                        : ""}{" "}
+                                      · {(document.size / 1024).toFixed(0)} KB ·{" "}
+                                      {document.addedAt}
+                                    </small>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Badge
+                                      tone={
+                                        document.status === "เผยแพร่"
+                                          ? "green"
+                                          : "amber"
+                                      }
+                                    >
+                                      {document.status}
+                                    </Badge>
+                                    <Button
+                                      variant={
+                                        document.status === "เผยแพร่"
+                                          ? "outline"
+                                          : "primary"
+                                      }
+                                      onClick={() => {
+                                        const nextStatus =
+                                          document.status === "เผยแพร่"
+                                            ? "รอตรวจ"
+                                            : "เผยแพร่";
+                                        setExamDocuments((current) =>
+                                          current.map((item) =>
+                                            item.id === document.id
+                                              ? { ...item, status: nextStatus }
+                                              : item,
+                                          ),
+                                        );
+                                        const hasPublishedDocument =
+                                          nextStatus === "เผยแพร่" ||
+                                          examDocuments.some(
+                                            (item) =>
+                                              item.id !== document.id &&
+                                              item.productId ===
+                                                document.productId &&
+                                              item.examSet === document.examSet &&
+                                              item.status === "เผยแพร่",
+                                          );
+                                        setExamSets((current) =>
+                                          current.map((set) =>
+                                            set.productId === document.productId &&
+                                            set.name === document.examSet
+                                              ? {
+                                                  ...set,
+                                                  contentStatus:
+                                                    hasPublishedDocument
+                                                      ? "เผยแพร่"
+                                                      : "รอตรวจ",
+                                                }
+                                              : set,
+                                          ),
+                                        );
+                                        setProducts((current) =>
+                                          current.map((item) =>
+                                            item.id === document.productId
+                                              ? {
+                                                  ...item,
+                                                  contentStatus:
+                                                    hasPublishedDocument
+                                                  ? "เผยแพร่"
+                                                  : "รอตรวจ",
+                                              }
+                                            : item,
+                                        ),
+                                      );
+                                      logAction(
+                                        nextStatus === "เผยแพร่"
+                                          ? "เผยแพร่ไฟล์ข้อสอบ"
+                                          : "พักไฟล์ข้อสอบ",
+                                        `${document.productName} · ${document.name}`,
+                                      );
+                                    }}
+                                  >
+                                    {document.status === "เผยแพร่"
+                                      ? "พักเผยแพร่"
+                                      : "เผยแพร่"}
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  </Panel>
+                )}
+              </div>
+            )}
+            {!embedded && activeScreen !== "trial-exams" && (
                 <Panel>
                   <div className="mt-4 grid gap-3 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-4">
                     <div>
@@ -4454,36 +4814,69 @@ export default function WebBAdminDemo({
                   </div>
                 </Panel>
               )}
-              <Panel
-                className={
-                  embedded ? "max-h-[58vh] overflow-y-auto" : ""
-                }
-              >
-                <h3 className="font-bold">
-                  เฉลยรายข้อ  ชุด {selectedExamSet?.name || "A"}
-                </h3>
-
-                {answerKeyProductId === "tgat3" && (
-                  <p className="mt-2 rounded-lg bg-indigo-50 px-3 py-2 text-xs leading-5 text-indigo-900">
-                    รูปแบบข้ออิงตามเอกสาร TGAT3: ข้อ 1–15 มีข้อเลือกหลายคำตอบและข้อเชื่อมโยง,
-                    ข้อ 16–30 มีข้อเลือกหลายคำตอบตามสถานการณ์,
-                    และข้อ 31–60 เป็นคำตอบเดี่ยว
-                  </p>
-                )}
-                {answerKeyProductId === "tgat-full" && (
-                  <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
-                    เรียงพาร์ทตามหน้าสอบ: TGAT1 → TGAT2 → TGAT3
-                  </p>
-                )}
-                <p className="mt-2 text-xs font-semibold text-blue-700">
-                  ตรวจเฉลยแล้ว{" "}
-                  {
-                    answerKey.filter((_, index) => reviewedAnswers[index])
-                      .length
+              <div className={embedded ? "flex-1 min-w-0 h-full overflow-hidden flex flex-col" : "min-w-0"}>
+                <Panel
+                  className={
+                    embedded ? "h-full flex flex-col min-h-0 overflow-hidden" : ""
                   }
-                  /{answerKey.length} ข้อ
-                </p>
-                <WebBAdminTable
+                >
+                  <div className="shrink-0">
+                    <h3 className="font-bold">
+                      เฉลยรายข้อ  ชุด {selectedExamSet?.name || "A"}
+                    </h3>
+
+                    {answerKeyProductId === "tgat-full" && (
+                      <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
+                        เรียงพาร์ทตามหน้าสอบ: TGAT1 → TGAT2 → TGAT3
+                      </p>
+                    )}
+                  </div>
+
+                  <div className={embedded ? "flex-1 min-h-0 overflow-y-auto mt-3 pr-1" : "pt-2"}>
+                    {isTgat3Product ? (
+                      <div>
+                        <WebBTGAT3AnswerKeyManager
+                          rules={tgat3Rules}
+                          disabled={answerEntryLocked}
+                      onChange={(newRules) => {
+                        setTgat3Rules(newRules);
+                        const nextAnswers = newRules.map((r) => {
+                          if (r.responseType === "single") return r.singleCorrectChoice || "1";
+                          if (r.responseType === "multiple") return (r.targetChoices || ["1"]).join(",");
+                          if (r.responseType === "weighted") return "1";
+                          if (r.responseType === "linked") {
+                            const pair = r.acceptedPairs?.[0];
+                            return pair ? `${pair.q1}/${pair.q2}` : "1/1";
+                          }
+                          return "1";
+                        });
+                        setAnswerKey(nextAnswers);
+                        setAnswerScoringRules(
+                          newRules.map((r) => ({
+                            responseType: (r.responseType === "weighted" ? "single" : r.responseType) as DemoAnswerScoringRule["responseType"],
+                            maxScore: r.maxScore,
+                            partialScore: r.responseType === "multiple" ? 0.25 : 0,
+                          }))
+                        );
+                        const nextReviewed: Record<string, boolean> = {};
+                        newRules.forEach((r, idx) => {
+                          nextReviewed[String(idx)] = !!r.isReviewed;
+                        });
+                        setReviewedAnswers(nextReviewed);
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <p className="mt-2 text-xs font-semibold text-blue-700">
+                      ตรวจเฉลยแล้ว{" "}
+                      {
+                        answerKey.filter((_, index) => reviewedAnswers[index])
+                          .length
+                      }
+                      /{answerKey.length} ข้อ
+                    </p>
+                    <WebBAdminTable
                   rows={answerKey.map((answer, index) => ({
                     answer,
                     index,
@@ -4509,12 +4902,11 @@ export default function WebBAdminDemo({
                     <div className="w-full">
                       <table className="w-full min-w-[900px] table-fixed text-left">
                         <colgroup>
-                          <col className="w-[12%]" />
-                          <col className="w-[20%]" />
-                          <col className="w-[20%]" />
-                          <col className="w-[14%]" />
-                          <col className="w-[20%]" />
-                          <col className="w-[14%]" />
+                          <col className="w-[15%]" />
+                          <col className="w-[25%]" />
+                          <col className="w-[25%]" />
+                          <col className="w-[18%]" />
+                          <col className="w-[17%]" />
                         </colgroup>
                         <thead>
                           <tr>
@@ -4524,7 +4916,6 @@ export default function WebBAdminDemo({
                               "เฉลย",
                               "คะแนนเต็ม",
                               "คะแนนบางส่วน",
-                              "ตรวจแล้ว",
                             ].map((x) => (
                               <th className={th} key={x}>
                                 {x}
@@ -4608,12 +4999,12 @@ export default function WebBAdminDemo({
                                       }));
                                     }}
                                     aria-label={`เฉลยข้อ ${i + 1}`}
-                                    placeholder={rule.responseType === "linked" ? "เช่น A/D หรือ D/C" : "เช่น 1,2,4"}
+                                    placeholder={rule.responseType === "linked" ? "เช่น 1/4 หรือ 4/3" : "เช่น 1,2,4"}
                                     className="w-36 rounded-lg border border-slate-200 px-2.5 py-2 text-sm disabled:bg-slate-100"
                                   />
                                 ) : (
                                   <AdminSelect
-                                    value={answer}
+                                    value={(({"A":"1","B":"2","C":"3","D":"4","E":"5"} as Record<string, string>)[answer] || answer)}
                                     disabled={answerEntryLocked}
                                     options={Array.from(
                                       {
@@ -4626,7 +5017,7 @@ export default function WebBAdminDemo({
                                         ).choiceCount,
                                       },
                                       (_, index) =>
-                                        String.fromCharCode(65 + index),
+                                        String(index + 1),
                                     ).map((value) => ({ value, label: value }))}
                                     onChange={(value) => {
                                       setAnswerKey((current) =>
@@ -4686,19 +5077,6 @@ export default function WebBAdminDemo({
                                   <span className="text-xs text-slate-400">—</span>
                                 )}
                               </td>
-                              <td className={td}>
-                                <WebBAdminInput
-                                  type="checkbox"
-                                  checked={!!reviewedAnswers[i]}
-                                  onChange={(event) =>
-                                    setReviewedAnswers((current) => ({
-                                      ...current,
-                                      [i]: event.target.checked,
-                                    }))
-                                  }
-                                  aria-label={`ตรวจคำตอบข้อ ${i + 1}`}
-                                />
-                              </td>
                             </tr>
                           );})}
                         </tbody>
@@ -4706,10 +5084,16 @@ export default function WebBAdminDemo({
                     </div>
                   )}
                 </WebBAdminTable>
-                <div className="flex flex-wrap items-center gap-3 pt-3">
+                  </>
+                )}
+                </div>
+                <div className={`flex flex-wrap items-center gap-3 ${embedded ? "shrink-0 pt-3 border-t border-slate-100 mt-2" : "pt-3"}`}>
                 <Button
                   disabled={answerEntryLocked}
                   onClick={() => {
+                    if (isTgat3Product) {
+                      setTgat3Rules([...tgat3Rules]);
+                    }
                     setAnswerKey([...answerKey]);
                     logAction(
                       "บันทึกเฉลย",
@@ -4717,11 +5101,12 @@ export default function WebBAdminDemo({
                         " ชุด " +
                         answerKeySetName,
                     );
+                    toast.success("บันทึกเฉลยและเกณฑ์คะแนนแล้ว");
                   }}
                 >
                   บันทึกเฉลย
                 </Button>
-                {selectedExamSet?.contentStatus === "รอตรวจ" ? (
+                {selectedExamSet?.contentStatus !== "เผยแพร่" ? (
                   <Button
                     disabled={
                       !selectedExamProduct ||
@@ -4730,12 +5115,15 @@ export default function WebBAdminDemo({
                         answerKeyProductId,
                         answerKeySetName,
                       ) ||
-                      !answerReviewComplete
+                      !(isTgat3Product ? tgat3Rules.length > 0 : answerKey.length > 0)
                     }
                     onClick={() => {
+                      if (isTgat3Product) {
+                        setTgat3Rules([...tgat3Rules]);
+                      }
                       setExamSets((current) =>
                         current.map((set) =>
-                          set.id === selectedExamSet.id
+                          set.id === selectedExamSet?.id
                             ? { ...set, contentStatus: "เผยแพร่" }
                             : set,
                         ),
@@ -4756,62 +5144,24 @@ export default function WebBAdminDemo({
                         ),
                       );
                       logAction(
-                        "อนุมัติเผยแพร่ชุดข้อสอบ",
+                        "เผยแพร่ชุดข้อสอบ",
                         selectedExamProduct?.name +
                           " · ชุด " +
                           answerKeySetName,
                       );
+                      toast.success("เผยแพร่ชุดข้อสอบและเปิดใช้งานเฉลยแล้ว");
                     }}
                   >
-                    อนุมัติเผยแพร่ชุดนี้
+                    เผยแพร่ชุดนี้
                   </Button>
-                ) : selectedExamSet?.contentStatus === "Draft" ? (
-                  <Button
-                    disabled={
-                      !selectedExamProduct ||
-                      hasActiveAttempt(selectedExamProduct.name) ||
-                      !hasExamFileForSet(
-                        answerKeyProductId,
-                        answerKeySetName,
-                      ) ||
-                      !answerKey.length
-                    }
-                    onClick={() => {
-                      setExamSets((current) =>
-                        current.map((set) =>
-                          set.id === selectedExamSet.id
-                            ? { ...set, contentStatus: "รอตรวจ" }
-                            : set,
-                        ),
-                      );
-                      setProducts((current) =>
-                        current.map((product) =>
-                          product.id === answerKeyProductId
-                            ? { ...product, contentStatus: "รอตรวจ" }
-                            : product,
-                        ),
-                      );
-                      setExamDocuments((current) =>
-                        current.map((document) =>
-                          document.productId === answerKeyProductId &&
-                          document.examSet === answerKeySetName
-                            ? { ...document, status: "รอตรวจ" }
-                            : document,
-                        ),
-                      );
-                      logAction(
-                        "ส่งตรวจชุดข้อสอบ",
-                        selectedExamProduct?.name +
-                          " · ชุด " +
-                          answerKeySetName,
-                      );
-                    }}
-                  >
-                    ส่งตรวจชุดนี้
-                  </Button>
-                ) : null}
+                ) : (
+                  <span className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                    ✓ ชุดข้อสอบนี้เผยแพร่และเปิดใช้งานแล้ว
+                  </span>
+                )}
                 </div>
               </Panel>
+              </div>
             </div>
           </div>
         </Section>
@@ -4953,38 +5303,6 @@ export default function WebBAdminDemo({
                               </Button>
                               {order.status === "รอชำระ" && (
                                 <>
-                                  <Button
-                                    onClick={() => {
-                                      updateMockPurchaseForOrder(order, "สำเร็จ");
-                                      setOrders((current) =>
-                                        current.map((o) =>
-                                          o.ref === order.ref
-                                            ? {
-                                                ...o,
-                                                status: "สำเร็จ" as const,
-                                              }
-                                            : o,
-                                        ),
-                                      );
-                                      setStudents((current) =>
-                                        current.map((s) =>
-                                          s.name === order.student
-                                            ? {
-                                                ...s,
-                                                entitlements:
-                                                  s.entitlements + 1,
-                                              }
-                                            : s,
-                                        ),
-                                      );
-                                      logAction(
-                                        "ยืนยันชำระเงินและเปิดสิทธิ์สอบ",
-                                        order.ref,
-                                      );
-                                    }}
-                                  >
-                                    ยืนยันชำระเงิน
-                                  </Button>
                                   <Button
                                     variant="danger"
                                     onClick={() => {
@@ -5707,11 +6025,13 @@ export default function WebBAdminDemo({
                 </Button>
                 <Button
                   onClick={() => {
-                    setPublishedResults((current) => !current);
+                    const next = !publishedResults;
+                    setPublishedResults(next);
+                    setDemoResultsPublished(next);
                     logAction(
-                      publishedResults
-                        ? "พักการเผยแพร่ผลสอบทุกชุด"
-                        : "เผยแพร่ผลสอบทุกชุด",
+                      next
+                        ? "เผยแพร่ผลสอบทุกชุด"
+                        : "พักการเผยแพร่ผลสอบทุกชุด",
                       "ทุกสินค้าและทุกชุด · ข้อมูลหลังบ้าน",
                     );
                   }}
@@ -6064,13 +6384,14 @@ export default function WebBAdminDemo({
               </WebBAdminTable>
             )}
             {selectedResultReport && (
-              <div
-                className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/70 p-3 sm:p-6"
-                onMouseDown={(event) => {
-                  if (event.target === event.currentTarget)
-                    setSelectedResultReport(null);
-                }}
-              >
+              <WebBModalPortal>
+                <div
+                  className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 p-3 backdrop-blur-sm sm:p-6"
+                  onMouseDown={(event) => {
+                    if (event.target === event.currentTarget)
+                      setSelectedResultReport(null);
+                  }}
+                >
                 <section
                   role="dialog"
                   aria-modal="true"
@@ -6225,10 +6546,12 @@ export default function WebBAdminDemo({
                   </p>
                 </section>
               </div>
-            )}
-            {selectedResultPart && (
+            </WebBModalPortal>
+          )}
+          {selectedResultPart && (
+            <WebBModalPortal>
               <div
-                className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/60 p-3"
+                className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/80 p-3 backdrop-blur-sm"
                 onMouseDown={(event) => {
                   if (event.target === event.currentTarget)
                     setSelectedResultPart(null);
@@ -6313,7 +6636,8 @@ export default function WebBAdminDemo({
                   </p>
                 </section>
               </div>
-            )}
+            </WebBModalPortal>
+          )}
             <p className="mt-4 text-xs text-slate-500">
               ระบบใช้ผลสอบครั้งแรกที่ส่งสำเร็จ
               หากรอบเดิมถูกยกเลิกจากปัญหาระบบจึงใช้รอบสอบใหม่ที่อนุมัติ
@@ -6569,12 +6893,13 @@ export default function WebBAdminDemo({
         </Section>
 
         {activeScreen === "exam-management" && solutionDraft && (
-          <div
-            className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/60 p-3"
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget) setSolutionDraft(null);
-            }}
-          >
+          <WebBModalPortal>
+            <div
+              className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 p-3 backdrop-blur-sm"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) setSolutionDraft(null);
+              }}
+            >
             <section
               role="dialog"
               aria-modal="true"
@@ -6773,10 +7098,12 @@ export default function WebBAdminDemo({
               </form>
             </section>
           </div>
-        )}
-        {activeScreen === "exam-management" && selectedSolutionDetail && (
+        </WebBModalPortal>
+      )}
+      {activeScreen === "exam-management" && selectedSolutionDetail && (
+        <WebBModalPortal>
           <div
-            className="fixed inset-0 z-[135] flex items-center justify-center bg-slate-950/70 p-3 sm:p-6"
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 p-3 backdrop-blur-sm sm:p-6"
             onMouseDown={(event) => {
               if (event.target === event.currentTarget)
                 setSelectedSolutionDetail(null);
@@ -6859,7 +7186,8 @@ export default function WebBAdminDemo({
               </div>
             </section>
           </div>
-        )}
+        </WebBModalPortal>
+      )}
 
         <Section
           id="finance"

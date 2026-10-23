@@ -6695,7 +6695,7 @@
   color: white;
 }
 .wb-answer-row[data-response-type="multiple"] > button {
-  border-radius: 6px;
+  border-radius: 50%;
 }
 .wb-answer-panel-actions {
   display: flex;
@@ -9110,8 +9110,8 @@
 .wb-pick-list { display: grid; gap: 12px; }
 .wb-review-detail-toggle { display: flex; width: 100%; align-items: center; justify-content: space-between; border: 0; border-radius: 9px; padding: 9px 12px; background: #f2f5f7; color: #24272b; font: inherit; font-size: 12px; font-weight: 700; text-align: left; cursor: pointer; }
 .wb-review-detail-panel { margin-top: 6px; border-radius: 10px; padding: 12px; background: #f8f9fa; color: #444; font-size: 12px; }
-.wb-answer-grid.is-part-2 .wb-answer-row button { border-radius: 8px; }
-.wb-answer-grid.is-part-3 .wb-answer-row button { border-radius: 5px 14px 5px 14px; }
+.wb-answer-grid.is-part-2 .wb-answer-row button { border-radius: 50%; }
+.wb-answer-grid.is-part-3 .wb-answer-row button { border-radius: 50%; }
 .wb-terms-accept { display: flex; align-items: flex-start; gap: 10px; border-top: 1px solid #eceef0; padding: 14px 22px 2px; color: #777; font-size: 13px; line-height: 1.5; }
 .wb-terms-accept.is-ready { color: #222; }
 .wb-terms-accept input { width: 18px; height: 18px; flex: none; margin: 0; accent-color: #ffce00; }

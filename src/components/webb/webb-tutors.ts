@@ -63,7 +63,7 @@ export function getTutorsForCategory(kind: string): TutorSubject[] {
     const raw = window.localStorage.getItem(`webb-subject-tutors:${kind}`);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         const validSaved = parsed.filter(
           (item): item is TutorSubject => item && typeof item.id === "string",
         );
@@ -78,7 +78,7 @@ export function getTutorsForCategory(kind: string): TutorSubject[] {
             bullets: fallback.bullets.map((value, index) => saved.bullets?.[index]?.trim() || value),
           };
         });
-        return merged.length ? merged : defaults;
+        return merged;
       }
     }
   } catch {

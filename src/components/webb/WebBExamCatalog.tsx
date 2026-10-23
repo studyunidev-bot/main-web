@@ -26,7 +26,6 @@ import {
   LuTag,
   LuTrash2,
   LuUpload,
-  LuUser,
 } from "react-icons/lu";
 import AdminSelect from "@/components/ui/AdminSelect";
 import { downloadCsvData } from "./WebBAdminTable";
@@ -89,6 +88,7 @@ type PartModalState = {
   answers: { value: string; score: string }[];
   contentStatus: NonNullable<CatalogPartSettings["contentStatus"]>;
   tutorDraft?: TutorSubject;
+  tutorId?: string;
   error?: string;
 };
 
@@ -99,8 +99,7 @@ type SetManagementTab =
   | "access"
   | "activity"
   | "results"
-  | "solutions"
-  | "tutors";
+  | "solutions";
 type ImagePreview = { src: string; alt: string; width: number; height: number };
 type FutureDemoRecord = {
   subjectId: string;
@@ -210,7 +209,6 @@ const setManagementTabs: { id: SetManagementTab; label: string }[] = [
   { id: "activity", label: "การเข้าสอบ" },
   { id: "results", label: "ผลสอบและ Ranking" },
   { id: "solutions", label: "สื่อเฉลย" },
-  { id: "tutors", label: "จัดการติวเตอร์" },
 ];
 
 const managementTabIcons: Record<SetManagementTab, typeof LuLayoutDashboard> = {
@@ -221,7 +219,6 @@ const managementTabIcons: Record<SetManagementTab, typeof LuLayoutDashboard> = {
   activity: LuActivity,
   results: LuChartNoAxesCombined,
   solutions: LuCirclePlay,
-  tutors: LuUser,
 };
 
 const managementImageGroups = [
@@ -375,43 +372,6 @@ export default function WebBExamCatalog({
     error?: string;
   } | null>(null);
   const [message, setMessage] = useState("");
-  const [tutorModal, setTutorModal] = useState<{
-    isOpen: boolean;
-    category: string;
-    setName: string;
-    selectedIndex: number;
-    tutors: TutorSubject[];
-  } | null>(null);
-
-  const openTutorModal = (
-    setName: string,
-    categoryId = selectedId || "tgat",
-    initialIndex = 0,
-    partName?: string,
-  ) => {
-    const kind = categoryId === "alevel" || categoryId === "a-level" ? "a-level" : categoryId;
-    const current = getTutorsForCategory(kind);
-    let matchedIndex = initialIndex;
-    if (partName) {
-      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, "");
-      const target = norm(partName);
-      const found = current.findIndex((t) => {
-        const tNorm = norm(t.title || "");
-        const idNorm = norm(t.id || "");
-        return tNorm.includes(target) || target.includes(tNorm) || idNorm.includes(target) || target.includes(idNorm);
-      });
-      if (found !== -1) matchedIndex = found;
-    }
-    const validIndex = Math.max(0, Math.min(matchedIndex, Math.max(0, current.length - 1)));
-    setTutorModal({
-      isOpen: true,
-      category: kind,
-      setName,
-      selectedIndex: validIndex,
-      tutors: JSON.parse(JSON.stringify(current)),
-    });
-  };
-
   const [managementTab, setManagementTab] = useState<SetManagementTab>(
     focusFamilyId === "tgat" &&
       focusSetId === "tgat-a" &&
@@ -703,9 +663,6 @@ export default function WebBExamCatalog({
 
   function openManagementTab(tabId: SetManagementTab) {
     setManagementTab(tabId);
-    if (tabId === "tutors" && managementTab !== "tutors" && selectedSet && selected) {
-      openTutorModal(selectedSet.name, selected.id);
-    }
   }
 
   function save(next: CatalogFamily[], notice: string) {
@@ -926,17 +883,7 @@ export default function WebBExamCatalog({
     const normalizedPart = part ? normalizeTitle(part) : "";
     const tutorDraft = part
       ? tutors.find((tutor) => tutor.id === (tutorPartId ? `tgat${tutorPartId}` : "")) ||
-        tutors.find((tutor) => normalizeTitle(tutor.title) === normalizedPart) || {
-          id: tutorPartId
-            ? `tgat${tutorPartId}`
-            : `${selected?.id || "category"}-${selectedSubject?.id || "set"}-${normalizedPart}`,
-          title: part,
-          tutor: "",
-          image: "",
-          education: "",
-          experience: "",
-          bullets: ["", "", ""],
-        }
+        tutors.find((tutor) => normalizeTitle(tutor.title) === normalizedPart)
       : undefined;
     setPartModal({
       mode,
@@ -954,6 +901,7 @@ export default function WebBExamCatalog({
       })),
       contentStatus: settings?.contentStatus || "Draft",
       ...(tutorDraft ? { tutorDraft: { ...tutorDraft, bullets: [...tutorDraft.bullets] } } : {}),
+      ...(part ? { tutorId: tutorDraft?.id || (tutorPartId ? `tgat${tutorPartId}` : `${selected?.id || "category"}-${selectedSubject?.id || "set"}-${normalizedPart}`) } : {}),
     });
   }
 
@@ -977,6 +925,8 @@ export default function WebBExamCatalog({
         : partModal.name.trim();
     if (!name)
       return setPartModal({ ...partModal, error: "กรอกชื่อพาร์ทก่อนบันทึก" });
+    if (partModal.mode === "edit" && !partModal.tutorDraft?.tutor.trim())
+      return setPartModal({ ...partModal, error: "กรอกชื่อติวเตอร์ประจำรายการก่อนบันทึก" });
     if (
       partModal.mode !== "manage" &&
       selectedSet.parts.some(
@@ -1042,11 +992,9 @@ export default function WebBExamCatalog({
     if (partModal.tutorDraft && selected) {
       const tutorKind = selected.id === "alevel" ? "a-level" : selected.id;
       const currentTutors = getTutorsForCategory(tutorKind);
-      const tutorIndex = currentTutors.findIndex(
-        (tutor) => tutor.id === partModal.tutorDraft?.id,
-      );
-      const updatedTutor = { ...partModal.tutorDraft, title: name };
       const nextTutors = [...currentTutors];
+      const tutorIndex = nextTutors.findIndex((tutor) => tutor.id === partModal.tutorDraft?.id);
+      const updatedTutor = { ...partModal.tutorDraft, title: name };
       if (tutorIndex >= 0) nextTutors[tutorIndex] = updatedTutor;
       else nextTutors.push(updatedTutor);
       saveTutorsForCategory(tutorKind, nextTutors);
@@ -1359,9 +1307,9 @@ export default function WebBExamCatalog({
         selectedSet &&
         managementTab !== "content" &&
         managementTab !== "offers" &&
-        (!isTgatA || managementTab === "overview" || managementTab === "tutors") && (
+        (!isTgatA || managementTab === "overview") && (
           <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            {managementTab !== "tutors" && <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 {/* <p className="text-xs font-bold text-indigo-700">
                   {selected.name}
@@ -1380,7 +1328,7 @@ export default function WebBExamCatalog({
                   ข้อมูลสำหรับการนำเสนอ
                 </span>
               </div>
-            </div>}
+            </div>
             {managementTab === "overview" && (
               <>
                 <p className="text-sm leading-6 text-slate-600">
@@ -1866,10 +1814,10 @@ export default function WebBExamCatalog({
                   ยังไม่มีสื่อเฉลยตัวอย่างสำหรับ {selected.name}
                 </p>
               ))}
-            {managementTab !== "tutors" && <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-500">
               ข้อมูลผู้เรียนและเหตุการณ์ในหน้านี้จำลองขึ้นเพื่อการนำเสนอ ·
               ยังไม่เชื่อมฐานข้อมูลจริง
-            </p>}
+            </p>
           </section>
         )}
 
@@ -2860,6 +2808,8 @@ export default function WebBExamCatalog({
                           <h3 className="font-bold text-slate-900">ข้อมูลติวเตอร์ประจำรายการ</h3>
                           <p className="mt-1 text-xs text-slate-600">แก้ไขข้อมูลติวเตอร์ของ {partModal.part} พร้อมชื่อพาร์ทในฟอร์มเดียวกัน</p>
                         </div>
+                        {partModal.tutorDraft ? (
+                          <>
                         <div className="grid gap-3 sm:grid-cols-2">
                           <label className="text-sm font-semibold">
                             ชื่อติวเตอร์
@@ -2954,6 +2904,33 @@ export default function WebBExamCatalog({
                             ))}
                           </div>
                         </div>
+                          </>
+                        ) : (
+                          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-slate-300 bg-white p-4">
+                            <p className="text-sm text-slate-600">
+                              รายการนี้ยังไม่มีข้อมูลติวเตอร์
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setPartModal({
+                                ...partModal,
+                                tutorDraft: {
+                                  id: partModal.tutorId || `${selected?.id || "category"}-${selectedSubject?.id || "set"}-${partModal.part || "part"}`,
+                                  title: partModal.name || partModal.part || "",
+                                  tutor: "",
+                                  image: "",
+                                  education: "",
+                                  experience: "",
+                                  bullets: ["", "", ""],
+                                },
+                              })}
+                              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                            >
+                              <LuPlus className="size-4" aria-hidden="true" />
+                              เพิ่มข้อมูลติวเตอร์
+                            </button>
+                          </div>
+                        )}
                       </section>
                     )}
                     {!isTgatA && (
@@ -3378,279 +3355,6 @@ export default function WebBExamCatalog({
           </div>
         </WebBModalPortal>
       )}
-
-      {isSetPage && managementTab === "tutors" && tutorModal && tutorModal.isOpen && (() => {
-        const activeIdx = Math.max(0, Math.min(tutorModal.selectedIndex ?? 0, tutorModal.tutors.length - 1));
-        const currentTutor = tutorModal.tutors[activeIdx];
-        if (!currentTutor) return null;
-
-        return (
-        <div className="mt-5">
-            <section
-              aria-labelledby="tutor-modal-title"
-              className="flex min-h-[680px] w-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
-            >
-              <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-6 py-4">
-                <div>
-                  {/* <div className="flex items-center gap-2">
-                    <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-bold text-indigo-700">
-                      {tutorModal.setName ? `ชุด ${tutorModal.setName} · ` : ""}{currentTutor.title}
-                    </span>
-                  </div> */}
-                  <h2 id="tutor-modal-title" className="mt-1 text-lg font-bold text-slate-900">
-                    จัดการข้อมูลติวเตอร์
-                  </h2>
-                  <p className="mt-1 text-xs text-slate-500">{tutorModal.setName ? `ชุด ${tutorModal.setName} · ` : ""}แก้ไขข้อมูลที่ใช้แสดงบนหน้ารายละเอียดวิชา</p>
-
-                </div>
-              </div>
-
-              <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[190px_minmax(0,1fr)] overflow-hidden md:grid-cols-[300px_minmax(0,1fr)] md:grid-rows-1">
-                <aside className="flex min-h-0 flex-col border-b border-slate-200 bg-slate-50 md:border-b-0 md:border-r">
-                  <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-800">รายการติวเตอร์</h3>
-                      <p className="mt-0.5 text-xs text-slate-500">{tutorModal.tutors.length} รายการ</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextTutor: TutorSubject = {
-                          id: `tutor-${Date.now()}`,
-                          title: "พาร์ท / วิชาใหม่",
-                          tutor: "",
-                          image: "",
-                          education: "",
-                          experience: "",
-                          bullets: ["", "", ""],
-                        };
-                        setTutorModal({
-                          ...tutorModal,
-                          tutors: [...tutorModal.tutors, nextTutor],
-                          selectedIndex: tutorModal.tutors.length,
-                        });
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-700"
-                    >
-                      <LuPlus className="size-4" aria-hidden="true" /> เพิ่มติวเตอร์
-                    </button>
-                  </div>
-                  <div className="min-h-0 flex-1 overflow-y-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead className="sticky top-0 bg-slate-100 text-slate-500">
-                        <tr><th className="px-3 py-2">พาร์ท / ติวเตอร์</th><th className="px-2 py-2 text-right">จัดการ</th></tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200">
-                        {tutorModal.tutors.map((tutor, index) => (
-                          <tr key={tutor.id} className={index === activeIdx ? "bg-indigo-50" : "bg-white hover:bg-slate-100"}>
-                            <td className="p-0">
-                              <button type="button" onClick={() => setTutorModal({ ...tutorModal, selectedIndex: index })} className="w-full px-3 py-3 text-left">
-                                <span className="block font-semibold text-slate-800">{tutor.title || "ยังไม่ระบุพาร์ท"}</span>
-                                <span className="mt-1 block text-slate-500">{tutor.tutor || "ยังไม่ระบุติวเตอร์"}</span>
-                              </button>
-                            </td>
-                            <td className="whitespace-nowrap px-2 text-right">
-                              <button type="button" onClick={() => setTutorModal({ ...tutorModal, selectedIndex: index })} aria-label={`แก้ไข ${tutor.title}`} title={`แก้ไข ${tutor.title}`} className="mr-1 inline-flex size-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"><LuPencil className="size-3.5" aria-hidden="true" /></button>
-                              <button type="button" disabled={tutorModal.tutors.length <= 1} onClick={async () => {
-                                const confirmed = await confirmWebBAction({ title: "ลบข้อมูลติวเตอร์", text: `ต้องการลบ ${tutor.title} ออกจากรายการหรือไม่`, confirmText: "ลบข้อมูล" });
-                                if (!confirmed) return;
-                                const updated = tutorModal.tutors.filter((_, itemIndex) => itemIndex !== index);
-                                setTutorModal({ ...tutorModal, tutors: updated, selectedIndex: Math.max(0, index <= activeIdx ? activeIdx - 1 : activeIdx) });
-                              }} aria-label={`ลบ ${tutor.title}`} title={`ลบ ${tutor.title}`} className="inline-flex size-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"><LuTrash2 className="size-3.5" aria-hidden="true" /></button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </aside>
-                <div className="min-h-0 overflow-y-auto p-4 sm:p-6">
-                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5 space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
-                    <div>
-                      <span className="text-sm font-bold text-slate-900">{currentTutor.title}</span>
-                      <span className="ml-2 text-xs text-slate-500">ผู้ออกข้อสอบ: {currentTutor.tutor}</span>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-slate-600">
-                        ชื่อวิชา / พาร์ท
-                      </label>
-                      <WebBAdminInput
-                        value={currentTutor.title}
-                        onChange={(e) => {
-                          const updated = [...tutorModal.tutors];
-                          updated[activeIdx] = { ...updated[activeIdx], title: e.target.value };
-                          setTutorModal({ ...tutorModal, tutors: updated });
-                        }}
-                        placeholder="เช่น TGAT 1 การสื่อสารภาษาอังกฤษ"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-slate-600">
-                        ชื่อติวเตอร์ / ผู้ออกข้อสอบ
-                      </label>
-                      <WebBAdminInput
-                        value={currentTutor.tutor}
-                        onChange={(e) => {
-                          const updated = [...tutorModal.tutors];
-                          updated[activeIdx] = { ...updated[activeIdx], tutor: e.target.value };
-                          setTutorModal({ ...tutorModal, tutors: updated });
-                        }}
-                        placeholder="เช่น ติวเตอร์แมว"
-                      />
-                    </div>
-                  </div>
-
-                  {/* รูปโปรไฟล์ติวเตอร์: เบราซ์ไฟล์มาลง */}
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-600">
-                      รูปโปรไฟล์ติวเตอร์ (เบราซ์ไฟล์รูปภาพ)
-                    </label>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 shadow-sm">
-                        {currentTutor.image ? (
-                          <img
-                            src={currentTutor.image}
-                            alt={currentTutor.tutor || "ติวเตอร์"}
-                            className="size-full object-cover"
-                          />
-                        ) : (
-                          <LuImage className="size-6 text-slate-400" />
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors">
-                          <LuUpload className="size-4 text-indigo-600" />
-                          <span>เบราซ์ไฟล์รูป...</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              const reader = new FileReader();
-                              reader.onload = (event) => {
-                                const base64 = event.target?.result as string;
-                                if (base64) {
-                                  const updated = [...tutorModal.tutors];
-                                  updated[activeIdx] = { ...updated[activeIdx], image: base64 };
-                                  setTutorModal({ ...tutorModal, tutors: updated });
-                                }
-                              };
-                              reader.readAsDataURL(file);
-                            }}
-                          />
-                        </label>
-                        {currentTutor.image && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = [...tutorModal.tutors];
-                              updated[activeIdx] = { ...updated[activeIdx], image: "" };
-                              setTutorModal({ ...tutorModal, tutors: updated });
-                            }}
-                            className="rounded-lg p-2 text-xs text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                            title="ลบรูปภาพ"
-                          >
-                            <LuTrash2 className="size-4" />
-                          </button>
-                        )}
-                        <span className="text-[11px] text-slate-400">
-                          (รองรับ PNG, JPG, WebP)
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* วุฒิการศึกษา และชื่อหัวข้อ */}
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-slate-600">
-                        วุฒิการศึกษา / มหาวิทยาลัย
-                      </label>
-                      <WebBAdminInput
-                        value={currentTutor.education || ""}
-                        onChange={(e) => {
-                          const updated = [...tutorModal.tutors];
-                          updated[activeIdx] = { ...updated[activeIdx], education: e.target.value };
-                          setTutorModal({ ...tutorModal, tutors: updated });
-                        }}
-                        placeholder="เช่น จบ ครุศาสตร์ จุฬาลงกรณ์มหาวิทยาลัย"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-slate-600">
-                        ชื่อหัวข้อ
-                      </label>
-                      <WebBAdminInput
-                        value={currentTutor.experience || ""}
-                        onChange={(e) => {
-                          const updated = [...tutorModal.tutors];
-                          updated[activeIdx] = { ...updated[activeIdx], experience: e.target.value };
-                          setTutorModal({ ...tutorModal, tutors: updated });
-                        }}
-                        placeholder="เช่น ความเชี่ยวชาญด้านการสอบ"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-600">
-                      หัวข้อย่อย (3 รายการ)
-                    </label>
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      {[0, 1, 2].map((bIndex) => (
-                        <WebBAdminInput
-                          key={bIndex}
-                          value={currentTutor.bullets[bIndex] || ""}
-                          onChange={(e) => {
-                            const updated = [...tutorModal.tutors];
-                            const bullets = [...(updated[activeIdx].bullets || [])];
-                            bullets[bIndex] = e.target.value;
-                            updated[activeIdx] = { ...updated[activeIdx], bullets };
-                            setTutorModal({ ...tutorModal, tutors: updated });
-                          }}
-                          placeholder={`จุดเด่นที่ ${bIndex + 1}`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                </div>
-              </div>
-
-              <div className="flex shrink-0 items-center justify-between border-t border-slate-200 bg-slate-50 px-6 py-4">
-                <span className="text-xs text-slate-500">
-                  กดบันทึกเพื่ออัปเดตข้อมูลติวเตอร์ที่จะปรากฏในหน้าเว็บทันที
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => openTutorModal(tutorModal.setName, tutorModal.category, activeIdx)}
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
-                  >
-                    ยกเลิก
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      saveTutorsForCategory(tutorModal.category, tutorModal.tutors);
-                      setMessage(`บันทึกข้อมูลชุด ${tutorModal.setName} และข้อมูลติวเตอร์เรียบร้อย ข้อมูลจะปรากฏบนหน้า /webb/${tutorModal.category}`);
-                    }}
-                    className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-bold text-white shadow hover:bg-indigo-700"
-                  >
-                    บันทึกข้อมูลติวเตอร์
-                  </button>
-                </div>
-              </div>
-            </section>
-        </div>
-        );
-      })()}
 
       {!isSetPage && (
         <section

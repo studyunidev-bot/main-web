@@ -88,6 +88,7 @@ type PartModalState = {
   answerFileName: string;
   answers: { value: string; score: string }[];
   contentStatus: NonNullable<CatalogPartSettings["contentStatus"]>;
+  tutorDraft?: TutorSubject;
   error?: string;
 };
 
@@ -388,7 +389,7 @@ export default function WebBExamCatalog({
     initialIndex = 0,
     partName?: string,
   ) => {
-    const kind = categoryId === "alevel" || categoryId === "a-level" ? "a-level" : "tgat";
+    const kind = categoryId === "alevel" || categoryId === "a-level" ? "a-level" : categoryId;
     const current = getTutorsForCategory(kind);
     let matchedIndex = initialIndex;
     if (partName) {
@@ -915,6 +916,28 @@ export default function WebBExamCatalog({
 
   function openPartModal(mode: PartModalState["mode"], part?: string) {
     const settings = part ? selectedSet?.partSettings?.[part] : undefined;
+    const tutorPartId = part?.match(/^TGAT([123])\b/i)?.[1];
+    const tutorKind = selected?.id === "alevel" ? "a-level" : selected?.id || "tgat";
+    const tutors = part ? getTutorsForCategory(tutorKind) : [];
+    const normalizeTitle = (value: string) => value
+      .toLowerCase()
+      .replace(/^a-?level\s*/i, "")
+      .replace(/[^a-z0-9\u0E00-\u0E7F]/g, "");
+    const normalizedPart = part ? normalizeTitle(part) : "";
+    const tutorDraft = part
+      ? tutors.find((tutor) => tutor.id === (tutorPartId ? `tgat${tutorPartId}` : "")) ||
+        tutors.find((tutor) => normalizeTitle(tutor.title) === normalizedPart) || {
+          id: tutorPartId
+            ? `tgat${tutorPartId}`
+            : `${selected?.id || "category"}-${selectedSubject?.id || "set"}-${normalizedPart}`,
+          title: part,
+          tutor: "",
+          image: "",
+          education: "",
+          experience: "",
+          bullets: ["", "", ""],
+        }
+      : undefined;
     setPartModal({
       mode,
       part,
@@ -930,6 +953,7 @@ export default function WebBExamCatalog({
         score: String(answer.score),
       })),
       contentStatus: settings?.contentStatus || "Draft",
+      ...(tutorDraft ? { tutorDraft: { ...tutorDraft, bullets: [...tutorDraft.bullets] } } : {}),
     });
   }
 
@@ -1015,6 +1039,18 @@ export default function WebBExamCatalog({
         score: Number(answer.score),
       })),
     };
+    if (partModal.tutorDraft && selected) {
+      const tutorKind = selected.id === "alevel" ? "a-level" : selected.id;
+      const currentTutors = getTutorsForCategory(tutorKind);
+      const tutorIndex = currentTutors.findIndex(
+        (tutor) => tutor.id === partModal.tutorDraft?.id,
+      );
+      const updatedTutor = { ...partModal.tutorDraft, title: name };
+      const nextTutors = [...currentTutors];
+      if (tutorIndex >= 0) nextTutors[tutorIndex] = updatedTutor;
+      else nextTutors.push(updatedTutor);
+      saveTutorsForCategory(tutorKind, nextTutors);
+    }
     updateSet(
       (set) => {
         const previousPart = partModal.part;
@@ -2252,16 +2288,16 @@ export default function WebBExamCatalog({
                                                 <>
                                                   <button
                                                     type="button"
-                                                    aria-label={`แก้ไข ${part}`}
-                                                    title={`แก้ไข ${part}`}
+                                                    aria-label={`แก้ไขชื่อและข้อมูลติวเตอร์ ${part}`}
+                                                    title={`แก้ไขชื่อและข้อมูลติวเตอร์ ${part}`}
                                                     onClick={() =>
                                                       openPartModal("edit", part)
                                                     }
-                                                    className="inline-flex size-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                                                    className="inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                                                   >
                                                     <LuPencil
                                                       aria-hidden="true"
-                                                      className="size-4"
+                                                      className="size-3.5"
                                                     />
                                                   </button>
                                                   <button
@@ -2766,7 +2802,9 @@ export default function WebBExamCatalog({
                       >
                         {partModal.mode === "add"
                           ? "สร้างพาร์ท / วิชา"
-                          : `แก้ไข ${partModal.part}`}
+                          : isTgatA
+                            ? `แก้ไขชื่อพาร์ทและติวเตอร์ · ${partModal.part}`
+                            : `แก้ไข ${partModal.part}`}
                       </h2>
                     </div>
                   )}
@@ -2815,6 +2853,108 @@ export default function WebBExamCatalog({
                           placeholder="เช่น พาร์ทการคิดวิเคราะห์"
                         />
                       </label>
+                    )}
+                    {partModal.mode === "edit" && partModal.tutorDraft && (
+                      <section className="space-y-4 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
+                        <div>
+                          <h3 className="font-bold text-slate-900">ข้อมูลติวเตอร์ประจำรายการ</h3>
+                          <p className="mt-1 text-xs text-slate-600">แก้ไขข้อมูลติวเตอร์ของ {partModal.part} พร้อมชื่อพาร์ทในฟอร์มเดียวกัน</p>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="text-sm font-semibold">
+                            ชื่อติวเตอร์
+                            <WebBAdminInput
+                              value={partModal.tutorDraft.tutor}
+                              onChange={(event) => setPartModal({
+                                ...partModal,
+                                tutorDraft: { ...partModal.tutorDraft!, tutor: event.target.value },
+                              })}
+                              className={`mt-1 ${inputClass}`}
+                              placeholder="ชื่อที่แสดงบนหน้า Client"
+                            />
+                          </label>
+                          <label className="text-sm font-semibold">
+                            วุฒิการศึกษา / มหาวิทยาลัย
+                            <WebBAdminInput
+                              value={partModal.tutorDraft.education || ""}
+                              onChange={(event) => setPartModal({
+                                ...partModal,
+                                tutorDraft: { ...partModal.tutorDraft!, education: event.target.value },
+                              })}
+                              className={`mt-1 ${inputClass}`}
+                              placeholder="เช่น ครุศาสตร์ จุฬาลงกรณ์มหาวิทยาลัย"
+                            />
+                          </label>
+                          <label className="text-sm font-semibold sm:col-span-2">
+                            รูปโปรไฟล์ติวเตอร์
+                            <div className="mt-1 flex flex-wrap items-center gap-3">
+                              {partModal.tutorDraft.image && (
+                                <Image
+                                  src={partModal.tutorDraft.image}
+                                  alt={partModal.tutorDraft.tutor || "รูปติวเตอร์"}
+                                  width={48}
+                                  height={48}
+                                  unoptimized
+                                  className="size-12 rounded-full object-cover"
+                                />
+                              )}
+                              <input
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp"
+                                aria-label="เลือกรูปโปรไฟล์ติวเตอร์"
+                                className="block max-w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:font-semibold file:text-indigo-700"
+                                onChange={(event) => {
+                                  const file = event.target.files?.[0];
+                                  if (!file) return;
+                                  const reader = new FileReader();
+                                  reader.onload = () => {
+                                    if (typeof reader.result === "string") {
+                                      setPartModal((current) => current?.tutorDraft
+                                        ? { ...current, tutorDraft: { ...current.tutorDraft, image: reader.result as string } }
+                                        : current);
+                                    }
+                                  };
+                                  reader.readAsDataURL(file);
+                                }}
+                              />
+                            </div>
+                          </label>
+                          <label className="text-sm font-semibold sm:col-span-2">
+                            หัวข้อหลัก
+                            <WebBAdminInput
+                              value={partModal.tutorDraft.experience || ""}
+                              onChange={(event) => setPartModal({
+                                ...partModal,
+                                tutorDraft: { ...partModal.tutorDraft!, experience: event.target.value },
+                              })}
+                              className={`mt-1 ${inputClass}`}
+                              placeholder="เช่น ประสบการณ์สอน 5 ปี"
+                            />
+                          </label>
+                        </div>
+                        <div>
+                          <p className="mb-2 text-sm font-semibold">หัวข้อย่อย (3 รายการ)</p>
+                          <div className="grid gap-2 sm:grid-cols-3">
+                            {[0, 1, 2].map((index) => (
+                              <WebBAdminInput
+                                key={index}
+                                aria-label={`หัวข้อย่อยติวเตอร์ ${index + 1}`}
+                                value={partModal.tutorDraft!.bullets[index] || ""}
+                                onChange={(event) => {
+                                  const bullets = [...partModal.tutorDraft!.bullets];
+                                  bullets[index] = event.target.value;
+                                  setPartModal({
+                                    ...partModal,
+                                    tutorDraft: { ...partModal.tutorDraft!, bullets },
+                                  });
+                                }}
+                                className={inputClass}
+                                placeholder={`หัวข้อย่อย ${index + 1}`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </section>
                     )}
                     {!isTgatA && (
                       <>

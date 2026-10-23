@@ -67,6 +67,7 @@ import WebBAdminTable, {
 import WebBModalPortal from "./WebBModalPortal";
 import WebBAdminClientReference from "./WebBAdminClientReference";
 import WebBDashboardMetrics from "./WebBDashboardMetrics";
+import WebBTrendChart, { type TrendMetric, type TrendPoint } from "./WebBTrendChart";
 import { TOTAL_MOCK_QUESTIONS } from "./mock-exam-questions";
 import { Badge, Button, Panel } from "./WebBAdminPrimitives";
 import {
@@ -1730,26 +1731,40 @@ export default function WebBAdminDemo({
         const time = new Date(`${order.day}T12:00:00`).getTime();
         return time >= start && time < end;
       });
+      const grossAmount = rows.reduce((sum, row) => sum + row.base, 0);
       const amount = rows.reduce((sum, row) => sum + row.charged, 0);
       const feeBreakdown = rows.map(paysoFeeBreakdown);
       const feeAmount = feeBreakdown.reduce((sum, fee) => sum + fee.feeBeforeVat, 0);
       const feeVatAmount = feeBreakdown.reduce((sum, fee) => sum + fee.vat, 0);
       return {
-        count: rows.length,
+        gross: grossAmount,
         amount,
+        uplift: amount - grossAmount,
         fee: feeAmount,
         feeVat: feeVatAmount,
         net: amount - feeAmount - feeVatAmount,
         from: toDateInputValue(new Date(start)),
-        to: toDateInputValue(new Date(end - 1)),
       };
     });
-    const maximum = Math.max(1, ...buckets.map((bucket) => bucket.net));
-    return buckets.map((bucket) => ({
-      ...bucket,
-      height: bucket.net ? Math.max(5, (bucket.net / maximum) * 100) : 3,
-    }));
+    return buckets;
   }, [dateFilteredOrders, fromDate, successful, toDate]);
+  const financeChartData: TrendPoint[] = financeBars.map((bucket) => ({
+    day: bucket.from,
+    gross: bucket.gross,
+    charged: bucket.amount,
+    uplift: bucket.uplift,
+    fee: bucket.fee,
+    feeVat: bucket.feeVat,
+    net: bucket.net,
+  }));
+  const financeChartMetrics: TrendMetric[] = [
+    { id: "gross", label: "ราคาสินค้ารวม", color: "#0d9488", axis: "money", value: money(gross) },
+    { id: "charged", label: "ยอดเรียกเก็บรวม Payso", color: "#2563eb", axis: "money", value: money(charged), defaultSelected: true },
+    { id: "uplift", label: "ส่วนเพิ่มในยอดชำระ", color: "#9333ea", axis: "smallMoney", value: money(charged - gross) },
+    { id: "fee", label: "ค่าบริการ Payso ก่อน VAT", color: "#ea580c", axis: "smallMoney", value: money(paysoFeeBeforeVat) },
+    { id: "feeVat", label: "VAT 7% ของค่าบริการ", color: "#db2777", axis: "smallMoney", value: money(paysoFeeVat) },
+    { id: "net", label: "ยอดรับสุทธิ", color: "#4f46e5", axis: "money", value: money(charged - paysoDeduction), defaultSelected: true },
+  ];
   const isFullTgatRanking = selectedExamProduct?.id === "tgat-full";
   const rankingColumns = isFullTgatRanking
     ? ["TGAT1", "TGAT2", "TGAT3", "รวม"]
@@ -7113,53 +7128,11 @@ export default function WebBAdminDemo({
           }
         >
           <Panel>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-              {[
-                ["ราคาสินค้ารวม", money(gross)],
-                ["ยอดเรียกเก็บรวม Payso", money(charged)],
-                ["ส่วนเพิ่มในยอดชำระ", money(charged - gross)],
-                ["ค่าบริการ Payso ก่อน VAT", money(paysoFeeBeforeVat)],
-                ["VAT 7% ของค่าบริการ", money(paysoFeeVat)],
-                ["ยอดรับสุทธิ", money(charged - paysoDeduction)],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-xl bg-slate-50 p-4">
-                  <span className="text-xs text-slate-500">{label}</span>
-                  <b className="mt-2 block text-lg">{value}</b>
-                </div>
-              ))}
-            </div>
-            <div className="relative mt-5 flex h-40 items-end gap-3 border-b border-l border-slate-100 px-4">
-              {financeBars.map(
-                ({ height, count, amount, fee: barFee, feeVat: barVat, net, from, to }, i) => (
-                  <div
-                    key={i}
-                    role="img"
-                    tabIndex={0}
-                    className="group relative flex h-full flex-1 items-end outline-none"
-                    aria-label={`${formatThaiDate(from)} ถึง ${formatThaiDate(to)} ${count} รายการ ยอดเรียกเก็บ ${money(amount)} ค่าบริการ Payso ${money(barFee)} VAT ${money(barVat)} ยอดสุทธิ ${money(net)}`}
-                  >
-                    <span
-                      className="w-full rounded-t bg-emerald-300 transition-colors group-hover:bg-emerald-500 group-focus:bg-emerald-500"
-                      style={{ height: `${height}%` }}
-                    />
-                    <span
-                      role="tooltip"
-                      className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-30 hidden w-max max-w-60 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-xs leading-5 text-white shadow-lg group-hover:block group-focus:block"
-                    >
-                      <b className="block">
-                        {formatThaiDate(from)} – {formatThaiDate(to)}
-                      </b>
-                      <span className="block">
-                        {count} รายการรับ {money(amount)}
-                      </span>
-                      <span className="block">
-                        ค่าบริการ Payso {money(barFee)} · VAT {money(barVat)} · สุทธิ {money(net)}
-                      </span>
-                    </span>
-                  </div>
-                ),
-              )}
-            </div>
+            <WebBTrendChart
+              data={financeChartData}
+              metrics={financeChartMetrics}
+              ariaLabel="กราฟแนวโน้มรายงานการเงินตามช่วงวันที่"
+            />
             <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-900">
               ค่าบริการ PromptPay QR เป็นข้อมูลตัวอย่าง และคำนวณ VAT 7% บนค่าบริการ ·
               อัตราจริงขึ้นกับข้อตกลงบัญชี Payso ·

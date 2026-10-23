@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LuCheck, LuChevronDown, LuChevronRight, LuDownload, LuFilter } from "react-icons/lu";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import WebBThaiDatePicker from "./WebBThaiDatePicker";
 import WebBAdminTable from "./WebBAdminTable";
 import { formatThaiDate, toDateInputValue } from "./data";
+import WebBTrendChart, { type TrendMetric, type TrendPoint } from "./WebBTrendChart";
 import { readAdminMockPurchases } from "./webb-admin-mock-store";
 import type { DemoOrder as Order, DemoStudent as Student } from "./WebBAdminDemo";
 
@@ -36,7 +36,6 @@ export default function WebBDashboardMetrics({ orders, students, onOrderDetail }
   const [productMenuOpen, setProductMenuOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
-  const [selected, setSelected] = useState<Metric[]>(["gmv", "units"]);
   useEffect(() => {
     if (!showFilters) return;
     const closeOnOutside = (event: MouseEvent) => {
@@ -75,6 +74,23 @@ export default function WebBDashboardMetrics({ orders, students, onOrderDetail }
     const priorValues = compareDays[index] ? values(previous.filter((row) => row.day === compareDays[index])) : null;
     return { day, compareDay: compareDays[index], ...todayValues, compareGmv: priorValues?.gmv, compareUnits: priorValues?.units, compareSku: priorValues?.sku, compareOrders: priorValues?.orders };
   });
+  const chartMetrics: TrendMetric[] = metrics.map((metric) => {
+    const value = currentValues[metric.id];
+    const previousValue = previousValues[metric.id];
+    const hasComparison = Boolean(compareFrom && compareTo);
+    return {
+      ...metric,
+      axis: metric.id === "gmv" ? "money" : "count",
+      value: metric.id === "gmv" ? baht(value) : value.toLocaleString("th-TH"),
+      defaultSelected: metric.id === "gmv" || metric.id === "units",
+      change: hasComparison
+        ? previousValue
+          ? ((value - previousValue) / previousValue) * 100
+          : undefined
+        : mockChange[metric.id],
+      ...(compareDays.length ? { comparisonKey: `compare${metric.id.charAt(0).toUpperCase()}${metric.id.slice(1)}` } : {}),
+    };
+  });
   const download = () => {
     const lines = tableMode === "orders"
       ? [["วันที่", "เลขคำสั่งซื้อ", "ผู้สมัคร", "สินค้า", "ยอดเรียกเก็บ", "สถานะ"], ...tableRows.map((row) => [row.day, row.ref, row.student, row.product, String(row.charged), row.status])]
@@ -95,22 +111,7 @@ export default function WebBDashboardMetrics({ orders, students, onOrderDetail }
       <span className="text-slate-400">–</span>
       <WebBThaiDatePicker label="สิ้นสุดเปรียบเทียบ" value={compareTo} min={compareFrom || undefined} onChange={setCompareTo} className="!min-w-0 w-36 [&_.wb-flatpickr-label]:sr-only" />
     </div>
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">{metrics.map((metric) => { const value = currentValues[metric.id]; const old = previousValues[metric.id]; const hasComparison = Boolean(compareFrom && compareTo); const percent = hasComparison ? old ? ((value - old) / old) * 100 : null : mockChange[metric.id]; const active = selected.includes(metric.id); return <button key={metric.id} type="button" aria-pressed={active} onClick={() => setSelected((list) => active && list.length > 1 ? list.filter((id) => id !== metric.id) : active ? list : [...list, metric.id])} className={`min-h-20 rounded-md border-l-[3px] px-3 py-2 text-left transition-colors ${active ? "border-indigo-600 bg-slate-100" : "border-transparent bg-white hover:bg-slate-50"}`}><span className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-700"><span>{metric.label}</span><span className={`grid size-4 place-items-center rounded border text-[10px] ${active ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300"}`}>{active ? "✓" : ""}</span></span><span className="mt-3 flex flex-wrap items-baseline gap-1"><b className="text-lg text-slate-900">{metric.id === "gmv" ? baht(value) : value.toLocaleString("th-TH")}</b>{percent !== null && <small className={`${percent >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{percent >= 0 ? "▲" : "▼"} {Math.abs(percent).toFixed(2)}%</small>}</span></button>; })}</div>
-      <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-500">{selected.map((id) => { const metric = metrics.find((item) => item.id === id)!; return <span key={id} className="inline-flex items-center gap-1"><span className="inline-block w-4 border-t-2" style={{ borderColor: metric.color }} />{metric.label}</span>; })}{compareDays.length > 0 && <span>เส้นประ = ช่วงเปรียบเทียบ</span>}</div>
-      <div className="mt-3 h-64 w-full" role="img" aria-label="กราฟเส้นแสดงตัวชี้วัดตามช่วงวันที่ที่เลือก">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 12, right: 4, left: 0, bottom: 0 }}>
-            <CartesianGrid vertical={false} stroke="#e5e7eb" />
-            <XAxis dataKey="day" tickFormatter={(day: string) => formatThaiDate(day).replace(/\s*พ\.ศ\..*/, "")} tick={{ fontSize: 11, fill: "#6b7280" }} minTickGap={18} tickLine={false} axisLine={{ stroke: "#d1d5db" }} />
-            <YAxis yAxisId="money" tickFormatter={(value: number) => `฿${value >= 1000 ? `${Math.round(value / 1000)}K` : value}`} tick={{ fontSize: 11, fill: "#6b7280" }} tickLine={false} axisLine={false} width={52} />
-            <YAxis yAxisId="count" orientation="right" tick={{ fontSize: 11, fill: "#6b7280" }} tickLine={false} axisLine={false} width={34} />
-            <Tooltip labelFormatter={(day) => String(day)} formatter={(value, name) => [name === "GMV" || name === "GMV (เปรียบเทียบ)" ? baht(Number(value)) : Number(value).toLocaleString("th-TH"), name]} contentStyle={{ borderRadius: 10, border: "1px solid #e5e7eb", boxShadow: "0 8px 24px #0f172a18", fontSize: 12 }} />
-            {selected.map((id) => { const metric = metrics.find((item) => item.id === id)!; const axis = id === "gmv" ? "money" : "count"; const compareKey = `compare${id.charAt(0).toUpperCase()}${id.slice(1)}`; return [<Line key={id} type="linear" dataKey={id} name={metric.label} yAxisId={axis} stroke={metric.color} strokeWidth={2} dot={false} activeDot={{ r: 5 }} isAnimationActive={false} />, ...(compareDays.length ? [<Line key={compareKey} type="linear" dataKey={compareKey} name={`${metric.label} (เปรียบเทียบ)`} yAxisId={axis} stroke={metric.color} strokeWidth={1.5} strokeDasharray="5 4" strokeOpacity={0.6} dot={false} isAnimationActive={false} />] : [])]; })}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
+    <WebBTrendChart data={chartData as TrendPoint[]} metrics={chartMetrics} ariaLabel="กราฟเส้นแสดงตัวชี้วัดตามช่วงวันที่ที่เลือก" />
     <div className="rounded-xl border border-slate-200 bg-white p-4">
     <WebBAdminTable
       rows={(tableMode === "orders" ? tableRows : students) as (Order | Student)[]}

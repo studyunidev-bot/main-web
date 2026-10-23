@@ -177,7 +177,7 @@ export default function WebBSubjectDetails({ kind }: { kind: SubjectKind }) {
                       </span>
                       <span className="wb-tutor-meta">
                         <LuAward aria-hidden="true" />
-                        <span>{subject.experience || "ประสบการณ์ 5 ปี"}</span>
+                        <span>{subject.experience || " กรอกหัวข้อ"}</span>
                       </span>
                       <ul className="wb-tutor-bullets">
                         {subject.bullets.map((bullet) => (

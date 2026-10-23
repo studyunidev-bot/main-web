@@ -15,8 +15,8 @@ export const defaultTgatSubjects: TutorSubject[] = [
     tutor: "ติวเตอร์แมว",
     image: "/images/user/user-01.png",
     education: "ครุศาสตร์ จุฬาลงกรณ์มหาวิทยาลัย",
-    experience: "ประสบการณ์ 5 ปี",
-    bullets: ["ติว TGAT ภาษาอังกฤษ", "เทคนิคทำข้อสอบ", "นักเรียนกว่า 300 คน"],
+    experience: "กรอกหัวข้อ",
+    bullets: ["กรอกหัวข้อย่อย 01", "กรอกหัวข้อย่อย 02", "กรอกหัวข้อย่อย 03"],
   },
   {
     id: "tgat2",
@@ -24,8 +24,8 @@ export const defaultTgatSubjects: TutorSubject[] = [
     tutor: "ติวเตอร์แมว",
     image: "/images/user/user-02.png",
     education: "ครุศาสตร์ จุฬาลงกรณ์มหาวิทยาลัย",
-    experience: "ประสบการณ์ 5 ปี",
-    bullets: ["ติวการคิดเชิงเหตุผล", "วิเคราะห์โจทย์อย่างเป็นระบบ", "นักเรียนกว่า 300 คน"],
+    experience: "กรอกหัวข้อ",
+    bullets: ["กรอกหัวข้อย่อย 01", "กรอกหัวข้อย่อย 02", "กรอกหัวข้อย่อย 03"],
   },
   {
     id: "tgat3",
@@ -33,8 +33,8 @@ export const defaultTgatSubjects: TutorSubject[] = [
     tutor: "ติวเตอร์แมว",
     image: "/images/user/user-03.png",
     education: "ครุศาสตร์ จุฬาลงกรณ์มหาวิทยาลัย",
-    experience: "ประสบการณ์ 5 ปี",
-    bullets: ["ติวสมรรถนะการทำงาน", "วิเคราะห์สถานการณ์", "นักเรียนกว่า 300 คน"],
+    experience: "กรอกหัวข้อ",
+    bullets: ["กรอกหัวข้อย่อย 01", "กรอกหัวข้อย่อย 02", "กรอกหัวข้อย่อย 03"],
   },
 ];
 
@@ -51,7 +51,11 @@ export const defaultALevelSubjects: TutorSubject[] = [
 ];
 
 export function getTutorsForCategory(kind: string): TutorSubject[] {
-  const defaults = kind === "a-level" ? defaultALevelSubjects : defaultTgatSubjects;
+  const defaults = kind === "a-level"
+    ? defaultALevelSubjects
+    : kind === "tgat"
+      ? defaultTgatSubjects
+      : [];
   if (typeof window === "undefined") {
     return defaults;
   }

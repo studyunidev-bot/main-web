@@ -47,9 +47,12 @@ import {
   readSocialSettings,
   isDemoStudentSuspended,
   isDemoSolutionPublished,
+  productsOverlap,
+  safeRead,
   safeWrite,
   setPurchaseExamStatus,
 } from "./demo-store";
+import { adminMockKey, WEBB_ADMIN_MOCK_UPDATED } from "./webb-admin-mock-store";
 import { getExamPlan } from "./exam-documents";
 import { confirmWebBAction } from "./confirm";
 import WebBProvinceSelect, {
@@ -2346,6 +2349,21 @@ function StudentSolutions({
 }: {
   onAction: (message: string) => void;
 }) {
+  type ManagedSolution = {
+    id: string;
+    name: string;
+    product: string;
+    kind: string;
+    access: string;
+    active: boolean;
+    questionNumber?: number;
+    duration?: string;
+    summary?: string;
+    tutor?: string;
+    tutorCredential?: string;
+    tutorBio?: string;
+    pdfName?: string;
+  };
   const [selectedSolution, setSelectedSolution] = useState<{
     id: string;
     name: string;
@@ -2354,15 +2372,21 @@ function StudentSolutions({
     productName: string;
     set: string;
     pdf: string;
+    summary?: string;
+    tutor?: string;
+    tutorCredential?: string;
+    tutorBio?: string;
   } | null>(null);
   const [eligiblePurchases, setEligiblePurchases] = useState<
     ReturnType<typeof readCurrentDemoPurchases>
   >([]);
   const [solutionsPublished, setSolutionsPublished] = useState(true);
   const [openDownloadMenu, setOpenDownloadMenu] = useState<string | null>(null);
+  const [managedSolutions, setManagedSolutions] = useState<ManagedSolution[]>([]);
 
   useEffect(() => {
     const refresh = () => {
+    setManagedSolutions(safeRead<ManagedSolution[]>(adminMockKey("mock-solutions"), []));
     const params = new URLSearchParams(window.location.search);
     const productId = params.get("product");
     const examSet = params.get("set");
@@ -2385,10 +2409,12 @@ function StudentSolutions({
     window.addEventListener("storage", refresh);
     window.addEventListener("webb-demo-purchases-updated", refresh);
     window.addEventListener("webb-admin-demo-updated", refresh);
+    window.addEventListener(WEBB_ADMIN_MOCK_UPDATED, refresh);
     return () => {
       window.removeEventListener("storage", refresh);
       window.removeEventListener("webb-demo-purchases-updated", refresh);
       window.removeEventListener("webb-admin-demo-updated", refresh);
+      window.removeEventListener(WEBB_ADMIN_MOCK_UPDATED, refresh);
     };
   }, []);
 
@@ -2413,6 +2439,19 @@ function StudentSolutions({
               purchase.examSet || "A",
             );
             const downloadMenuId = `solution-download-${purchase.ref}`;
+            const publishedVideos = managedSolutions.filter((solution) => {
+              const productLabel = solution.product.toLowerCase();
+              const isFullTgatMedia = productLabel.includes("full tgat");
+              const matchesProduct = isFullTgatMedia
+                ? purchase.productId === "tgat-full"
+                : productsOverlap(purchase.productId, solution.product);
+              return (
+                solution.active &&
+                solution.kind === "Video" &&
+                matchesProduct &&
+                productLabel.includes(`ชุด ${(purchase.examSet || "A").toLowerCase()}`)
+              );
+            });
             return (
               <section className="wb-solution-purchase" key={purchase.ref}>
                 <header className="wb-solutions-head">
@@ -2533,6 +2572,50 @@ function StudentSolutions({
                     })}
                   </tbody>
                 </table>
+                {publishedVideos.length > 0 && (
+                  <section className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+                    <div className="mb-3">
+                      <h3 className="font-bold text-slate-900">วิดีโอเฉลยจากผู้สอน</h3>
+                      <p className="mt-1 text-sm text-slate-600">รายการวิดีโอที่ผู้ดูแลเผยแพร่สำหรับชุดนี้</p>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {publishedVideos.map((solution, index) => (
+                        <article key={solution.id} className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4">
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-indigo-700">
+                              {solution.questionNumber ? `ข้อ ${solution.questionNumber}` : "เฉลยทั้งชุด"}
+                            </p>
+                            <h4 className="mt-1 truncate font-bold text-slate-900">{solution.name}</h4>
+                            <p className="mt-1 text-xs text-slate-500">{solution.product} · {solution.duration || "ไม่ระบุความยาว"}</p>
+                          </div>
+                          <button
+                            type="button"
+                            className="wb-solutions-play-btn shrink-0"
+                            onClick={() =>
+                              setSelectedSolution({
+                                id: solution.id,
+                                name: solution.name,
+                                duration: solution.duration || "ไม่ระบุความยาว",
+                                index: solution.questionNumber || index + 1,
+                                productName: solution.product.split("·")[0].trim(),
+                                set: purchase.examSet || "A",
+                                pdf: plan.sections[0]?.solutionPdf || "#",
+                                summary: solution.summary,
+                                tutor: solution.tutor,
+                                tutorCredential: solution.tutorCredential,
+                                tutorBio: solution.tutorBio,
+                              })
+                            }
+                          >
+                            <span className="wb-solutions-btn-desktop">ดูวิดีโอเฉลย</span>
+                            <span className="wb-solutions-btn-mobile">ดู</span>
+                            <LuPlay className="wb-solutions-play-icon" aria-hidden="true" />
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                )}
               </section>
             );
           })
@@ -2564,6 +2647,10 @@ function VideoSolutionModal({
     productName: string;
     set: string;
     pdf: string;
+    summary?: string;
+    tutor?: string;
+    tutorCredential?: string;
+    tutorBio?: string;
   };
   onClose: () => void;
   onDownloadPdf: () => void;
@@ -2731,8 +2818,8 @@ function VideoSolutionModal({
               <div className="wb-video-meta-desc">
                 <h4>สรุปประเด็นเฉลย</h4>
                 <p>
-                  วิดีโอนี้อธิบายแนวคิดและวิธีวิเคราะห์โจทย์ของหัวข้อนี้
-                  พร้อมเทคนิคการตัดตัวเลือก
+                  {solution.summary ||
+                    "วิดีโอนี้อธิบายแนวคิดและวิธีวิเคราะห์โจทย์ของหัวข้อนี้ พร้อมเทคนิคการตัดตัวเลือก"}
                 </p>
               </div>
               <div className="wb-video-meta-tags">
@@ -2745,9 +2832,9 @@ function VideoSolutionModal({
             <section className="wb-video-tutor-card" aria-label="ประวัติและช่องทางติดตามติวเตอร์">
               <Image src="/images/user/user-01.png" alt="ติวเตอร์แมว" width={52} height={52} />
               <div className="wb-video-tutor-info">
-                <h4>ติวเตอร์แมว</h4>
-                <p>ครุศาสตร์ จุฬาลงกรณ์มหาวิทยาลัย · ประสบการณ์สอน 5 ปี</p>
-                <small>ติวเตรียมสอบ TGAT และแนะนำเทคนิควิเคราะห์โจทย์</small>
+                <h4>{solution.tutor || "ติวเตอร์แมว"}</h4>
+                <p>{solution.tutorCredential || "ครุศาสตร์ จุฬาลงกรณ์มหาวิทยาลัย · ประสบการณ์สอน 5 ปี"}</p>
+                <small>{solution.tutorBio || "ติวเตรียมสอบ TGAT และแนะนำเทคนิควิเคราะห์โจทย์"}</small>
               </div>
               <div className="wb-video-tutor-social">
                 <b>ช่องทางติดตาม</b>

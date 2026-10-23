@@ -16,6 +16,7 @@ import {
   LuChartNoAxesCombined,
   LuCirclePlay,
   LuDownload,
+  LuEye,
   LuFileText,
   LuImage,
   LuKeyRound,
@@ -37,6 +38,7 @@ import {
 } from "./webb-tutors";
 import { safeRead, type DemoPurchase } from "./demo-store";
 import { getExamPlan } from "./exam-documents";
+import WebBExam from "./WebBExam";
 import WebBExamApprovals, { readExamRequests } from "./WebBExamApprovals";
 import WebBAdminDemo from "./WebBAdminDemo";
 import WebBModalPortal from "./WebBModalPortal";
@@ -96,7 +98,8 @@ type SetManagementTab =
   | "access"
   | "activity"
   | "results"
-  | "solutions";
+  | "solutions"
+  | "tutors";
 type ImagePreview = { src: string; alt: string; width: number; height: number };
 type FutureDemoRecord = {
   subjectId: string;
@@ -206,6 +209,7 @@ const setManagementTabs: { id: SetManagementTab; label: string }[] = [
   { id: "activity", label: "การเข้าสอบ" },
   { id: "results", label: "ผลสอบและ Ranking" },
   { id: "solutions", label: "สื่อเฉลย" },
+  { id: "tutors", label: "จัดการติวเตอร์" },
 ];
 
 const managementTabIcons: Record<SetManagementTab, typeof LuLayoutDashboard> = {
@@ -216,6 +220,7 @@ const managementTabIcons: Record<SetManagementTab, typeof LuLayoutDashboard> = {
   activity: LuActivity,
   results: LuChartNoAxesCombined,
   solutions: LuCirclePlay,
+  tutors: LuUser,
 };
 
 const managementImageGroups = [
@@ -434,6 +439,7 @@ export default function WebBExamCatalog({
     solutions: [] as { id: string; product: string; active: boolean }[],
   });
   const [imagePreview, setImagePreview] = useState<ImagePreview | null>(null);
+  const [examPreviewProductId, setExamPreviewProductId] = useState<string | null>(null);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [previewChoices, setPreviewChoices] = useState<Record<string, string>>(
     {},
@@ -519,6 +525,20 @@ export default function WebBExamCatalog({
   useEffect(() => {
     setPortalTarget(document.body);
   }, []);
+
+  useEffect(() => {
+    if (!examPreviewProductId) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExamPreviewProductId(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [examPreviewProductId]);
 
   useEffect(() => {
     const refresh = () => {
@@ -682,6 +702,9 @@ export default function WebBExamCatalog({
 
   function openManagementTab(tabId: SetManagementTab) {
     setManagementTab(tabId);
+    if (tabId === "tutors" && managementTab !== "tutors" && selectedSet && selected) {
+      openTutorModal(selectedSet.name, selected.id);
+    }
   }
 
   function save(next: CatalogFamily[], notice: string) {
@@ -908,6 +931,17 @@ export default function WebBExamCatalog({
       })),
       contentStatus: settings?.contentStatus || "Draft",
     });
+  }
+
+  function openExamPreview(part: string) {
+    const productId = part.match(/^TGAT[123]\b/i)?.[0].toLowerCase();
+    if (!productId || !selectedSet || !selected) return;
+    const plan = getExamPlan(productId, selectedSet.name);
+    if (!plan.hasSuppliedExam) {
+      setMessage(`ยังไม่มีไฟล์ข้อสอบสำหรับ Preview ของ ${part} ชุด ${selectedSet.name}`);
+      return;
+    }
+    setExamPreviewProductId(productId);
   }
 
   function savePartModal(event: FormEvent<HTMLFormElement>) {
@@ -1289,9 +1323,9 @@ export default function WebBExamCatalog({
         selectedSet &&
         managementTab !== "content" &&
         managementTab !== "offers" &&
-        (!isTgatA || managementTab === "overview") && (
+        (!isTgatA || managementTab === "overview" || managementTab === "tutors") && (
           <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            {managementTab !== "tutors" && <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 {/* <p className="text-xs font-bold text-indigo-700">
                   {selected.name}
@@ -1310,7 +1344,7 @@ export default function WebBExamCatalog({
                   ข้อมูลสำหรับการนำเสนอ
                 </span>
               </div>
-            </div>
+            </div>}
             {managementTab === "overview" && (
               <>
                 <p className="text-sm leading-6 text-slate-600">
@@ -1752,6 +1786,16 @@ export default function WebBExamCatalog({
                 </article>
               ))}
             {managementTab === "solutions" &&
+              selected.id === "tgat" && (
+                <WebBAdminDemo
+                  key={`tgat-solution-media-${selectedSet.id}`}
+                  activeScreen="exam-management"
+                  initialExamTab="solutions"
+                  initialProductId="tgat-full"
+                  embedded
+                />
+              )}
+            {managementTab === "solutions" &&
               selected.id !== "tgat" &&
               (futureDemoRecord ? (
                 <section className="space-y-3 rounded-xl border border-slate-200 p-4">
@@ -1786,10 +1830,10 @@ export default function WebBExamCatalog({
                   ยังไม่มีสื่อเฉลยตัวอย่างสำหรับ {selected.name}
                 </p>
               ))}
-            <p className="text-xs text-slate-500">
+            {managementTab !== "tutors" && <p className="text-xs text-slate-500">
               ข้อมูลผู้เรียนและเหตุการณ์ในหน้านี้จำลองขึ้นเพื่อการนำเสนอ ·
               ยังไม่เชื่อมฐานข้อมูลจริง
-            </p>
+            </p>}
           </section>
         )}
 
@@ -2075,15 +2119,6 @@ export default function WebBExamCatalog({
                                       </td>
                                       <td className="px-3 py-3 text-right">
                                         <div className="flex items-center justify-end gap-2">
-                                          <button
-                                            type="button"
-                                            onClick={() => openTutorModal(set.name, selected.id)}
-                                            className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
-                                            title={`แก้ไขชุด ${set.name} และข้อมูลติวเตอร์`}
-                                          >
-                                            <LuPencil className="size-3.5" />
-                                            แก้ไข
-                                          </button>
                                           <Link
                                             href={`/webb/admin/exam-catalog/${encodeURIComponent(selected.id)}/${encodeURIComponent(set.id)}`}
                                             className={primaryButton}
@@ -2121,7 +2156,7 @@ export default function WebBExamCatalog({
                             </h3>
                             <>
                               <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">
-                                <table className="w-full min-w-[760px] text-left text-sm">
+                                <table className="w-full min-w-[900px] text-left text-sm">
                                   <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                                     <tr>
                                       <th className="px-4 py-3">พาร์ท / วิชา</th>
@@ -2136,7 +2171,7 @@ export default function WebBExamCatalog({
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-slate-100">
-                                    {selectedSet.parts.map((part, pIdx) => {
+                                    {selectedSet.parts.map((part) => {
                                       const settings =
                                         selectedSet.partSettings?.[part];
                                       const structure = [
@@ -2201,17 +2236,18 @@ export default function WebBExamCatalog({
                                               >
                                                 จัดการ
                                               </button>
-                                              <button
-                                                type="button"
-                                                onClick={() =>
-                                                  openTutorModal(selectedSet.name, selected.id, pIdx, part)
-                                                }
-                                                className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
-                                                title={`แก้ไขติวเตอร์สำหรับ ${part}`}
-                                              >
-                                                <LuUser className="size-3.5" />
-                                                แก้ไขติวเตอร์
-                                              </button>
+                                              {selected.id === "tgat" && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => openExamPreview(part)}
+                                                  aria-label={`Preview ข้อสอบ ${part}`}
+                                                  title={`Preview ข้อสอบ ${part} ก่อนเปิดขาย`}
+                                                  className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                                                >
+                                                  <LuEye aria-hidden="true" className="size-4" />
+                                                  Preview
+                                                </button>
+                                              )}
                                               {canEdit && (
                                                 <>
                                                   <button
@@ -3203,50 +3239,92 @@ export default function WebBExamCatalog({
         </WebBModalPortal>
       )}
 
-      {tutorModal && tutorModal.isOpen && (() => {
+      {isSetPage && managementTab === "tutors" && tutorModal && tutorModal.isOpen && (() => {
         const activeIdx = Math.max(0, Math.min(tutorModal.selectedIndex ?? 0, tutorModal.tutors.length - 1));
         const currentTutor = tutorModal.tutors[activeIdx];
         if (!currentTutor) return null;
 
         return (
-        <WebBModalPortal>
-          <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 p-3 backdrop-blur-sm sm:p-6"
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget) setTutorModal(null);
-            }}
-          >
+        <div className="mt-5">
             <section
-              role="dialog"
-              aria-modal="true"
               aria-labelledby="tutor-modal-title"
-              className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+              className="flex min-h-[680px] w-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
             >
               <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-6 py-4">
                 <div>
-                  <div className="flex items-center gap-2">
+                  {/* <div className="flex items-center gap-2">
                     <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-bold text-indigo-700">
                       {tutorModal.setName ? `ชุด ${tutorModal.setName} · ` : ""}{currentTutor.title}
                     </span>
-                  </div>
+                  </div> */}
                   <h2 id="tutor-modal-title" className="mt-1 text-lg font-bold text-slate-900">
-                    แก้ไขข้อมูลติวเตอร์
+                    จัดการข้อมูลติวเตอร์
                   </h2>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    จัดการข้อมูลติวเตอร์และประวัติผู้ออกข้อสอบประจำวิชานี้ (1 รายการ ต่อ 1 ติวเตอร์)
-                  </p>
+                  <p className="mt-1 text-xs text-slate-500">{tutorModal.setName ? `ชุด ${tutorModal.setName} · ` : ""}แก้ไขข้อมูลที่ใช้แสดงบนหน้ารายละเอียดวิชา</p>
+
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setTutorModal(null)}
-                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                  aria-label="ปิดหน้าต่าง"
-                >
-                  ✕
-                </button>
               </div>
 
-              <div className="flex-1 space-y-4 overflow-y-auto p-6">
+              <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[190px_minmax(0,1fr)] overflow-hidden md:grid-cols-[300px_minmax(0,1fr)] md:grid-rows-1">
+                <aside className="flex min-h-0 flex-col border-b border-slate-200 bg-slate-50 md:border-b-0 md:border-r">
+                  <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800">รายการติวเตอร์</h3>
+                      <p className="mt-0.5 text-xs text-slate-500">{tutorModal.tutors.length} รายการ</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextTutor: TutorSubject = {
+                          id: `tutor-${Date.now()}`,
+                          title: "พาร์ท / วิชาใหม่",
+                          tutor: "",
+                          image: "",
+                          education: "",
+                          experience: "",
+                          bullets: ["", "", ""],
+                        };
+                        setTutorModal({
+                          ...tutorModal,
+                          tutors: [...tutorModal.tutors, nextTutor],
+                          selectedIndex: tutorModal.tutors.length,
+                        });
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-700"
+                    >
+                      <LuPlus className="size-4" aria-hidden="true" /> เพิ่มติวเตอร์
+                    </button>
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-y-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="sticky top-0 bg-slate-100 text-slate-500">
+                        <tr><th className="px-3 py-2">พาร์ท / ติวเตอร์</th><th className="px-2 py-2 text-right">จัดการ</th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {tutorModal.tutors.map((tutor, index) => (
+                          <tr key={tutor.id} className={index === activeIdx ? "bg-indigo-50" : "bg-white hover:bg-slate-100"}>
+                            <td className="p-0">
+                              <button type="button" onClick={() => setTutorModal({ ...tutorModal, selectedIndex: index })} className="w-full px-3 py-3 text-left">
+                                <span className="block font-semibold text-slate-800">{tutor.title || "ยังไม่ระบุพาร์ท"}</span>
+                                <span className="mt-1 block text-slate-500">{tutor.tutor || "ยังไม่ระบุติวเตอร์"}</span>
+                              </button>
+                            </td>
+                            <td className="whitespace-nowrap px-2 text-right">
+                              <button type="button" onClick={() => setTutorModal({ ...tutorModal, selectedIndex: index })} aria-label={`แก้ไข ${tutor.title}`} title={`แก้ไข ${tutor.title}`} className="mr-1 inline-flex size-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"><LuPencil className="size-3.5" aria-hidden="true" /></button>
+                              <button type="button" disabled={tutorModal.tutors.length <= 1} onClick={async () => {
+                                const confirmed = await confirmWebBAction({ title: "ลบข้อมูลติวเตอร์", text: `ต้องการลบ ${tutor.title} ออกจากรายการหรือไม่`, confirmText: "ลบข้อมูล" });
+                                if (!confirmed) return;
+                                const updated = tutorModal.tutors.filter((_, itemIndex) => itemIndex !== index);
+                                setTutorModal({ ...tutorModal, tutors: updated, selectedIndex: Math.max(0, index <= activeIdx ? activeIdx - 1 : activeIdx) });
+                              }} aria-label={`ลบ ${tutor.title}`} title={`ลบ ${tutor.title}`} className="inline-flex size-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"><LuTrash2 className="size-3.5" aria-hidden="true" /></button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </aside>
+                <div className="min-h-0 overflow-y-auto p-4 sm:p-6">
                 <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5 space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
                     <div>
@@ -3348,7 +3426,7 @@ export default function WebBExamCatalog({
                     </div>
                   </div>
 
-                  {/* วุฒิการศึกษา และ ประสบการณ์ */}
+                  {/* วุฒิการศึกษา และชื่อหัวข้อ */}
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-600">
@@ -3366,7 +3444,7 @@ export default function WebBExamCatalog({
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-600">
-                        ประสบการณ์
+                        ชื่อหัวข้อ
                       </label>
                       <WebBAdminInput
                         value={currentTutor.experience || ""}
@@ -3375,14 +3453,14 @@ export default function WebBExamCatalog({
                           updated[activeIdx] = { ...updated[activeIdx], experience: e.target.value };
                           setTutorModal({ ...tutorModal, tutors: updated });
                         }}
-                        placeholder="เช่น ประสบการณ์ 5 ปี"
+                        placeholder="เช่น ความเชี่ยวชาญด้านการสอบ"
                       />
                     </div>
                   </div>
 
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-slate-600">
-                      หัวข้อไฮไลต์ / ประสบการณ์ (3 รายการ)
+                      หัวข้อย่อย (3 รายการ)
                     </label>
                     <div className="grid gap-2 sm:grid-cols-3">
                       {[0, 1, 2].map((bIndex) => (
@@ -3402,6 +3480,7 @@ export default function WebBExamCatalog({
                     </div>
                   </div>
                 </div>
+                </div>
               </div>
 
               <div className="flex shrink-0 items-center justify-between border-t border-slate-200 bg-slate-50 px-6 py-4">
@@ -3411,7 +3490,7 @@ export default function WebBExamCatalog({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setTutorModal(null)}
+                    onClick={() => openTutorModal(tutorModal.setName, tutorModal.category, activeIdx)}
                     className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
                   >
                     ยกเลิก
@@ -3420,7 +3499,6 @@ export default function WebBExamCatalog({
                     type="button"
                     onClick={() => {
                       saveTutorsForCategory(tutorModal.category, tutorModal.tutors);
-                      setTutorModal(null);
                       setMessage(`บันทึกข้อมูลชุด ${tutorModal.setName} และข้อมูลติวเตอร์เรียบร้อย ข้อมูลจะปรากฏบนหน้า /webb/${tutorModal.category}`);
                     }}
                     className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-bold text-white shadow hover:bg-indigo-700"
@@ -3430,8 +3508,7 @@ export default function WebBExamCatalog({
                 </div>
               </div>
             </section>
-          </div>
-        </WebBModalPortal>
+        </div>
         );
       })()}
 
@@ -3526,6 +3603,22 @@ export default function WebBExamCatalog({
           </div>
         </section>
       )}
+
+      {examPreviewProductId && portalTarget && (() => {
+        const examProduct = WEBB_PRODUCTS.find((product) => product.id === examPreviewProductId);
+        return examProduct ? createPortal(
+          <div className="fixed inset-0 z-[10000] h-[100dvh] w-screen overflow-y-auto bg-white" role="dialog" aria-modal="true" aria-label={`Preview ข้อสอบ ${examProduct.name}`}>
+            <WebBExam
+              key={`preview-${examPreviewProductId}`}
+              product={examProduct}
+              examSet="A"
+              previewMode
+              onPreviewExit={() => setExamPreviewProductId(null)}
+            />
+          </div>,
+          portalTarget,
+        ) : null;
+      })()}
 
       {imagePreview &&
         portalTarget &&

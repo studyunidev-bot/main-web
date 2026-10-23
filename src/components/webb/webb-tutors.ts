@@ -23,14 +23,18 @@ export const defaultTgatSubjects: TutorSubject[] = [
     title: "TGAT 2 การคิดอย่างมีเหตุผล",
     tutor: "ติวเตอร์แมว",
     image: "/images/user/user-02.png",
-    bullets: ["ติว TGAT ภาษาอังกฤษ", "เทคนิคทำข้อสอบ", "นักเรียนกว่า 300 คน"],
+    education: "ครุศาสตร์ จุฬาลงกรณ์มหาวิทยาลัย",
+    experience: "ประสบการณ์ 5 ปี",
+    bullets: ["ติวการคิดเชิงเหตุผล", "วิเคราะห์โจทย์อย่างเป็นระบบ", "นักเรียนกว่า 300 คน"],
   },
   {
     id: "tgat3",
     title: "TGAT 3 สมรรถนะการทำงาน",
     tutor: "ติวเตอร์แมว",
     image: "/images/user/user-03.png",
-    bullets: ["ติว TGAT ภาษาอังกฤษ", "เทคนิคทำข้อสอบ", "นักเรียนกว่า 300 คน"],
+    education: "ครุศาสตร์ จุฬาลงกรณ์มหาวิทยาลัย",
+    experience: "ประสบการณ์ 5 ปี",
+    bullets: ["ติวสมรรถนะการทำงาน", "วิเคราะห์สถานการณ์", "นักเรียนกว่า 300 คน"],
   },
 ];
 
@@ -47,21 +51,36 @@ export const defaultALevelSubjects: TutorSubject[] = [
 ];
 
 export function getTutorsForCategory(kind: string): TutorSubject[] {
+  const defaults = kind === "a-level" ? defaultALevelSubjects : defaultTgatSubjects;
   if (typeof window === "undefined") {
-    return kind === "a-level" ? defaultALevelSubjects : defaultTgatSubjects;
+    return defaults;
   }
   try {
     const raw = window.localStorage.getItem(`webb-subject-tutors:${kind}`);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        const validSaved = parsed.filter(
+          (item): item is TutorSubject => item && typeof item.id === "string",
+        );
+        const merged = validSaved.map((saved) => {
+          const fallback = defaults.find((item) => item.id === saved.id);
+          if (!fallback) return saved;
+          return {
+            ...fallback,
+            ...saved,
+            education: saved.education?.trim() || fallback.education,
+            experience: saved.experience?.trim() || fallback.experience,
+            bullets: fallback.bullets.map((value, index) => saved.bullets?.[index]?.trim() || value),
+          };
+        });
+        return merged.length ? merged : defaults;
       }
     }
   } catch {
     // fallback
   }
-  return kind === "a-level" ? defaultALevelSubjects : defaultTgatSubjects;
+  return defaults;
 }
 
 export function saveTutorsForCategory(kind: string, tutors: TutorSubject[]) {

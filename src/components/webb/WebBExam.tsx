@@ -375,11 +375,15 @@ export default function WebBExam({
   examType = "purchased",
   examSet = "A",
   purchaseRef,
+  previewMode = false,
+  onPreviewExit,
 }: {
   product: ExamProduct;
   examType?: "purchased" | "trial";
   examSet?: string;
   purchaseRef?: string;
+  previewMode?: boolean;
+  onPreviewExit?: () => void;
 }) {
   const answerStorageKey = examAnswersStorageKey(product.id, examType, undefined, examSet);
   const resultKey = examResultStorageKey(product.id, examType, undefined, examSet);
@@ -435,6 +439,10 @@ export default function WebBExam({
   }
 
   useEffect(() => {
+    if (previewMode) {
+      setAttemptStatus("ready");
+      return;
+    }
     const redirectIfCompleted = () => {
       try {
         if (examType === "purchased" && !selectedPurchase) {
@@ -481,9 +489,17 @@ export default function WebBExam({
     const onPageShow = () => redirectIfCompleted();
     window.addEventListener("pageshow", onPageShow);
     return () => window.removeEventListener("pageshow", onPageShow);
-  }, [resultKey, answerStorageKey, product.id, examType, examSet, purchaseRef, examPlan.hasSuppliedExam]);
+  }, [resultKey, answerStorageKey, product.id, examType, examSet, purchaseRef, examPlan.hasSuppliedExam, previewMode]);
 
   useEffect(() => {
+    if (previewMode) {
+      setAnswers({});
+      const nextDeadline = Date.now() + examDurationSeconds * 1000;
+      setDeadlineAt(nextDeadline);
+      setRemaining(examDurationSeconds);
+      setAttemptStatus("ready");
+      return;
+    }
     if (pdfBacked && !examPlan.hasSuppliedExam) return;
     try {
       let stored = localStorage.getItem(answerStorageKey);
@@ -534,15 +550,16 @@ export default function WebBExam({
     } catch {
       /* Exam answers remain usable when browser storage is unavailable. */
     }
-  }, [answerStorageKey, resultKey, startedAtKey, product.id, examType, examSet, examDurationSeconds, pdfBacked, examPlan.hasSuppliedExam, questionCount]);
+  }, [answerStorageKey, resultKey, startedAtKey, product.id, examType, examSet, examDurationSeconds, pdfBacked, examPlan.hasSuppliedExam, questionCount, previewMode]);
 
   useEffect(() => {
+    if (previewMode) return;
     try {
       localStorage.setItem(answerStorageKey, JSON.stringify(answers));
     } catch {
       /* Exam answers remain usable when browser storage is unavailable. */
     }
-  }, [answers, answerStorageKey]);
+  }, [answers, answerStorageKey, previewMode]);
 
   useEffect(() => {
     if (attemptStatus !== "ready" || deadlineAt === null) return;
@@ -555,6 +572,11 @@ export default function WebBExam({
 
   useEffect(() => {
     if (remaining !== 0 || attemptStatus !== "ready") return;
+    if (previewMode) {
+      setConfirmSubmit(false);
+      setAttemptStatus("timeout");
+      return;
+    }
     if (examType === "purchased") {
       const score = calculateDemoScore(answers, product.id, examSet);
       localStorage.setItem(
@@ -582,11 +604,12 @@ export default function WebBExam({
     questionCount,
     answerStorageKey,
     startedAtKey,
+    previewMode,
   ]);
 
 
   useEffect(() => {
-    if (attemptStatus !== "timeout") return;
+    if (previewMode || attemptStatus !== "timeout") return;
     const timer = window.setTimeout(() => {
       if (examType === "trial") {
         clearTrialAttempt(resultKey, answerStorageKey, startedAtKey);
@@ -598,7 +621,7 @@ export default function WebBExam({
       }
     }, 3000);
     return () => window.clearTimeout(timer);
-  }, [attemptStatus, product.id, examSet, purchaseRef, examType, resultKey, answerStorageKey, startedAtKey]);
+  }, [attemptStatus, product.id, examSet, purchaseRef, examType, resultKey, answerStorageKey, startedAtKey, previewMode]);
 
   function chooseAnswer(question: number, choice: number, responseType: ExamResponseType = "single") {
     setAnswers((current) => {
@@ -629,6 +652,11 @@ export default function WebBExam({
 
   function submit() {
     if (attemptStatus !== "ready") return;
+    if (previewMode) {
+      setConfirmSubmit(false);
+      onPreviewExit?.();
+      return;
+    }
     if (examType === "trial") {
       clearTrialAttempt(resultKey, answerStorageKey, startedAtKey);
       window.location.replace("/webb/student?view=exam");
@@ -680,16 +708,22 @@ export default function WebBExam({
           <div className="wb-answer-clock" aria-label="เวลาที่เหลือ">
             {formatTime(remaining)}
           </div>
-          <button type="button" className="wb-answer-test-expiry" onClick={testExamExpiry}>
-            ทดสอบหมดเวลา (5 วิ)
-          </button>
+          {previewMode ? (
+            <button type="button" className="wb-answer-test-expiry" onClick={onPreviewExit}>
+              ปิด Preview
+            </button>
+          ) : (
+            <button type="button" className="wb-answer-test-expiry" onClick={testExamExpiry}>
+              ทดสอบหมดเวลา (5 วิ)
+            </button>
+          )}
         </div>
         <button
           type="button"
           className="wb-answer-submit"
           onClick={() => setConfirmSubmit(true)}
         >
-          ส่งคำตอบ
+          {previewMode ? "จบ Preview" : "ส่งคำตอบ"}
         </button>
       </header>
 
@@ -764,22 +798,22 @@ export default function WebBExam({
             <span className="wb-confirm-icon" aria-hidden="true">
               ✏️
             </span>
-            <h2 id="wb-confirm-title">ยืนยันการส่งคำตอบ?</h2>
-            <p>เมื่อส่งแล้วจะไม่สามารถกลับมาแก้ไขได้</p>
+            <h2 id="wb-confirm-title">{previewMode ? "สิ้นสุด Preview?" : "ยืนยันการส่งคำตอบ?"}</h2>
+            <p>{previewMode ? "การทดลองทำข้อสอบนี้จะไม่บันทึกคำตอบหรือผลสอบ" : "เมื่อส่งแล้วจะไม่สามารถกลับมาแก้ไขได้"}</p>
             <div className="wb-confirm-actions">
               <button
                 type="button"
                 className="wb-confirm-review"
                 onClick={() => setConfirmSubmit(false)}
               >
-                ตรวจทานอีกครั้ง
+                {previewMode ? "ทำข้อสอบต่อ" : "ตรวจทานอีกครั้ง"}
               </button>
               <button
                 type="button"
                 className="wb-confirm-send"
                 onClick={submit}
               >
-                ยืนยันส่งคำตอบ
+                {previewMode ? "ปิด Preview" : "ยืนยันส่งคำตอบ"}
               </button>
             </div>
           </section>

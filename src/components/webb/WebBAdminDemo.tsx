@@ -15,9 +15,13 @@ import {
   LuActivity,
   LuChartNoAxesCombined,
   LuCirclePlay,
+  LuArrowUpRight,
+  LuCreditCard,
+  LuFileCheck2,
   LuFileText,
   LuKeyRound,
   LuLayoutDashboard,
+  LuLifeBuoy,
   LuPencil,
   LuTag,
   LuTrash2,
@@ -62,6 +66,7 @@ import WebBAdminTable, {
 } from "./WebBAdminTable";
 import WebBModalPortal from "./WebBModalPortal";
 import WebBAdminClientReference from "./WebBAdminClientReference";
+import WebBDashboardMetrics from "./WebBDashboardMetrics";
 import { TOTAL_MOCK_QUESTIONS } from "./mock-exam-questions";
 import { Badge, Button, Panel } from "./WebBAdminPrimitives";
 import {
@@ -74,7 +79,7 @@ import {
   WEBB_ADMIN_MOCK_UPDATED,
 } from "./webb-admin-mock-store";
 
-type DemoOrder = {
+export type DemoOrder = {
   ref: string;
   student: string;
   username?: string;
@@ -106,7 +111,7 @@ function paysoFeeBreakdown(order: DemoOrder): PaysoFeeBreakdown {
   return { feeBeforeVat, vat, totalDeduction: feeBeforeVat + vat };
 }
 
-type DemoStudent = {
+export type DemoStudent = {
   id: string;
   name: string;
   username?: string;
@@ -945,7 +950,7 @@ export default function WebBAdminDemo({
   );
   const [examTab, setExamTab] = useState<ExamTab>(() =>
     activeScreen === "exam-management" &&
-    ["overview", "content", "offers", "access", "activity", "results"].includes(
+    ["overview", "content", "offers", "access", "activity", "results", "solutions"].includes(
       initialExamTab || "",
     )
       ? (initialExamTab as ExamTab)
@@ -3231,138 +3236,67 @@ export default function WebBAdminDemo({
         <Section
           id="overview"
           title="ภาพรวมแพลตฟอร์มฝึกสอบ"
-          detail="สรุปกิจกรรมและยอดคำสั่งซื้อตามช่วงวันที่"
+          detail="แนวโน้มยอดขายและคำสั่งซื้อจากข้อมูลตัวอย่าง"
           actionEnabledWhenReadOnly
-          action={
-            <div className="flex flex-wrap items-end gap-2">
-              <WebBThaiDatePicker
-                label="ตั้งแต่วันที่"
-                value={fromDate}
-                max={toDate || undefined}
-                onChange={setFromDate}
-              />
-              <WebBThaiDatePicker
-                label="ถึงวันที่"
-                value={toDate}
-                min={fromDate || undefined}
-                onChange={setToDate}
-              />
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setFromDate("");
-                  setToDate("");
-                }}
-              >
-                ล้าง
-              </Button>
-            </div>
-          }
         >
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {[
-              ["สมาชิกทั้งหมด", students.length, "บัญชีผู้เรียน"],
-              [
-                "คำสั่งซื้อสำเร็จ",
-                successful.length,
-                `${dateFilteredOrders.filter((o) => o.status === "รอชำระ").length} รายการรอชำระ`,
-              ],
-              ["ราคาสินค้ารวม", money(gross), "ก่อนส่วนเพิ่มในยอดชำระ"],
-              ["ยอดที่ผู้เรียนชำระ", money(charged), "เฉพาะรายการสำเร็จ"],
-            ].map(([label, value, hint]) => (
-              <Panel key={String(label)} className="!p-5">
-                <p className="text-sm text-slate-500">{label}</p>
-                <p className="mt-3 text-2xl font-extrabold">{value}</p>
-                <p className="mt-1 text-xs text-slate-500">{hint}</p>
-              </Panel>
-            ))}
-          </div>
-          <Panel className="mt-4 !p-4">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <h3 className="font-bold">สรุปยอดรับจาก Payso</h3>
-                <p className="mt-1 text-xs text-slate-500">ยอดจำลองตามช่องทางชำระในช่วงวันที่ที่เลือก</p>
-              </div>
-              <Link href="/webb/admin/finance" className="text-sm font-semibold text-indigo-700 hover:text-indigo-900">ดูรายงานการเงินละเอียด →</Link>
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              {[
-                ["ค่าบริการ Payso", money(paysoFeeBeforeVat)],
-                ["VAT 7% ของค่าบริการ", money(paysoFeeVat)],
-                ["ยอดรับหลังหัก Payso", money(charged - paysoDeduction)],
-              ].map(([label, value]) => <div key={label} className="rounded-xl bg-slate-50 p-3"><span className="text-xs text-slate-500">{label}</span><b className="mt-1 block text-lg">{value}</b></div>)}
-            </div>
-          </Panel>
-          <div className="grid gap-4 lg:grid-cols-[1.2fr_.8fr]">
+          <WebBDashboardMetrics
+            orders={orders}
+            students={students}
+            onOrderDetail={(order) => setDetail({ type: "order", value: order })}
+          />
+          <div className="mt-4">
             <Panel>
-              <div className="flex items-start justify-between">
+              <div className="mb-4 flex items-end justify-between gap-3">
                 <div>
-                  <h3 className="font-bold">กิจกรรมคำสั่งซื้อ</h3>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {fromDate ? formatThaiDate(fromDate) : "ทุกวัน"} –{" "}
-                    {toDate ? formatThaiDate(toDate) : "วันนี้"}
-                  </p>
+                  <h3 className="text-base font-extrabold text-slate-900">รายการที่ควรตรวจสอบ</h3>
+                  <p className="mt-1 text-xs text-slate-500">ติดตามรายการที่รอดำเนินการจากแต่ละส่วน</p>
                 </div>
-                <Badge tone="blue">5 รายการล่าสุด</Badge>
+                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">งานค้าง</span>
               </div>
-              <div className="relative mt-6 flex h-40 items-end gap-3 border-b border-l border-slate-100 px-4">
-                {activityBars.map(({ height, count, from, to }, i) => (
-                  <div
-                    key={i}
-                    role="img"
-                    tabIndex={0}
-                    className="group relative flex h-full flex-1 items-end outline-none"
-                    aria-label={`${formatThaiDate(from)} ถึง ${formatThaiDate(to)} มี ${count} คำสั่งซื้อ`}
-                  >
-                    <span
-                      className="w-full rounded-t bg-amber-300 transition-colors group-hover:bg-indigo-500 group-focus:bg-indigo-500"
-                      style={{ height: `${height}%` }}
-                    />
-                    <span
-                      role="tooltip"
-                      className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-30 hidden w-max max-w-52 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-xs leading-5 text-white shadow-lg group-hover:block group-focus:block"
-                    >
-                      <b className="block">
-                        {formatThaiDate(from)} – {formatThaiDate(to)}
-                      </b>
-                      {count} คำสั่งซื้อ
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2 flex justify-between text-[10px] text-slate-400">
-                <span>{fromDate ? formatThaiDate(fromDate) : "เริ่มต้น"}</span>
-                <span>คำสั่งซื้อ {dateFilteredOrders.length} รายการ</span>
-                <span>{toDate ? formatThaiDate(toDate) : "วันนี้"}</span>
-              </div>
-            </Panel>
-            <Panel>
-              <h3 className="font-bold">รายการที่ควรตรวจสอบ</h3>
-              <div className="mt-4 space-y-3">
-                {[
+              <div className="grid gap-3 lg:grid-cols-3">
+                {([
                   [
                     "คำร้องขอสอบใหม่",
                     tickets.filter((t) => t.status === "รอตรวจสอบ").length,
                     "/webb/admin/exam-management?tab=access",
+                    "คำร้องจากผู้เรียนที่รอตรวจสอบ",
+                    LuLifeBuoy,
+                    "from-violet-500 to-indigo-600",
                   ],
                   [
                     "ชำระเงินรอยืนยัน",
                     orders.filter((o) => o.status === "รอชำระ").length,
                     "/webb/admin/orders",
+                    "คำสั่งซื้อที่ยังไม่ยืนยันการชำระ",
+                    LuCreditCard,
+                    "from-amber-400 to-orange-500",
                   ],
                   [
                     "ผลสอบที่พักการเผยแพร่",
                     attempts.filter((a) => a.status === "ผิดปกติ").length,
                     "/webb/admin/exam-management?tab=results",
+                    "ผลสอบที่ต้องตรวจสอบก่อนเผยแพร่",
+                    LuFileCheck2,
+                    "from-rose-500 to-pink-600",
                   ],
-                ].map(([label, value, href]) => (
+                ] as [string, number, string, string, typeof LuLifeBuoy, string][]).map(([label, value, href, hint, Icon, gradient]) => (
                   <Link
                     key={String(label)}
                     href={String(href)}
-                    className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-3 text-sm hover:bg-amber-50"
+                    className="group flex min-h-32 items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
                   >
-                    <span>{label}</span>
-                    <b>{value}</b>
+                    <span className={`grid size-12 shrink-0 place-items-center rounded-2xl bg-indigo-600 text-white shadow-sm`}>
+                      <Icon className="size-5" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold text-slate-800 group-hover:text-indigo-700">{label}</span>
+                      <span className="mt-1 block text-xs leading-5 text-slate-500">{hint}</span>
+                    </span>
+                    <span className="text-right">
+                      <b className="block text-2xl font-extrabold tabular-nums text-slate-900">{value}</b>
+                      <span className="text-[11px] text-slate-400">รายการ</span>
+                    </span>
+                    <LuArrowUpRight className="size-4 shrink-0 text-slate-300 transition-colors group-hover:text-indigo-600" aria-hidden="true" />
                   </Link>
                 ))}
               </div>
@@ -5106,59 +5040,6 @@ export default function WebBAdminDemo({
                 >
                   บันทึกเฉลย
                 </Button>
-                {selectedExamSet?.contentStatus !== "เผยแพร่" ? (
-                  <Button
-                    disabled={
-                      !selectedExamProduct ||
-                      hasActiveAttempt(selectedExamProduct.name) ||
-                      !hasExamFileForSet(
-                        answerKeyProductId,
-                        answerKeySetName,
-                      ) ||
-                      !(isTgat3Product ? tgat3Rules.length > 0 : answerKey.length > 0)
-                    }
-                    onClick={() => {
-                      if (isTgat3Product) {
-                        setTgat3Rules([...tgat3Rules]);
-                      }
-                      setExamSets((current) =>
-                        current.map((set) =>
-                          set.id === selectedExamSet?.id
-                            ? { ...set, contentStatus: "เผยแพร่" }
-                            : set,
-                        ),
-                      );
-                      setProducts((current) =>
-                        current.map((product) =>
-                          product.id === answerKeyProductId
-                            ? { ...product, contentStatus: "เผยแพร่" }
-                            : product,
-                        ),
-                      );
-                      setExamDocuments((current) =>
-                        current.map((document) =>
-                          document.productId === answerKeyProductId &&
-                          document.examSet === answerKeySetName
-                            ? { ...document, status: "เผยแพร่" }
-                            : document,
-                        ),
-                      );
-                      logAction(
-                        "เผยแพร่ชุดข้อสอบ",
-                        selectedExamProduct?.name +
-                          " · ชุด " +
-                          answerKeySetName,
-                      );
-                      toast.success("เผยแพร่ชุดข้อสอบและเปิดใช้งานเฉลยแล้ว");
-                    }}
-                  >
-                    เผยแพร่ชุดนี้
-                  </Button>
-                ) : (
-                  <span className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-                    ✓ ชุดข้อสอบนี้เผยแพร่และเปิดใช้งานแล้ว
-                  </span>
-                )}
                 </div>
               </Panel>
               </div>
@@ -6656,7 +6537,7 @@ export default function WebBAdminDemo({
                   setSolutionDraft({
                     name: "",
                     questionNumber: "",
-                    kind: "PDF",
+                    kind: "Video",
                     access: "หลังส่งข้อสอบ",
                     fileSelected: false,
                     duration: "",
@@ -7083,8 +6964,8 @@ export default function WebBAdminDemo({
                   </label>
                 </div>
                 <p className="rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-900">
-                  รายละเอียดทั้งหมดเป็นข้อมูลตัวอย่างใน Browser ·
-                  ยังไม่อัปโหลดไฟล์หรือเปลี่ยนเนื้อหาที่ Client แสดง
+                  ไฟล์และรายละเอียดเป็น Mockup ใน Browser ·
+                  สื่อวิดีโอที่เผยแพร่จะแสดงในหน้าเฉลยของ Client
                 </p>
                 <div className="flex justify-end gap-2">
                   <Button

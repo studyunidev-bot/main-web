@@ -49,6 +49,7 @@ export default function WebBAdminTable<T>({
   exportCsvColumns,
   onExportCsv,
   hideCsvExport = false,
+  toolbarBeforeSearch = false,
 }: {
   rows: T[];
   getSearchText: (row: T) => string;
@@ -64,6 +65,7 @@ export default function WebBAdminTable<T>({
   exportCsvColumns?: { header: string; getValue: (row: T) => string | number | boolean | null | undefined }[];
   onExportCsv?: () => void;
   hideCsvExport?: boolean;
+  toolbarBeforeSearch?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [pageSize, setPageSize] = useState(String(initialPageSize));
@@ -163,6 +165,7 @@ export default function WebBAdminTable<T>({
   return (
     <section aria-label={ariaLabel} className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
+        {toolbarBeforeSearch && toolbar}
         {!hideSearch && (
           <WebBAdminInput
             value={query}
@@ -172,7 +175,7 @@ export default function WebBAdminTable<T>({
             className="min-w-[210px] flex-1"
           />
         )}
-        {toolbar}
+        {!toolbarBeforeSearch && toolbar}
         {!hideCsvExport && (
           <button
             type="button"

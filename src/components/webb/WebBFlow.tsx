@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LuCheck, LuRotateCcw } from "react-icons/lu";
+import { LuCheck, LuRotateCcw, LuX } from "react-icons/lu";
 import WebBMyPurchases from "./WebBMyPurchases";
 import { getProduct } from "./data";
 import { getExamPlan } from "./exam-documents";
@@ -369,7 +369,7 @@ function RulesScreen({
               aria-label="ปิด"
               onClick={() => setWarningOpen(false)}
             >
-              ×
+              <LuX aria-hidden="true" className="size-5" />
             </button>
             <span className="wb-rules-warning-icon" aria-hidden="true">
               !

@@ -309,7 +309,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
             onClick={() => setMenuOpen(!menuOpen)}
           >
             {menuOpen ? (
-              <span className="wb-menu-close">×</span>
+              <LuX aria-hidden="true" className="wb-menu-close" />
             ) : (
               <span className="wb-hamburger">
                 <i />
@@ -341,7 +341,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
                 aria-label="ปิดเมนู"
                 onClick={() => setMenuOpen(false)}
               >
-                ×
+                <LuX aria-hidden="true" className="size-6" />
               </button>
               <div className="wb-mobile-links">
                 {mainLinks.map((link) => (
@@ -438,7 +438,9 @@ export function PublicShell({ children }: { children: ReactNode }) {
       )}
       {helpOpen && <div className="wb-contact-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setHelpOpen(false); }}>
         <section className="wb-contact-dialog" role="dialog" aria-modal="true" aria-labelledby="wb-contact-title">
-          <button type="button" className="wb-contact-close" aria-label="ปิด" onClick={() => setHelpOpen(false)}>×</button>
+          <button type="button" className="wb-contact-close" aria-label="ปิด" onClick={() => setHelpOpen(false)}>
+            <LuX aria-hidden="true" className="size-5" />
+          </button>
           <span className="webb-kicker">STUDY UNITH · SUPPORT</span>
           <h2 id="wb-contact-title">เราพร้อมช่วยเหลือ</h2>
           <p>ติดต่อทีมงานผ่านช่องทางด้านล่าง</p>

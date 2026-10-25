@@ -12,6 +12,7 @@ import {
   LuInfo,
   LuLayoutGrid,
   LuList,
+  LuX,
 } from "react-icons/lu";
 import AdminSelect from "@/components/ui/AdminSelect";
 import WebBAdminInput from "./WebBAdminInput";
@@ -583,7 +584,6 @@ export default function WebBTGAT3AnswerKeyManager({
                           <div className="rounded-xl bg-purple-50/50 p-4 border border-purple-200/70">
                             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-purple-100 pb-3">
                               <div className="flex flex-wrap items-center gap-2.5">
-                                <LuLink className="text-purple-600" />
                                 <span className="text-xs font-bold text-purple-950">
                                   กำหนดข้อที่สัมพันธ์กัน:
                                 </span>
@@ -702,16 +702,14 @@ export default function WebBTGAT3AnswerKeyManager({
                                         title="ลบคู่นี้"
                                         aria-label={`ลบคู่ที่ ${pIdx + 1}`}
                                       >
-                                        ✕
+                                        <LuX aria-hidden="true" className="size-4" />
                                       </button>
                                     </div>
                                   ))}
                                 </div>
                               </div>
                             ) : (
-                              <div className="mt-2 text-xs text-purple-800 bg-purple-100/60 p-2.5 rounded-lg">
-                                * ข้อนี้ไม่มีความสัมพันธ์กับข้ออื่น (ใส่ 0 หรือปิดสวิตช์) ระบบจะตรวจคะแนนเป็นข้อเดี่ยวตามปกติ
-                              </div>
+                              null
                             )}
                           </div>
                         )}

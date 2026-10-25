@@ -16,6 +16,7 @@ import { WebBAdminRoleContext } from "@/components/webb/WebBAdminAccess";
 import { GoDot, GoDotFill } from "react-icons/go";
 import {
   LuChartNoAxesCombined,
+  LuCirclePlay,
   LuClipboardCheck,
   LuLayoutDashboard,
   LuPanelLeftClose,
@@ -141,6 +142,13 @@ export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
           title: "คลังและจัดการข้อสอบ",
           icon: LuClipboardCheck,
           url: "/webb/admin/exam-catalog",
+          roles: ["DEMO"],
+          items: [],
+        },
+        {
+          title: "จัดการทดลองสอบ",
+          icon: LuCirclePlay,
+          url: "/webb/admin/trial-exams",
           roles: ["DEMO"],
           items: [],
         },
@@ -313,7 +321,7 @@ export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
                   onClick={() => isMobile && toggleSidebar()}
                   className={cn(
                     "truncate font-bold text-dark-2 dark:text-dark-8 whitespace-nowrap",
-                    demoSite === "webb" ? "text-sm tracking-tight" : "text-lg",
+                    demoSite === "webb" ? "text-base tracking-tight" : "text-lg",
                   )}
                 >
                   {demoSite === "webb"
@@ -344,7 +352,7 @@ export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
               >
                 {demoSite === "webb" ? (
                   isOpen ? (
-                    <h2 className="mb-1.5 px-2 text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 truncate transition-opacity duration-200">
+                    <h2 className="mb-1.5 px-2 text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 truncate transition-opacity duration-200">
                       {section.label}
                     </h2>
                   ) : (
@@ -367,7 +375,7 @@ export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
                                 "flex items-center transition-all duration-200",
                                 demoSite === "webb"
                                   ? isOpen
-                                    ? "gap-3 px-3 py-2 text-xs font-medium rounded-lg justify-start"
+                                    ? "gap-3 px-3 py-2 text-sm font-medium rounded-lg justify-start"
                                     : "justify-center px-0 py-2.5 rounded-lg w-full"
                                   : "gap-3 py-2.5 px-3.5",
                               )}
@@ -450,7 +458,7 @@ export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
                                   "flex items-center transition-all duration-200",
                                   demoSite === "webb"
                                     ? isOpen
-                                      ? "gap-3 px-3 py-2 text-xs font-medium rounded-lg justify-start"
+                                    ? "gap-3 px-3 py-2 text-sm font-medium rounded-lg justify-start"
                                       : "justify-center px-0 py-2.5 rounded-lg w-full"
                                     : "gap-3 py-2.5 px-3.5",
                                 )}

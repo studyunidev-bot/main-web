@@ -11,18 +11,24 @@ const WebBAdminRoleSetterContext = createContext<(role: string) => void>(() => {
 export function WebBAdminRoleSelector() {
   const role = useContext(WebBAdminRoleContext);
   const setRole = useContext(WebBAdminRoleSetterContext);
+  const roleLabels: Record<string, string> = {
+    "Super Admin": "ผู้ดูแลระบบสูงสุด",
+    Content: "ฝ่ายเนื้อหา",
+    Support: "ฝ่ายสนับสนุน",
+    Finance: "ฝ่ายการเงิน",
+  };
   return (
     <label className="flex shrink-0 items-center gap-2 rounded-lg border border-stroke px-2.5 py-1.5 text-xs text-dark-6 dark:border-stroke-dark dark:text-dark-6">
       <span className="hidden sm:inline">จำลองบทบาท</span>
       <AdminSelect
         ariaLabel="จำลองบทบาทผู้ดูแล"
         value={role}
-        options={["Super Admin", "Content", "Support", "Finance"].map((value) => ({ value, label: value }))}
+        options={Object.entries(roleLabels).map(([value, label]) => ({ value, label }))}
         onChange={(nextRole) => {
           setRole(nextRole);
           localStorage.setItem("webb-admin-demo-role", nextRole);
           window.dispatchEvent(new Event("webb-admin-demo-role-updated"));
-          toast.info(`เปลี่ยนบทบาทผู้ดูแลเป็น ${nextRole}`);
+          toast.info(`เปลี่ยนบทบาทผู้ดูแลเป็น ${roleLabels[nextRole] || nextRole}`);
         }}
         className="min-w-32 font-semibold"
       />

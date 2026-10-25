@@ -1,6 +1,7 @@
 "use client";
 
 import { QRCodeSVG } from "qrcode.react";
+import { LuX } from "react-icons/lu";
 
 const qrCenterMark = `data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect width="32" height="32" rx="5" fill="#123e65"/><path d="M8 7h11a5 5 0 0 1 5 5v8h-5v-8H8v13h8v5H8a5 5 0 0 1-5-5V12a5 5 0 0 1 5-5Z" fill="white"/><path d="M15 16h6v7l8 7H15V16Z" fill="#26b6ab"/></svg>',
@@ -46,7 +47,7 @@ export default function WebBPaymentQrModal({
           aria-label="ปิด"
           onClick={onClose}
         >
-          ×
+          <LuX aria-hidden="true" className="size-5" />
         </button>
 
         <h2 id="wb-subject-payment-title">สแกน QR เพื่อชำระเงิน</h2>

@@ -7,7 +7,12 @@ import type { ExamProduct } from "./data";
 import { getExamPlan, getExamQuestionDetails, getExamResponseDetails, type ExamPlan, type ExamResponseType } from "./exam-documents";
 import PurchasedExamPdfViewer from "./PurchasedExamPdfViewer";
 import { addDemoEmail, calculateDemoScore, currentPurchaseForExam, currentPurchaseForRef, examAnswersStorageKey, examResultStorageKey, isDemoContentPublished, readDemoAccount, recordDemoRankingResult, setPurchaseExamStatus, updateAdminAttempt } from "./demo-store";
-import { MOCK_EXAM_PAGES, TOTAL_MOCK_QUESTIONS, TOTAL_MOCK_PAGES, getPageForQuestion } from "./mock-exam-questions";
+import {
+  MOCK_EXAM_PAGES,
+  TOTAL_MOCK_QUESTIONS,
+  TOTAL_MOCK_PAGES,
+  getPageForQuestion,
+} from "./mock-exam-questions";
 
 const TOTAL_QUESTIONS = TOTAL_MOCK_QUESTIONS;
 type ExamAnswer = string | string[];
@@ -51,11 +56,7 @@ function formatTime(seconds: number) {
     .join(":");
 }
 
-function MockExamPdf({
-  page,
-}: {
-  page: number;
-}) {
+function MockExamPdf({ page }: { page: number }) {
   const viewerRef = useRef<HTMLElement>(null);
   const currentPageData =
     MOCK_EXAM_PAGES.find((p) => p.pageNumber === page) || MOCK_EXAM_PAGES[0];
@@ -708,11 +709,7 @@ export default function WebBExam({
           <div className="wb-answer-clock" aria-label="เวลาที่เหลือ">
             {formatTime(remaining)}
           </div>
-          {previewMode ? (
-            <button type="button" className="wb-answer-test-expiry" onClick={onPreviewExit}>
-              ปิด Preview
-            </button>
-          ) : (
+          {!previewMode && (
             <button type="button" className="wb-answer-test-expiry" onClick={testExamExpiry}>
               ทดสอบหมดเวลา (5 วิ)
             </button>

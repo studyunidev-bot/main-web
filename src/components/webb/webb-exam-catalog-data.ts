@@ -41,6 +41,10 @@ export type CatalogFamily = {
   id: string;
   name: string;
   description: string;
+  homeSubtitle: string;
+  homeActive: boolean;
+  homeCoverImage?: string;
+  detailDescription: string;
   flow: CatalogFlow;
   status: CatalogStatus;
   subjects: CatalogSubject[];
@@ -273,6 +277,9 @@ export const initialCatalog: CatalogFamily[] = [
     id: "tgat",
     name: "TGAT",
     description: "ระบบ TGAT วัดสมรรถนะทั่วไป · ชุด A (เปิดขายและสอบได้), ชุด B–D (ร่างเตรียมพร้อม)",
+    homeSubtitle: "ความถนัดทั่วไป",
+    homeActive: true,
+    detailDescription: "TGAT ย่อมาจาก Thai General Aptitude Test หรือการสอบวัดสมรรถนะความถนัดทั่วไป เป็นข้อสอบกลางในระบบ TCAS ที่ใช้ประเมินทักษะการคิดวิเคราะห์และการประยุกต์ใช้ความรู้ในชีวิตประจำวัน แทนการท่องจำเนื้อหา",
     flow: "set-first",
     status: "open",
     subjects: [],
@@ -303,6 +310,9 @@ export const initialCatalog: CatalogFamily[] = [
     id: "tpat",
     name: "TPAT",
     description: "ระบบ TPAT วัดความถนัดวิชาชีพ (TPAT1–5) · ไส้ในและพาร์ทแบ่งตามมาตรฐาน ทปอ.",
+    homeSubtitle: "ความถนัดทางวิชาชีพ",
+    homeActive: false,
+    detailDescription: "TPAT คือการสอบวัดความถนัดทางวิชาชีพ แบ่งตามสาขาที่ผู้เรียนสนใจและใช้ประกอบการสมัครเข้าศึกษาต่อในระบบ TCAS",
     flow: "subject-first",
     status: "draft",
     sets: [],
@@ -333,6 +343,9 @@ export const initialCatalog: CatalogFamily[] = [
     id: "alevel",
     name: "A-Level",
     description: "ข้อสอบความรู้เชิงวิชาการ A-Level (16 วิชาเดี่ยว ทปอ.) · ข้อสอบฉบับเดียว 90 นาที 100 คะแนน",
+    homeSubtitle: "ความรู้เชิงวิชาการ",
+    homeActive: true,
+    detailDescription: "A-Level คือการสอบวัดความรู้เชิงวิชาการ เพื่อใช้ยื่นเข้าศึกษาต่อในระดับมหาวิทยาลัย ครอบคลุมวิชาหลักที่ผู้เรียนเลือกได้ตามคณะเป้าหมาย",
     flow: "subject-first",
     status: "draft",
     sets: [],
@@ -367,6 +380,9 @@ export const initialCatalog: CatalogFamily[] = [
     id: "netsat",
     name: "NETSAT",
     description: "ข้อสอบวัดความฉลาดรู้ทั่วไปและความฉลาดรู้เฉพาะด้าน (ม.ขอนแก่น 7 วิชา) · ข้อสอบฉบับเดียว 90 นาที 100 คะแนน",
+    homeSubtitle: "มหาวิทยาลัยขอนแก่น",
+    homeActive: false,
+    detailDescription: "NETSAT คือการทดสอบความฉลาดรู้ทั่วไปและความฉลาดรู้เฉพาะด้าน สำหรับผู้สมัครเข้าศึกษาต่อมหาวิทยาลัยขอนแก่น",
     flow: "subject-first",
     status: "draft",
     sets: [],
@@ -431,6 +447,11 @@ export function readCatalog(): CatalogFamily[] {
       if (seedFamily.flow === "set-first") {
         return {
           ...seedFamily,
+          name: savedFamily.name || seedFamily.name,
+          homeSubtitle: savedFamily.homeSubtitle || seedFamily.homeSubtitle,
+          homeActive: savedFamily.homeActive ?? seedFamily.homeActive,
+          homeCoverImage: savedFamily.homeCoverImage ?? seedFamily.homeCoverImage,
+          detailDescription: savedFamily.detailDescription || seedFamily.detailDescription,
           status: savedFamily.status || seedFamily.status,
           sets: seedFamily.sets.map((seedSet) => {
             const savedSet = savedFamily.sets.find((s) => s.id === seedSet.id);
@@ -454,6 +475,11 @@ export function readCatalog(): CatalogFamily[] {
 
       return {
         ...seedFamily,
+        name: savedFamily.name || seedFamily.name,
+        homeSubtitle: savedFamily.homeSubtitle || seedFamily.homeSubtitle,
+        homeActive: savedFamily.homeActive ?? seedFamily.homeActive,
+        homeCoverImage: savedFamily.homeCoverImage ?? seedFamily.homeCoverImage,
+        detailDescription: savedFamily.detailDescription || seedFamily.detailDescription,
         status: savedFamily.status || seedFamily.status,
         subjects: seedFamily.subjects.map((seedSubject) => {
           const savedSubject = savedFamily.subjects.find((s) => s.id === seedSubject.id || s.name === seedSubject.name);

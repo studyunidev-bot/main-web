@@ -669,7 +669,7 @@ function StudentHeader({
             onClick={onMenu}
           >
             {menuOpen ? (
-              <span>×</span>
+              <LuX aria-hidden="true" className="size-5" />
             ) : (
               <i>
                 <b />
@@ -780,7 +780,7 @@ function StudentHelpDialog({ onClose }: { onClose: () => void }) {
           aria-label="ปิด"
           onClick={onClose}
         >
-          ×
+          <LuX aria-hidden="true" className="size-5" />
         </button>
         <span className="webb-kicker">STUDY UNITH · SUPPORT</span>
         <h2 id="wb-student-help-title">ขอความช่วยเหลือ</h2>
@@ -2266,7 +2266,7 @@ function Ranking({
           onClick={onClose}
           aria-label="ปิดหน้าจัดอันดับ"
         >
-          ×
+          <LuX aria-hidden="true" className="size-5" />
         </button>
         <div className="wb-ranking-brand">
           <WebBBrand />

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { LuArrowLeft, LuArrowRight, LuAward, LuGraduationCap } from "react-icons/lu";
 import { PublicShell } from "./PublicShell";
 import { DEMO_AUTH_KEY } from "./demo-store";
+import { initialCatalog, readCatalog } from "./webb-exam-catalog-data";
 
 import {
   type TutorSubject,
@@ -18,16 +19,32 @@ type SubjectKind = "tgat" | "a-level";
 
 export default function WebBSubjectDetails({ kind }: { kind: SubjectKind }) {
   const isALevel = kind === "a-level";
+  const familyId = isALevel ? "alevel" : "tgat";
+  const [family, setFamily] = useState(
+    () => initialCatalog.find((item) => item.id === familyId)!,
+  );
   const defaultList = isALevel ? defaultALevelSubjects : defaultTgatSubjects;
   const [tutorList, setTutorList] = useState<TutorSubject[]>(defaultList);
   const [examSet, setExamSet] = useState(isALevel ? "B" : "A");
   const [selected, setSelected] = useState<string[]>(isALevel ? ["math-2"] : []);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const selectedSubjects = tutorList.filter((subject) => selected.includes(subject.id));
-  const subjectLabel = isALevel ? "A-Level ความรู้เชิงวิชาการ" : "TGAT ความถนัดทั่วไป";
-  const description = isALevel
-    ? "A-Level คือการสอบวัดความรู้เชิงวิชาการ เพื่อใช้ยื่นเข้าศึกษาต่อในระดับมหาวิทยาลัย ครอบคลุมวิชาหลักที่ผู้เรียนเลือกได้ตามคณะเป้าหมาย"
-    : "TGAT ย่อมาจาก Thai General Aptitude Test หรือการสอบวัดสมรรถนะความถนัดทั่วไป เป็นข้อสอบกลางในระบบ TCAS ที่ใช้ประเมินทักษะการคิดวิเคราะห์และการประยุกต์ใช้ความรู้ในชีวิตประจำวัน แทนการท่องจำเนื้อหา";
+  const subjectLabel = `${family.name} ${family.homeSubtitle}`;
+  const description = family.detailDescription;
+
+  useEffect(() => {
+    const syncCatalog = () => {
+      const savedFamily = readCatalog().find((item) => item.id === familyId);
+      if (savedFamily) setFamily(savedFamily);
+    };
+    syncCatalog();
+    window.addEventListener("storage", syncCatalog);
+    window.addEventListener("webb-catalog-updated", syncCatalog);
+    return () => {
+      window.removeEventListener("storage", syncCatalog);
+      window.removeEventListener("webb-catalog-updated", syncCatalog);
+    };
+  }, [familyId]);
 
   useEffect(() => {
     const loadTutors = () => {

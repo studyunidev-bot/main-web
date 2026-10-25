@@ -5,16 +5,19 @@ import { WEBB_MOCK_IMAGE } from "./data";
 export function WebBImage({
   className = "",
   alt = "ภาพตัวอย่าง Web B",
+  src = WEBB_MOCK_IMAGE,
 }: {
   className?: string;
   alt?: string;
+  src?: string;
 }) {
   return (
     <Image
-      src={WEBB_MOCK_IMAGE}
+      src={src}
       alt={alt}
       width={1200}
       height={800}
+      unoptimized={src.startsWith("data:")}
       className={className}
       priority
     />

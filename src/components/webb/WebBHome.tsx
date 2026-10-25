@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { PublicShell } from "./PublicShell";
 import { WebBImage } from "./WebBImage";
 import { DEMO_AUTH_KEY } from "./demo-store";
+import { initialCatalog, readCatalog, type CatalogFamily } from "./webb-exam-catalog-data";
 
 const benefits = [
   {
@@ -27,13 +28,6 @@ const benefits = [
     detail:
       "วิเคราะห์ผลสอบอย่างละเอียด พร้อมดู Ranking เทียบกับผู้สอบทั่วประเทศ เพื่อรู้จุดที่ต้องพัฒนาและวางแผนเพิ่มคะแนน",
   },
-];
-
-const subjects = [
-  { code: "TGAT", name: "ความถนัดทั่วไป", active: true },
-  { code: "TPAT", name: "ความถนัดทางวิชาชีพ", active: false },
-  { code: "A-Level", name: "ความถนัดทางวิชาชีพ", active: true },
-  { code: "NETSAT", name: "มหาวิทยาลัยขอนแก่น", active: false },
 ];
 
 const guide = [
@@ -241,6 +235,15 @@ function MatrixPreview() {
 export default function WebBHome() {
   const [studentLoggedIn, setStudentLoggedIn] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [catalogFamilies, setCatalogFamilies] = useState<CatalogFamily[]>(initialCatalog);
+
+  const subjects = catalogFamilies.map((family) => ({
+    id: family.id,
+    code: family.name,
+    name: family.homeSubtitle,
+    active: family.homeActive,
+    coverImage: family.homeCoverImage,
+  }));
 
   useEffect(() => {
     const syncLogin = () => {
@@ -257,6 +260,17 @@ export default function WebBHome() {
       window.removeEventListener("webb-demo-auth-updated", syncLogin);
       window.removeEventListener("pageshow", syncLogin);
       window.removeEventListener("popstate", syncLogin);
+    };
+  }, []);
+
+  useEffect(() => {
+    const syncCatalog = () => setCatalogFamilies(readCatalog());
+    syncCatalog();
+    window.addEventListener("storage", syncCatalog);
+    window.addEventListener("webb-catalog-updated", syncCatalog);
+    return () => {
+      window.removeEventListener("storage", syncCatalog);
+      window.removeEventListener("webb-catalog-updated", syncCatalog);
     };
   }, []);
 
@@ -363,6 +377,7 @@ export default function WebBHome() {
                 <div className="wb-subject-image">
                   <WebBImage
                     className="wb-image"
+                    src={subject.coverImage}
                     alt={`ภาพตัวอย่าง ${subject.code}`}
                   />
                 </div>
@@ -373,7 +388,7 @@ export default function WebBHome() {
                 {subject.active ? (
                   <Link
                     className="wb-pill-button wb-pill-yellow"
-                    href={subject.code === "A-Level" ? "/webb/a-level" : "/webb/tgat"}
+                    href={subject.id === "alevel" ? "/webb/a-level" : "/webb/tgat"}
                   >
                     ดูรายละเอียด
                   </Link>

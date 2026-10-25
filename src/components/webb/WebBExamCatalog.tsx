@@ -26,10 +26,12 @@ import {
   LuTag,
   LuTrash2,
   LuUpload,
+  LuX,
 } from "react-icons/lu";
 import AdminSelect from "@/components/ui/AdminSelect";
 import { downloadCsvData } from "./WebBAdminTable";
 import { WebBAdminRoleContext } from "./WebBAdminAccess";
+import { WEBB_MOCK_IMAGE } from "./data";
 import {
   type TutorSubject,
   getTutorsForCategory,
@@ -89,6 +91,14 @@ type PartModalState = {
   contentStatus: NonNullable<CatalogPartSettings["contentStatus"]>;
   tutorDraft?: TutorSubject;
   tutorId?: string;
+  error?: string;
+};
+type FamilyContentDraft = {
+  id: string;
+  name: string;
+  homeSubtitle: string;
+  detailDescription: string;
+  homeCoverImage: string;
   error?: string;
 };
 
@@ -342,6 +352,40 @@ function flowText(flow: CatalogFlow) {
     : "ประเภทสอบ → วิชาย่อย → ชุด → แพ็กเกต";
 }
 
+function compressCoverImage(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    if (!file.type.startsWith("image/")) {
+      reject(new Error("เลือกไฟล์รูปภาพก่อน"));
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      reject(new Error("รูปภาพต้องมีขนาดไม่เกิน 8 MB"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("อ่านไฟล์รูปภาพไม่สำเร็จ"));
+    reader.onload = () => {
+      const image = new window.Image();
+      image.onerror = () => reject(new Error("เปิดไฟล์รูปภาพไม่สำเร็จ"));
+      image.onload = () => {
+        const scale = Math.min(1, 1200 / image.width, 800 / image.height);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) {
+          reject(new Error("เตรียมรูปภาพไม่สำเร็จ"));
+          return;
+        }
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/webp", 0.82));
+      };
+      image.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function WebBExamCatalog({
   focusFamilyId,
   focusSetId,
@@ -360,7 +404,13 @@ export default function WebBExamCatalog({
   const [selectedId, setSelectedId] = useState(focusFamilyId || "");
   const [subjectId, setSubjectId] = useState("");
   const [setId, setSetId] = useState("");
+  const [selectedSetIds, setSelectedSetIds] = useState<string[]>([]);
+  const [salesAction, setSalesAction] = useState<
+    "pause-selected" | "open-selected" | "pause-category" | "open-category" | ""
+  >("");
   const [partModal, setPartModal] = useState<PartModalState | null>(null);
+  const [familyContentDraft, setFamilyContentDraft] =
+    useState<FamilyContentDraft | null>(null);
   const [offerModal, setOfferModal] = useState<{
     id?: string;
     productId?: string;
@@ -805,6 +855,7 @@ export default function WebBExamCatalog({
         );
         window.dispatchEvent(new Event(WEBB_ADMIN_MOCK_UPDATED));
       }
+      window.dispatchEvent(new Event("webb-catalog-updated"));
       setMessage(notice);
     } catch {
       setMessage("บันทึกใน Browser ไม่สำเร็จ ข้อมูลยังอยู่ในหน้านี้ชั่วคราว");
@@ -826,6 +877,40 @@ export default function WebBExamCatalog({
       }),
       notice,
     );
+  }
+
+  function openFamilyContentEditor(family: CatalogFamily) {
+    if (!canEdit) return;
+    setFamilyContentDraft({
+      id: family.id,
+      name: family.name,
+      homeSubtitle: family.homeSubtitle,
+      detailDescription: family.detailDescription,
+      homeCoverImage: family.homeCoverImage || "",
+    });
+  }
+
+  function saveFamilyContent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!familyContentDraft || !canEdit) return;
+    const name = familyContentDraft.name.trim();
+    if (!name) {
+      setFamilyContentDraft({ ...familyContentDraft, error: "กรอกชื่อวิชาก่อนบันทึก" });
+      return;
+    }
+    const next = families.map((family) =>
+      family.id === familyContentDraft.id
+        ? {
+            ...family,
+            name,
+            homeSubtitle: familyContentDraft.homeSubtitle.trim(),
+            detailDescription: familyContentDraft.detailDescription.trim(),
+            homeCoverImage: familyContentDraft.homeCoverImage || undefined,
+          }
+        : family,
+    );
+    save(next, "บันทึกข้อมูลหน้าบ้านของหมวดวิชาแล้ว");
+    setFamilyContentDraft(null);
   }
 
   function updateSet(change: (set: CatalogSet) => CatalogSet, notice: string) {
@@ -856,16 +941,95 @@ export default function WebBExamCatalog({
     );
   }
 
+  function updateSelectedSets(status: CatalogStatus) {
+    if (!selected || !canEdit || selectedSetIds.length === 0) return;
+    const selectedIds = new Set(selectedSetIds);
+    const selectedSets = familySets(selected).filter((set) =>
+      selectedIds.has(set.id),
+    );
+    if (
+      selectedSets.every((set) =>
+        set.offers.every((offer) => offer.status === status),
+      )
+    ) {
+      setMessage(
+        status === "draft"
+          ? "ชุดที่เลือกพักการขายอยู่แล้ว"
+          : "ชุดที่เลือกเปิดขายอยู่แล้ว",
+      );
+      return;
+    }
+    updateFamily(
+      (family) => ({
+        ...family,
+        sets: family.sets.map((set) =>
+          selectedIds.has(set.id)
+            ? {
+                ...set,
+                offers: set.offers.map((offer) => ({ ...offer, status })),
+              }
+            : set,
+        ),
+        subjects: family.subjects.map((subject) => ({
+          ...subject,
+          sets: subject.sets.map((set) =>
+            selectedIds.has(set.id)
+              ? {
+                  ...set,
+                  offers: set.offers.map((offer) => ({ ...offer, status })),
+                }
+              : set,
+          ),
+        })),
+      }),
+      status === "open"
+        ? "เปิดขายชุดที่เลือกแล้ว"
+        : "พักการขายชุดที่เลือกแล้ว",
+    );
+  }
+
+  function applySalesAction() {
+    if (!selected || !canEdit) return;
+    if (salesAction === "pause-selected") updateSelectedSets("draft");
+    if (salesAction === "open-selected") updateSelectedSets("open");
+    if (salesAction === "pause-category") {
+      if (selected.status === "draft") {
+        setMessage("หมวดนี้พักการขายอยู่แล้ว");
+      } else {
+        updateFamily(
+          (family) => ({ ...family, status: "draft" }),
+          "พักการขายทั้งหมวดแล้ว",
+        );
+      }
+    }
+    if (salesAction === "open-category" && familyCanOpen(selected)) {
+      if (selected.status === "open") {
+        setMessage("หมวดนี้เปิดการขายอยู่แล้ว");
+      } else {
+        updateFamily(
+          (family) => ({ ...family, status: "open" }),
+          "เปิดการขายทั้งหมวดแล้ว",
+        );
+      }
+    }
+    setSelectedSetIds([]);
+    setSalesAction("");
+  }
+
   function chooseFamily(id: string) {
     setSelectedId(id);
     setSubjectId("");
     setSetId("");
+    setSelectedSetIds([]);
+    setSalesAction("");
     setPreviewChoices({});
     setMessage("");
   }
 
   function closeModal() {
     setSelectedId("");
+    setSelectedSetIds([]);
+    setSalesAction("");
     setMessage("");
     requestAnimationFrame(() => openerRef.current?.focus());
   }
@@ -1255,27 +1419,62 @@ export default function WebBExamCatalog({
           className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
         >
           {families.map((family) => (
-            <button
+            <div
               key={family.id}
-              type="button"
-              onClick={(event) => {
-                openerRef.current = event.currentTarget;
-                chooseFamily(family.id);
-              }}
-              aria-pressed={selected?.id === family.id}
-              className={`rounded-2xl border p-4 text-left shadow-sm ${selected?.id === family.id ? "border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200" : "border-slate-200 bg-white hover:border-indigo-300"}`}
+              className={`relative rounded-2xl border px-4 pb-4 pt-5 shadow-sm ${selected?.id === family.id ? "border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200" : "border-slate-200 bg-white hover:border-indigo-300"}`}
             >
-              <span className="flex items-center justify-between gap-2">
-                <b className="text-lg">{family.name}</b>
-                <span
-                  className={`rounded-full px-2 py-1 text-xs font-bold ${family.status === "open" ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"}`}
+              {(() => {
+                const openSetCount = familySets(family).filter((set) =>
+                  set.offers.some((offer) => offer.status === "open"),
+                ).length;
+                const statusLabel =
+                  family.id === "tgat" && openSetCount > 0
+                    ? `เปิดขายแล้ว ${openSetCount} ชุด`
+                    : family.status === "open"
+                      ? "เปิดการขาย"
+                      : "ยังไม่เปิดขาย";
+                return (
+              <span
+                className={`absolute right-4 top-0 z-10 -translate-y-1/2 rounded-full border px-2.5 py-0.5 text-[11px] font-bold shadow-sm ${family.status === "open" || openSetCount > 0 ? "border-emerald-200 bg-white text-emerald-700" : "border-slate-200 bg-white text-slate-500"}`}
+              >
+                {statusLabel}
+              </span>
+                );
+              })()}
+              <div className="flex items-start justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    openerRef.current = event.currentTarget;
+                    chooseFamily(family.id);
+                  }}
+                  aria-pressed={selected?.id === family.id}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
                 >
-                  {family.status === "open" ? "เปิดการขาย" : "ยังไม่เปิดขาย"}
+                  <Image
+                    src={family.homeCoverImage || WEBB_MOCK_IMAGE}
+                    alt={`รูปปก ${family.name}`}
+                    width={48}
+                    height={36}
+                    unoptimized
+                    className="size-12 shrink-0 rounded-lg object-cover"
+                  />
+                  <b className="text-lg">{family.name}</b>
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={(event) => {
+                  openerRef.current = event.currentTarget;
+                  chooseFamily(family.id);
+                }}
+                aria-pressed={selected?.id === family.id}
+                className="mt-2 block w-full text-left"
+              >
+                <span className="mt-2 block text-xs leading-5 text-slate-600">
+                  {flowText(family.flow)}
                 </span>
-              </span>
-              <span className="mt-2 block text-xs leading-5 text-slate-600">
-                {flowText(family.flow)}
-              </span>
+              </button>
               <span className="mt-2 block text-xs text-slate-500">
                 {familySets(family).length} ชุด ·{" "}
                 {familySets(family).reduce(
@@ -1284,7 +1483,7 @@ export default function WebBExamCatalog({
                 )}{" "}
                 แพ็กเกต
               </span>
-            </button>
+            </div>
           ))}
         </section>
       )}
@@ -1323,11 +1522,7 @@ export default function WebBExamCatalog({
                       ?.label}
                 </h2>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">
-                  ข้อมูลสำหรับการนำเสนอ
-                </span>
-              </div>
+
             </div>
             {managementTab === "overview" && (
               <>
@@ -1861,15 +2056,28 @@ export default function WebBExamCatalog({
                         รูปแบบการเลือก · {flowText(selected.flow)}
                       </p>
                     </div>
-                    <button
-                      ref={closeButtonRef}
-                      type="button"
-                      onClick={closeModal}
-                      className={secondaryButton}
-                      aria-label={`ปิดรายละเอียด ${selected.name}`}
-                    >
-                      ปิด ×
-                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openFamilyContentEditor(selected)}
+                        disabled={!canEdit}
+                        aria-label={`แก้ไขหน้าบ้าน ${selected.name}`}
+                        title={`แก้ไขชื่อ รูปปก และรายละเอียด ${selected.name}`}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <LuPencil aria-hidden="true" className="size-4" />
+                        แก้ไข
+                      </button>
+                      <button
+                        ref={closeButtonRef}
+                        type="button"
+                        onClick={closeModal}
+                        className={secondaryButton}
+                        aria-label={`ปิดรายละเอียด ${selected.name}`}
+                      >
+                        <LuX aria-hidden="true" className="size-4" />
+                      </button>
+                    </div>
                   </div>
                 )}
                 <div
@@ -1961,6 +2169,7 @@ export default function WebBExamCatalog({
                                         onClick={() => {
                                           setSubjectId(subject.id);
                                           setSetId("");
+                                          setSelectedSetIds([]);
                                           setPreviewChoices({});
                                         }}
                                         className={
@@ -2034,25 +2243,46 @@ export default function WebBExamCatalog({
                               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
                                 {sets.length} ชุด
                               </span>
-                              <span
+                              {/* <span
                                 className={`rounded-full px-3 py-1.5 text-xs font-bold ${selected.status === "open" ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}
                               >
                                 {selected.status === "open"
                                   ? "หมวดเปิดขาย"
                                   : "หมวดยังไม่เปิดขาย"}
-                              </span>
+                              </span> */}
                             </div>
                           </div>
                           <div className="overflow-x-auto rounded-xl border border-slate-200">
-                            <table className="w-full min-w-[650px] table-fixed text-left text-sm">
+                            <table className="w-full min-w-[690px] table-fixed text-left text-sm">
                               <thead className="bg-slate-50 text-xs font-bold text-slate-500">
                                 <tr>
-                                  <th className="w-[15%] px-3 py-3">ชุดสอบ</th>
-                                  <th className="w-[35%] px-3 py-3">
+                                  <th className="w-[8%] px-3 py-3">
+                                    <input
+                                      type="checkbox"
+                                      aria-label="เลือกทุกชุดสอบ"
+                                      checked={
+                                        sets.length > 0 &&
+                                        sets.every((set) =>
+                                          selectedSetIds.includes(set.id),
+                                        )
+                                      }
+                                      disabled={!canEdit || sets.length === 0}
+                                      onChange={(event) =>
+                                        setSelectedSetIds(
+                                          event.target.checked
+                                            ? sets.map((set) => set.id)
+                                            : [],
+                                        )
+                                      }
+                                      className="size-4 accent-[#211d4f]"
+                                    />
+                                  </th>
+                                  <th className="w-[12%] px-3 py-3">ชุดสอบ</th>
+                                  <th className="w-[32%] px-3 py-3">
                                     พาร์ท / รายวิชา
                                   </th>
-                                  <th className="w-[15%] px-3 py-3">แพ็กเกต</th>
-                                  <th className="w-[15%] px-3 py-3">สถานะ</th>
+                                  <th className="w-[14%] px-3 py-3">แพ็กเกต</th>
+                                  <th className="w-[14%] px-3 py-3">สถานะ</th>
                                   <th className="w-[20%] px-3 py-3 text-right">
                                     การทำงาน
                                   </th>
@@ -2068,6 +2298,24 @@ export default function WebBExamCatalog({
                                       key={set.id}
                                       className="bg-white hover:bg-slate-50"
                                     >
+                                      <td className="px-3 py-3">
+                                        <input
+                                          type="checkbox"
+                                          aria-label={`เลือกชุด ${set.name}`}
+                                          checked={selectedSetIds.includes(set.id)}
+                                          disabled={!canEdit}
+                                          onChange={(event) =>
+                                            setSelectedSetIds((current) =>
+                                              event.target.checked
+                                                ? [...current, set.id]
+                                                : current.filter(
+                                                    (id) => id !== set.id,
+                                                  ),
+                                            )
+                                          }
+                                          className="size-4 accent-[#211d4f]"
+                                        />
+                                      </td>
                                       <td className="px-3 py-3">
                                         <b>ชุด {set.name}</b>
                                       </td>
@@ -2097,7 +2345,7 @@ export default function WebBExamCatalog({
                                           className={`rounded-full px-2.5 py-1 text-xs font-semibold ${openOffers ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}
                                         >
                                           {openOffers
-                                            ? `เปิด ${openOffers} แพ็กเกต`
+                                            ? "เปิดขายแล้ว"
                                             : "ยังไม่เปิดขาย"}
                                         </span>
                                       </td>
@@ -2117,7 +2365,7 @@ export default function WebBExamCatalog({
                                 {sets.length === 0 && (
                                   <tr>
                                     <td
-                                      colSpan={5}
+                                      colSpan={6}
                                       className="px-4 py-8 text-center text-sm text-slate-500"
                                     >
                                       ยังไม่มีชุดสอบ กด “เพิ่มชุดสอบ”
@@ -2144,10 +2392,7 @@ export default function WebBExamCatalog({
                                   <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                                     <tr>
                                       <th className="px-4 py-3">พาร์ท / วิชา</th>
-                                      <th className="px-4 py-3">
-                                        โครงสร้างข้อสอบ
-                                      </th>
-                                      <th className="px-4 py-3">ไฟล์และสถานะ</th>
+                                      <th className="px-4 py-3">สถานะ</th>
                                       <th className="px-4 py-3">อยู่ในแพ็กเกต</th>
                                       <th className="px-4 py-3 text-right">
                                         จัดการ
@@ -2158,48 +2403,31 @@ export default function WebBExamCatalog({
                                     {selectedSet.parts.map((part) => {
                                       const settings =
                                         selectedSet.partSettings?.[part];
-                                      const structure = [
-                                        settings?.questionCount
-                                          ? `${settings.questionCount} ข้อ`
-                                          : "จำนวนข้อยังไม่ตั้งค่า",
-                                        settings?.durationMinutes
-                                          ? `${settings.durationMinutes} นาที`
-                                          : "เวลาไม่ระบุ",
-                                        settings?.choiceCount
-                                          ? `${settings.choiceCount} ตัวเลือก`
-                                          : "รูปแบบตัวเลือกไม่ระบุ",
-                                        settings?.scoreMaximum
-                                          ? `${settings.scoreMaximum} คะแนน`
-                                          : "คะแนนไม่ระบุ",
-                                      ].join(" · ");
-                                      const files = [
-                                        settings?.examFileName,
-                                        settings?.answerFileName,
-                                      ]
-                                        .filter(Boolean)
-                                        .join(" · ");
+                                      const contentStatus =
+                                        settings?.contentStatus || "Draft";
+                                      const completionPercent =
+                                        contentStatus === "เผยแพร่"
+                                          ? 100
+                                          : contentStatus === "รอตรวจ"
+                                            ? 60
+                                            : 0;
+                                      const completionTextTone =
+                                        completionPercent === 100
+                                          ? "text-emerald-700"
+                                          : completionPercent >= 60
+                                            ? "text-amber-700"
+                                            : "text-rose-700";
                                       return (
                                         <tr key={part}>
                                           <td className="px-4 py-3 font-semibold">
                                             {part}
                                           </td>
-                                          <td className="px-4 py-3 text-xs leading-5 text-slate-600">
-                                            {isTgatA
-                                              ? "ตั้งค่ารายพาร์ทในหน้าจัดการข้อสอบ"
-                                              : structure}
-                                          </td>
-                                          <td className="px-4 py-3 text-xs leading-5 text-slate-600">
-                                            <span className="block">
-                                              {isTgatA
-                                                ? "จัดการไฟล์ในหน้ารายละเอียด"
-                                                : files || "ยังไม่มีไฟล์"}
+                                          <td className="px-4 py-3">
+                                            <span
+                                              className={`text-xs font-semibold ${completionTextTone}`}
+                                            >
+                                              ดำเนินการแล้ว {completionPercent}%
                                             </span>
-                                            {!isTgatA && (
-                                              <span className="text-slate-400">
-                                                {settings?.contentStatus ||
-                                                  "Draft"}
-                                              </span>
-                                            )}
                                           </td>
                                           <td className="px-4 py-3 text-xs text-slate-600">
                                             {selectedSet.offers
@@ -2592,34 +2820,65 @@ export default function WebBExamCatalog({
                             แพ็กเกตที่เป็นร่างยังเลือกไม่ได้
                           </p>
                         </div>
-                        {canEdit && (
-                          <button
-                            type="button"
-                            disabled={
-                              selected.status === "draft" &&
-                              !familyCanOpen(selected)
-                            }
-                            onClick={() =>
-                              updateFamily(
-                                (family) => ({
-                                  ...family,
-                                  status:
-                                    family.status === "open" ? "draft" : "open",
-                                }),
-                                "ปรับสถานะหมวดแล้ว",
-                              )
-                            }
-                            className={
-                              selected.status === "open"
-                                ? secondaryButton
-                                : primaryButton
-                            }
-                          >
-                            {selected.status === "open"
-                              ? "พักการขายทั้งหมวด"
-                              : "เปิดการขาย"}
-                          </button>
-                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {selectedSetIds.length > 0 && (
+                            <span
+                              className="text-xs font-semibold text-slate-600"
+                              aria-live="polite"
+                            >
+                              เลือก {selectedSetIds.length} ชุด
+                            </span>
+                          )}
+                          {canEdit && (
+                            <>
+                              <div className="min-w-[250px]">
+                                <AdminSelect
+                                  value={salesAction}
+                                  onChange={(value) =>
+                                    setSalesAction(
+                                      value as typeof salesAction,
+                                    )
+                                  }
+                                  placeholder="เลือกคำสั่งสถานะการขาย"
+                                  ariaLabel="เลือกคำสั่งสถานะการขาย"
+                                  options={[
+                                    {
+                                      value: "pause-selected",
+                                      label: "พักการขายชุดที่เลือก",
+                                    },
+                                    {
+                                      value: "open-selected",
+                                      label: "เปิดขายชุดที่เลือก",
+                                    },
+                                    {
+                                      value: "pause-category",
+                                      label: "พักการขายทั้งหมวด",
+                                    },
+                                    {
+                                      value: "open-category",
+                                      label: "เปิดการขายทั้งหมวด",
+                                    },
+                                  ]}
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                disabled={
+                                  !salesAction ||
+                                  ((salesAction === "pause-selected" ||
+                                    salesAction === "open-selected") &&
+                                    selectedSetIds.length === 0) ||
+                                  (salesAction === "open-category" &&
+                                    !familyCanOpen(selected))
+                                }
+                                onClick={applySalesAction}
+                                className={primaryButton}
+                              >
+                                นำไปใช้
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     )}
                   </section>
@@ -2720,13 +2979,13 @@ export default function WebBExamCatalog({
                 <div>
                   {partModal.mode === "manage" ? (
                     <div>
-                      <div className="flex items-center gap-2">
+                      {/* <div className="flex items-center gap-2">
                         <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-bold text-indigo-700">
                           {selected?.name}
                           {selectedSubject ? ` · ${selectedSubject.name}` : ""} · ชุด {selectedSet?.name}
                           {partModal.part ? ` · ${partModal.part}` : ""}
                         </span>
-                      </div>
+                      </div> */}
                       <h2
                         id="catalog-part-modal-title"
                         className="mt-1 text-lg font-bold text-slate-900"
@@ -2761,8 +3020,9 @@ export default function WebBExamCatalog({
                   type="button"
                   onClick={() => setPartModal(null)}
                   className={secondaryButton}
+                  aria-label="ปิดหน้าต่าง"
                 >
-                  ปิด ×
+                  <LuX aria-hidden="true" className="size-4" />
                 </button>
               </div>
               <div className={partModal.mode === "manage" ? "flex-1 min-h-0 overflow-hidden flex flex-col p-4 sm:p-5" : "min-h-0 overflow-y-auto p-4"}>
@@ -3209,8 +3469,9 @@ export default function WebBExamCatalog({
                   type="button"
                   onClick={() => setOfferModal(null)}
                   className={secondaryButton}
+                  aria-label="ปิดหน้าต่าง"
                 >
-                  ปิด ×
+                  <LuX aria-hidden="true" className="size-4" />
                 </button>
               </div>
               <form onSubmit={saveOfferModal} className="mt-5 space-y-4">
@@ -3487,7 +3748,7 @@ export default function WebBExamCatalog({
                 title="ปิดภาพ"
                 className="absolute right-3 top-3 z-10 inline-flex items-center gap-2 rounded-xl border border-white/30 bg-slate-950/75 px-4 py-2.5 text-sm font-semibold text-white shadow-lg backdrop-blur hover:bg-slate-800 sm:right-5 sm:top-5"
               >
-                ปิด <span aria-hidden="true">×</span>
+                ปิด <LuX aria-hidden="true" className="size-4" />
               </button>
               <Image
                 src={imagePreview.src}
@@ -3502,6 +3763,154 @@ export default function WebBExamCatalog({
           </div>,
           portalTarget,
         )}
+
+      {familyContentDraft && (
+        <WebBModalPortal>
+          <div
+            className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm sm:p-6"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setFamilyContentDraft(null);
+            }}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="family-content-title"
+              className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
+            >
+              <header className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+                <div>
+                  <h2 id="family-content-title" className="text-lg font-bold text-slate-900">
+                    แก้ไขข้อมูลหน้าบ้าน · {familyContentDraft.name}
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    ข้อมูลตัวอย่างจะบันทึกในเบราว์เซอร์นี้และแสดงบนหน้าบ้าน
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFamilyContentDraft(null)}
+                  aria-label="ปิดหน้าต่างแก้ไข"
+                  title="ปิดหน้าต่าง"
+                  className="inline-flex rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+                >
+                  <LuX aria-hidden="true" className="size-4" />
+                </button>
+              </header>
+              <form onSubmit={saveFamilyContent} className="space-y-4 p-5">
+                <label className="block text-sm font-semibold text-slate-700">
+                  ชื่อหมวดวิชา
+                  <WebBAdminInput
+                    autoFocus
+                    value={familyContentDraft.name}
+                    onChange={(event) =>
+                      setFamilyContentDraft({
+                        ...familyContentDraft,
+                        name: event.target.value,
+                        error: undefined,
+                      })
+                    }
+                    className={`mt-1.5 ${inputClass}`}
+                    placeholder="เช่น TGAT"
+                  />
+                </label>
+                <label className="block text-sm font-semibold text-slate-700">
+                  คำอธิบายสั้นบนการ์ดหน้าบ้าน
+                  <WebBAdminInput
+                    value={familyContentDraft.homeSubtitle}
+                    onChange={(event) =>
+                      setFamilyContentDraft({
+                        ...familyContentDraft,
+                        homeSubtitle: event.target.value,
+                      })
+                    }
+                    className={`mt-1.5 ${inputClass}`}
+                    placeholder="เช่น ความถนัดทั่วไป"
+                  />
+                </label>
+                <div className="grid gap-4 sm:grid-cols-[1.2fr_.8fr]">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    รูปปกหมวดวิชา
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      aria-label={`เลือกรูปปก ${familyContentDraft.name}`}
+                      className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-normal text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-semibold file:text-indigo-700"
+                      onChange={async (event) => {
+                        const file = event.currentTarget.files?.[0];
+                        if (!file) return;
+                        try {
+                          const homeCoverImage = await compressCoverImage(file);
+                          setFamilyContentDraft((current) =>
+                            current
+                              ? { ...current, homeCoverImage, error: undefined }
+                              : current,
+                          );
+                        } catch (error) {
+                          setFamilyContentDraft((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  error:
+                                    error instanceof Error
+                                      ? error.message
+                                      : "อ่านไฟล์รูปภาพไม่สำเร็จ",
+                                }
+                              : current,
+                          );
+                        }
+                      }}
+                    />
+                    <span className="mt-1 block text-xs font-normal text-slate-500">
+                      PNG, JPG หรือ WebP · ไม่เกิน 8 MB
+                    </span>
+                  </label>
+                  <Image
+                    src={familyContentDraft.homeCoverImage || WEBB_MOCK_IMAGE}
+                    alt={`ตัวอย่างรูปปก ${familyContentDraft.name}`}
+                    width={640}
+                    height={360}
+                    unoptimized
+                    className="h-28 w-full rounded-xl border border-slate-200 object-cover"
+                  />
+                </div>
+                <label className="block text-sm font-semibold text-slate-700">
+                  รายละเอียดหน้าแนะนำวิชา
+                  <textarea
+                    value={familyContentDraft.detailDescription}
+                    onChange={(event) =>
+                      setFamilyContentDraft({
+                        ...familyContentDraft,
+                        detailDescription: event.target.value,
+                      })
+                    }
+                    rows={5}
+                    className={`mt-1.5 ${inputClass}`}
+                    placeholder="กรอกรายละเอียดที่จะแสดงเมื่อผู้เรียนกดดูรายละเอียด"
+                  />
+                </label>
+                {familyContentDraft.error && (
+                  <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                    {familyContentDraft.error}
+                  </p>
+                )}
+                <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setFamilyContentDraft(null)}
+                    className={secondaryButton}
+                  >
+                    ยกเลิก
+                  </button>
+                  <button type="submit" className={primaryButton}>
+                    บันทึกข้อมูล
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>
+        </WebBModalPortal>
+      )}
     </main>
   );
 }

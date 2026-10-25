@@ -25,6 +25,7 @@ import {
   LuPencil,
   LuTag,
   LuTrash2,
+  LuX,
 } from "react-icons/lu";
 import {
   WEBB_PRODUCTS,
@@ -199,6 +200,7 @@ type DemoLog = { time: string; actor: string; action: string; target: string };
 type DemoExamDocument = {
   id: string;
   productId: string;
+  trial?: boolean;
   productName: string;
   examSet: string;
   sectionId?: string;
@@ -694,6 +696,7 @@ function Section({
   detail,
   action,
   actionEnabledWhenReadOnly = false,
+  actionFullWidth = false,
   headerNoWrap = false,
   children,
 }: {
@@ -702,6 +705,7 @@ function Section({
   detail?: string;
   action?: ReactNode;
   actionEnabledWhenReadOnly?: boolean;
+  actionFullWidth?: boolean;
   headerNoWrap?: boolean;
   children: ReactNode;
 }) {
@@ -780,27 +784,40 @@ function Section({
   const canEdit =
     role === "Super Admin" ||
     Boolean(access && (access.add || access.edit || access.approve));
+  const hasHeading = Boolean(title.trim() || detail?.trim());
+  const hasSectionHeader = hasHeading || Boolean(action);
   return (
-    <section id={id} className={embedded ? "h-full flex flex-col min-h-0" : "scroll-mt-24 space-y-4"}>
+    <section
+      id={id}
+      className={
+        embedded
+          ? "h-full flex flex-col min-h-0"
+          : `scroll-mt-24 ${hasSectionHeader ? "space-y-4" : ""}`
+      }
+    >
       {!embedded ? (
-        <div
-          className={`shrink-0 flex flex-wrap items-end justify-between gap-3 ${
-            headerNoWrap ? "2xl:flex-nowrap" : ""
-          }`}
-        >
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">{title}</h2>
-            {detail && <p className="mt-1 text-sm text-slate-500">{detail}</p>}
+        hasHeading || action ? (
+          <div
+            className={`shrink-0 flex flex-wrap items-end justify-between gap-3 ${
+              headerNoWrap ? "2xl:flex-nowrap" : ""
+            }`}
+          >
+            {hasHeading && (
+              <div>
+                {title.trim() && <h2 className="text-xl font-bold text-slate-900">{title}</h2>}
+                {detail?.trim() && <p className="mt-1 text-sm text-slate-500">{detail}</p>}
+              </div>
+            )}
+            {action && (
+              <fieldset
+                disabled={!canEdit && !actionEnabledWhenReadOnly}
+                className={`m-0 min-w-0 border-0 p-0 ${actionFullWidth ? "w-full" : ""}`}
+              >
+                {action}
+              </fieldset>
+            )}
           </div>
-          {action && (
-            <fieldset
-              disabled={!canEdit && !actionEnabledWhenReadOnly}
-              className="m-0 min-w-0 border-0 p-0"
-            >
-              {action}
-            </fieldset>
-          )}
-        </div>
+        ) : null
       ) : action ? (
         <div className="shrink-0 flex justify-end pb-2">
           <fieldset
@@ -813,7 +830,11 @@ function Section({
       ) : null}
       <fieldset
         disabled={!canEdit}
-        className={embedded ? "m-0 min-w-0 border-0 p-0 flex-1 min-h-0 flex flex-col mt-2" : "m-0 min-w-0 space-y-4 border-0 p-0"}
+        className={
+          embedded
+            ? `m-0 min-w-0 border-0 p-0 flex-1 min-h-0 flex flex-col ${hasSectionHeader ? "mt-2" : ""}`
+            : "m-0 min-w-0 space-y-4 border-0 p-0"
+        }
       >
         <legend className="sr-only">{title}</legend>
         {children}
@@ -947,15 +968,20 @@ export default function WebBAdminDemo({
     activeScreen === "payments" ? "payments" : "orders",
   );
   const [examView, setExamView] = useState<"table" | "detail">(
-    activeScreen === "exam-management" && !offerTable ? "detail" : "table",
+    (activeScreen === "exam-management" || activeScreen === "trial-exams") &&
+    !offerTable
+      ? "detail"
+      : "table",
   );
   const [examTab, setExamTab] = useState<ExamTab>(() =>
-    activeScreen === "exam-management" &&
-    ["overview", "content", "offers", "access", "activity", "results", "solutions"].includes(
-      initialExamTab || "",
-    )
-      ? (initialExamTab as ExamTab)
-      : "overview",
+    activeScreen === "trial-exams"
+      ? "content"
+      : activeScreen === "exam-management" &&
+          ["overview", "content", "offers", "access", "activity", "results", "solutions"].includes(
+            initialExamTab || "",
+          )
+        ? (initialExamTab as ExamTab)
+        : "overview",
   );
   const externalExamTabRef = useRef(initialExamTab);
   const [permissionRole, setPermissionRole] = useState("Content");
@@ -977,6 +1003,11 @@ export default function WebBAdminDemo({
   const [examSectionSettings, setExamSectionSettings] = useDemoData<
     DemoExamSectionSetting[]
   >("exam-section-settings", initialExamSectionSettings);
+  const [trialExamSectionSettings, setTrialExamSectionSettings] =
+    useDemoData<DemoExamSectionSetting[]>(
+      "trial-exam-section-settings",
+      initialExamSectionSettings.filter((section) => section.id === "tgat1"),
+    );
   const [examSets, setExamSets] = useDemoData<DemoExamSet[]>(
     "exam-sets",
     initialExamSets,
@@ -1040,7 +1071,9 @@ export default function WebBAdminDemo({
   );
   const [selectedExamSetId, setSelectedExamSetId] = useState(
     () =>
-      (initialProductId ||
+      ((activeScreen === "trial-exams"
+        ? initialProducts.find((product) => product.trial)?.id
+        : initialProductId) ||
         initialProducts.find((product) => !product.trial)?.id ||
         initialProducts[0]?.id ||
         "") + ":A",
@@ -1213,6 +1246,10 @@ export default function WebBAdminDemo({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [detail]);
   const answerKeyProductId = selectedExamProductId || "tgat1";
+  const answerKeyStorageProductId =
+    activeScreen === "trial-exams"
+      ? `trial-${answerKeyProductId}`
+      : answerKeyProductId;
   const selectedExamSet =
     examSets.find(
       (set) =>
@@ -1223,6 +1260,10 @@ export default function WebBAdminDemo({
     ) ||
     null;
   const answerKeySetName = selectedExamSet?.name || "A";
+  const activeExamSectionSettings =
+    activeScreen === "trial-exams"
+      ? trialExamSectionSettings
+      : examSectionSettings;
   const getManagedExamPlan = (productId: string, examSet = "A") => {
     const base = getExamPlan(productId, examSet);
     const product = products.find((item) => item.id === productId);
@@ -1241,7 +1282,7 @@ export default function WebBAdminDemo({
     let questionStart = 1;
     const sections = ids.map((id) => {
       const source =
-        examSectionSettings.find((item) => item.id === id) ||
+        activeExamSectionSettings.find((item) => item.id === id) ||
         initialExamSectionSettings.find((item) => item.id === id)!;
       const original = getExamPlan(id, "A").sections[0];
       const section = {
@@ -1267,7 +1308,7 @@ export default function WebBAdminDemo({
       hasSuppliedExam: sections.length > 0 && base.hasSuppliedExam,
     };
   };
-  const selectedSectionSetting = examSectionSettings.find(
+  const selectedSectionSetting = activeExamSectionSettings.find(
     (section) => section.id === answerKeyProductId,
   );
   useEffect(() => {
@@ -1294,34 +1335,38 @@ export default function WebBAdminDemo({
       ].every((value) => Number.isInteger(value) && value > 0)
     )
       return toast.error("จำนวนข้อ เวลา ตัวเลือก และคะแนนเต็มต้องมากกว่า 0");
-    const nextSettings = examSectionSettings.map((section) =>
+    const nextSettings = activeExamSectionSettings.map((section) =>
       section.id === setting.id ? setting : section,
     );
-    setExamSectionSettings(nextSettings);
-    setExamSets((current) =>
-      current.map((set) => {
-        if (set.name !== "A") return set;
-        const product = products.find((item) => item.id === set.productId);
-        const ids = product?.sectionIds?.length
-          ? product.sectionIds
-          : getExamPlan(set.productId, set.name).sections.map(
-              (section) => section.id,
-            );
-        const questionCount = ids.reduce(
-          (sum, id) =>
-            sum +
-            (nextSettings.find((item) => item.id === id)?.questionCount || 0),
-          0,
-        );
-        return ids.includes(setting.id) ? { ...set, questionCount } : set;
-      }),
-    );
+    if (activeScreen === "trial-exams") {
+      setTrialExamSectionSettings(nextSettings);
+    } else {
+      setExamSectionSettings(nextSettings);
+      setExamSets((current) =>
+        current.map((set) => {
+          if (set.name !== "A") return set;
+          const product = products.find((item) => item.id === set.productId);
+          const ids = product?.sectionIds?.length
+            ? product.sectionIds
+            : getExamPlan(set.productId, set.name).sections.map(
+                (section) => section.id,
+              );
+          const questionCount = ids.reduce(
+            (sum, id) =>
+              sum +
+              (nextSettings.find((item) => item.id === id)?.questionCount || 0),
+            0,
+          );
+          return ids.includes(setting.id) ? { ...set, questionCount } : set;
+        }),
+      );
+    }
     logAction("ปรับโครงสร้างข้อสอบรายพาร์ท", setting.title);
     toast.success("บันทึกการตั้งค่าพาร์ทแล้ว");
   }
   const answerKeyStorageSet = encodeURIComponent(answerKeySetName);
   const [answerKey, setAnswerKey, answerKeyLoaded] = useDemoData<string[]>(
-    `answer-key:${answerKeyProductId}:${answerKeyStorageSet}`,
+    `answer-key:${answerKeyStorageProductId}:${answerKeyStorageSet}`,
     ["1", "3", "2", "4", "1"],
   );
   const answerKeyPlan = getManagedExamPlan(
@@ -1331,7 +1376,7 @@ export default function WebBAdminDemo({
   const expectedAnswerCount = answerKeyPlan.questionCount;
   const [answerScoringRules, setAnswerScoringRules, answerScoringRulesLoaded] =
     useDemoData<DemoAnswerScoringRule[]>(
-      `answer-scoring:${answerKeyProductId}:${answerKeyStorageSet}`,
+      `answer-scoring:${answerKeyStorageProductId}:${answerKeyStorageSet}`,
       defaultAnswerScoringRules(
         answerKeyProductId,
         expectedAnswerCount,
@@ -1340,7 +1385,7 @@ export default function WebBAdminDemo({
     );
   const [reviewedAnswers, setReviewedAnswers, reviewedAnswersLoaded] =
     useDemoData<Record<string, boolean>>(
-      `reviewed-answers:${answerKeyProductId}:${answerKeyStorageSet}`,
+      `reviewed-answers:${answerKeyStorageProductId}:${answerKeyStorageSet}`,
       selectedExamSet?.contentStatus === "เผยแพร่"
         ? Object.fromEntries(
             Array.from(
@@ -2304,6 +2349,7 @@ export default function WebBAdminDemo({
     const document: DemoExamDocument = {
       id: `DOC-${String(Date.now()).slice(-8)}`,
       productId: product.id,
+      trial: activeScreen === "trial-exams",
       productName: product.name,
       examSet: selectedExamSet?.name || "A",
       sectionId: selectedPart?.id,
@@ -2314,18 +2360,20 @@ export default function WebBAdminDemo({
       addedAt: formatThaiDateTimeValue(new Date()),
     };
     setExamDocuments((current) => [document, ...current]);
-    setExamSets((current) =>
-      current.map((set) =>
-        set.id === selectedExamSetId
-          ? { ...set, contentStatus: "รอตรวจ" }
-          : set,
-      ),
-    );
-    setProducts((current) =>
-      current.map((row) =>
-        row.id === product.id ? { ...row, contentStatus: "รอตรวจ" } : row,
-      ),
-    );
+    if (activeScreen !== "trial-exams") {
+      setExamSets((current) =>
+        current.map((set) =>
+          set.id === selectedExamSetId
+            ? { ...set, contentStatus: "รอตรวจ" }
+            : set,
+        ),
+      );
+      setProducts((current) =>
+        current.map((row) =>
+          row.id === product.id ? { ...row, contentStatus: "รอตรวจ" } : row,
+        ),
+      );
+    }
     setPendingExamFile(null);
     logAction(
       "บันทึกไฟล์ข้อสอบ PDF",
@@ -2336,7 +2384,9 @@ export default function WebBAdminDemo({
     if (getManagedExamPlan(productId, examSet).hasSuppliedExam) return true;
     const documents = examDocuments.filter(
       (document) =>
-        document.productId === productId && document.examSet === examSet,
+        document.productId === productId &&
+        document.examSet === examSet &&
+        Boolean(document.trial) === (activeScreen === "trial-exams"),
     );
     const parts = getManagedExamPlan(productId, "A").sections;
     return parts.length
@@ -2544,7 +2594,7 @@ export default function WebBAdminDemo({
     </nav>
   );
   const orderTabs = (
-    <nav aria-label="คำสั่งซื้อและการชำระเงิน" className="flex flex-wrap gap-2">
+    <nav aria-label="คำสั่งซื้อและการชำระเงิน" className="flex shrink-0 flex-nowrap gap-2">
       <Link
         href="/webb/admin/orders"
         aria-current={orderTab === "orders" ? "page" : undefined}
@@ -2600,10 +2650,7 @@ export default function WebBAdminDemo({
             ]?.view === true,
         )
       : activeScreen === "trial-exams"
-        ? [
-            { id: "overview", label: "ข้อมูลชุด" },
-            { id: "content", label: "เอกสารและเฉลย" },
-          ]
+        ? [{ id: "content", label: "เอกสารและเฉลย" }]
         : [
             { id: "overview", label: "ข้อมูลชุด" },
             { id: "content", label: "ข้อสอบและเฉลย" },
@@ -2650,7 +2697,13 @@ export default function WebBAdminDemo({
         embedded,
       }}
     >
-      <div className={embedded ? "flex-1 min-h-0 flex flex-col h-full text-slate-900" : "space-y-7 text-slate-900"}>
+      <div
+        className={
+          embedded
+            ? "flex-1 min-h-0 flex flex-col h-full text-slate-900"
+            : `${activeScreen === "overview" ? "-mt-6 " : ""}space-y-7 text-slate-900`
+        }
+      >
         {activeScreen === "real-exams" && initialFamilyId === "tpat" && (
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
             <Link
@@ -2895,19 +2948,21 @@ export default function WebBAdminDemo({
         {(activeScreen === "trial-exams" || activeScreen === "real-exams") &&
           examView === "detail" &&
           selectedExamProduct && (
-            <header className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <header className={activeScreen === "trial-exams" ? "hidden" : "space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setExamView("table");
-                      setExamTab("overview");
-                      setPendingExamFile(null);
-                    }}
-                  >
-                    ← กลับรายการ
-                  </Button>
+                  {activeScreen !== "trial-exams" && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setExamView("table");
+                        setExamTab("overview");
+                        setPendingExamFile(null);
+                      }}
+                    >
+                      ← กลับรายการ
+                    </Button>
+                  )}
                   <div>
                     <span className="text-xs font-bold text-slate-500">
                       {activeScreen === "trial-exams" ? "ชุดทดลอง" : "ชุดจริง"}{" "}
@@ -2921,34 +2976,40 @@ export default function WebBAdminDemo({
                     </p>
                   </div>
                 </div>
-                <Badge
-                  tone={
-                    selectedExamProduct.status === "เปิดขาย" ? "green" : "gray"
-                  }
-                >
-                  {selectedExamProduct.status}
-                </Badge>
-              </div>
-              <nav
-                aria-label="รายการจัดการชุดข้อสอบ"
-                className="flex gap-2 overflow-x-auto border-t border-slate-100 pt-3"
-              >
-                {examTabs.map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    aria-current={examTab === tab.id ? "page" : undefined}
-                    onClick={() => setExamTab(tab.id)}
-                    className={`shrink-0 rounded-xl px-3.5 py-2.5 text-sm font-semibold ${examTab === tab.id ? "bg-[#211d4f] text-white" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+                {activeScreen === "trial-exams" ? (
+                  <Badge tone="blue">ทดลองฟรี</Badge>
+                ) : (
+                  <Badge
+                    tone={
+                      selectedExamProduct.status === "เปิดขาย" ? "green" : "gray"
+                    }
                   >
-                    {(() => {
-                      const TabIcon = examTabIcons[tab.id];
-                      return <TabIcon aria-hidden="true" className="size-4 shrink-0" />;
-                    })()}
-                    {tab.label}
-                  </button>
-                ))}
-              </nav>
+                    {selectedExamProduct.status}
+                  </Badge>
+                )}
+              </div>
+              {activeScreen !== "trial-exams" && (
+                <nav
+                  aria-label="รายการจัดการชุดข้อสอบ"
+                  className="flex gap-2 overflow-x-auto border-t border-slate-100 pt-3"
+                >
+                  {examTabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      aria-current={examTab === tab.id ? "page" : undefined}
+                      onClick={() => setExamTab(tab.id)}
+                      className={`shrink-0 rounded-xl px-3.5 py-2.5 text-sm font-semibold ${examTab === tab.id ? "bg-[#211d4f] text-white" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+                    >
+                      {(() => {
+                        const TabIcon = examTabIcons[tab.id];
+                        return <TabIcon aria-hidden="true" className="size-4 shrink-0" />;
+                      })()}
+                      {tab.label}
+                    </button>
+                  ))}
+                </nav>
+              )}
             </header>
           )}
         {detail && (
@@ -2990,7 +3051,7 @@ export default function WebBAdminDemo({
                   aria-label="ปิดหน้าต่างรายละเอียด"
                   className="grid size-9 shrink-0 place-items-center rounded-full bg-slate-100 text-xl text-slate-600 hover:bg-slate-200"
                 >
-                  ×
+                  <LuX aria-hidden="true" className="size-4" />
                 </button>
               </div>
               {detail.type === "student" ? (
@@ -3166,7 +3227,7 @@ export default function WebBAdminDemo({
                   aria-label="ปิดหน้าต่างเพิ่มสิทธิ์"
                   className="grid size-9 shrink-0 place-items-center rounded-full bg-slate-100 text-xl text-slate-600 hover:bg-slate-200"
                 >
-                  ×
+                  <LuX aria-hidden="true" className="size-4" />
                 </button>
               </div>
               <div className="mt-5 grid gap-4">
@@ -3250,8 +3311,8 @@ export default function WebBAdminDemo({
       )}
         <Section
           id="overview"
-          title="ภาพรวมแพลตฟอร์มฝึกสอบ"
-          detail="แนวโน้มยอดขายและคำสั่งซื้อจากข้อมูลตัวอย่าง"
+          title=""
+          detail=""
           actionEnabledWhenReadOnly
         >
           <WebBDashboardMetrics
@@ -3355,60 +3416,8 @@ export default function WebBAdminDemo({
           id="students"
           title="สมาชิกและผู้เข้าสอบ"
           detail="ค้นหาบัญชี ดูสถานะ และจัดการการเข้าถึงของผู้เรียน"
-          action={<Button onClick={addStudent}>＋ เพิ่มผู้เรียน</Button>}
         >
           <Panel>
-            <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-[minmax(240px,1.5fr)_repeat(3,minmax(145px,1fr))]">
-              <label className="grid min-w-0 gap-1 text-xs font-semibold">
-                ค้นหาผู้เรียน
-                <WebBAdminInput
-                  value={studentQuery}
-                  onChange={(event) => setStudentQuery(event.target.value)}
-                  placeholder="ชื่อ อีเมล โรงเรียน หรือรหัสผู้เรียน"
-                  aria-label="ค้นหาชื่อ อีเมล โรงเรียน หรือรหัสผู้เรียน"
-                  className="w-full"
-                />
-              </label>
-              <label className="grid min-w-0 gap-1 text-xs font-semibold">
-                ระดับชั้น
-                <AdminSelect
-                  value={studentGradeFilter}
-                  onChange={setStudentGradeFilter}
-                  options={[
-                    { value: "ทุกระดับชั้น", label: "ทุกระดับชั้น" },
-                    ...registrationEducationOptions.map((education) => ({
-                      value: education,
-                      label: education,
-                    })),
-                  ]}
-                  ariaLabel="กรองระดับชั้นผู้เรียน"
-                />
-              </label>
-              <label className="grid min-w-0 gap-1 text-xs font-semibold">
-                สถานะบัญชี
-                <AdminSelect
-                  value={studentStatusFilter}
-                  onChange={setStudentStatusFilter}
-                  options={["ทุกสถานะ", "ใช้งาน", "ระงับ", "ลบข้อมูลแล้ว"].map((status) => ({
-                    value: status,
-                    label: status,
-                  }))}
-                  ariaLabel="กรองสถานะบัญชีผู้เรียน"
-                />
-              </label>
-              <label className="grid min-w-0 gap-1 text-xs font-semibold">
-                สิทธิ์สอบ
-                <AdminSelect
-                  value={studentEntitlementFilter}
-                  onChange={setStudentEntitlementFilter}
-                  options={["ทุกสิทธิ์", "มีสิทธิ์สอบ", "ไม่มีสิทธิ์สอบ"].map((status) => ({
-                    value: status,
-                    label: status,
-                  }))}
-                  ariaLabel="กรองสิทธิ์สอบผู้เรียน"
-                />
-              </label>
-            </div>
             <WebBAdminTable
               rows={filteredStudents}
               getSearchText={(student) =>
@@ -3425,6 +3434,65 @@ export default function WebBAdminDemo({
                   : "ยังไม่มีบัญชีผู้เรียน"
               }
               hideSearch
+              toolbar={
+                <div className="grid min-w-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1.45fr)_repeat(3,minmax(145px,1fr))_auto]">
+                  <label className="grid min-w-0 gap-1 text-xs font-semibold">
+                    ค้นหาผู้เรียน
+                    <WebBAdminInput
+                      value={studentQuery}
+                      onChange={(event) => setStudentQuery(event.target.value)}
+                      placeholder="ชื่อ อีเมล โรงเรียน หรือรหัสผู้เรียน"
+                      aria-label="ค้นหาชื่อ อีเมล โรงเรียน หรือรหัสผู้เรียน"
+                      className="w-full"
+                    />
+                  </label>
+                  <label className="grid min-w-0 gap-1 text-xs font-semibold">
+                    ระดับชั้น
+                    <AdminSelect
+                      value={studentGradeFilter}
+                      onChange={setStudentGradeFilter}
+                      options={[
+                        { value: "ทุกระดับชั้น", label: "ทุกระดับชั้น" },
+                        ...registrationEducationOptions.map((education) => ({
+                          value: education,
+                          label: education,
+                        })),
+                      ]}
+                      ariaLabel="กรองระดับชั้นผู้เรียน"
+                    />
+                  </label>
+                  <label className="grid min-w-0 gap-1 text-xs font-semibold">
+                    สถานะบัญชี
+                    <AdminSelect
+                      value={studentStatusFilter}
+                      onChange={setStudentStatusFilter}
+                      options={[
+                        "ทุกสถานะ",
+                        "ใช้งาน",
+                        "ระงับ",
+                        "ลบข้อมูลแล้ว",
+                      ].map((status) => ({ value: status, label: status }))}
+                      ariaLabel="กรองสถานะบัญชีผู้เรียน"
+                    />
+                  </label>
+                  <label className="grid min-w-0 gap-1 text-xs font-semibold">
+                    สิทธิ์สอบ
+                    <AdminSelect
+                      value={studentEntitlementFilter}
+                      onChange={setStudentEntitlementFilter}
+                      options={[
+                        "ทุกสิทธิ์",
+                        "มีสิทธิ์สอบ",
+                        "ไม่มีสิทธิ์สอบ",
+                      ].map((status) => ({ value: status, label: status }))}
+                      ariaLabel="กรองสิทธิ์สอบผู้เรียน"
+                    />
+                  </label>
+                  <div className="flex items-end">
+                    <Button onClick={addStudent}>＋ เพิ่มผู้เรียน</Button>
+                  </div>
+                </div>
+              }
             >
               {(pageStudents) => (
                 <div className="overflow-x-auto">
@@ -3595,8 +3663,9 @@ export default function WebBAdminDemo({
                   type="button"
                   onClick={() => setExamView("table")}
                   className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold"
+                  aria-label="ปิดหน้าตั้งค่า"
                 >
-                  ปิด ×
+                  ปิด <LuX aria-hidden="true" className="size-4" />
                 </button>
               </div>
             )}
@@ -4070,11 +4139,11 @@ export default function WebBAdminDemo({
 
         <Section
           id="content"
-          title="คลังข้อสอบและเฉลยคำตอบ"
-          detail="จัดการไฟล์ข้อสอบ เวอร์ชัน และเฉลยคำตอบที่ใช้ตรวจคะแนนก่อนเผยแพร่"
+          title={activeScreen === "trial-exams" ? "" : "คลังข้อสอบและเฉลยคำตอบ"}
+          detail={activeScreen === "trial-exams" ? undefined : "จัดการไฟล์ข้อสอบ เวอร์ชัน และเฉลยคำตอบที่ใช้ตรวจคะแนนก่อนเผยแพร่"}
         >
           <div className={embedded ? "flex-1 min-h-0 flex flex-col h-full" : "space-y-4"}>
-            {selectedExamProduct && !embedded && (
+            {selectedExamProduct && !embedded && activeScreen !== "trial-exams" && (
               <WebBAdminClientReference
                 productId={selectedExamProduct.id}
                 examSet={selectedExamSet?.name || "A"}
@@ -4087,10 +4156,14 @@ export default function WebBAdminDemo({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h3 className="font-bold">
-                      ตั้งค่าโครงสร้าง {sectionSettingsDraft.title}
+                      {activeScreen === "trial-exams"
+                        ? "คลังข้อสอบและเฉลยคำตอบ"
+                        : `ตั้งค่าโครงสร้าง ${sectionSettingsDraft.title}`}
                     </h3>
                     <p className="mt-1 text-xs text-slate-500">
-                      ใช้กำหนดจำนวนข้อ เวลา รูปแบบตอบ และคะแนนในชุด A
+                      {activeScreen === "trial-exams"
+                        ? "จัดการไฟล์ข้อสอบ เวอร์ชัน และเฉลยคำตอบที่ใช้ตรวจคะแนนก่อนเผยแพร่"
+                        : "ใช้กำหนดจำนวนข้อ เวลา รูปแบบตอบ และคะแนนในชุด A"}
                     </p>
                   </div>
                   <Button onClick={saveSectionSettings}>
@@ -4187,20 +4260,26 @@ export default function WebBAdminDemo({
               className={
                 embedded
                   ? "flex-1 min-h-0 flex flex-col lg:flex-row gap-5 overflow-hidden"
-                  : "grid gap-4 xl:grid-cols-[1.1fr_.9fr]"
+                  : activeScreen === "trial-exams"
+                    ? "grid gap-4 xl:grid-cols-[.7fr_1.3fr]"
+                    : "grid gap-4 xl:grid-cols-[1.1fr_.9fr]"
               }
             >
               {embedded && (
-                <div className="w-full lg:w-[460px] xl:w-[480px] shrink-0 h-full overflow-y-auto space-y-4 pr-1.5">
+                <div className={`w-full ${activeScreen === "trial-exams" ? "lg:w-[300px] xl:w-[320px]" : "lg:w-[400px] xl:w-[420px]"} shrink-0 h-full overflow-y-auto space-y-4 pr-1.5`}>
                   {sectionSettingsDraft && (
                     <Panel>
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <h3 className="font-bold">
-                            ตั้งค่าโครงสร้าง {sectionSettingsDraft.title}
+                            {activeScreen === "trial-exams"
+                              ? "คลังข้อสอบและเฉลยคำตอบ"
+                              : `ตั้งค่าโครงสร้าง ${sectionSettingsDraft.title}`}
                           </h3>
                           <p className="mt-1 text-xs text-slate-500">
-                            ใช้กำหนดจำนวนข้อ เวลา รูปแบบตอบ และคะแนนในชุด A
+                            {activeScreen === "trial-exams"
+                              ? "จัดการไฟล์ข้อสอบ เวอร์ชัน และเฉลยคำตอบที่ใช้ตรวจคะแนนก่อนเผยแพร่"
+                              : "ใช้กำหนดจำนวนข้อ เวลา รูปแบบตอบ และคะแนนในชุด A"}
                           </p>
                         </div>
                         <Button onClick={saveSectionSettings}>
@@ -4295,13 +4374,14 @@ export default function WebBAdminDemo({
                       </p>
                     )}
 
-                  {activeScreen !== "trial-exams" && (
+                  {(activeScreen !== "trial-exams" || embedded) && (
                     <Panel>
-                      <div className="mt-2 grid gap-3 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-4">
+                      <div className={`mt-2 grid gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 ${activeScreen === "trial-exams" ? "p-2" : "gap-3 p-4"}`}>
                         <div>
                           <b className="text-sm">
-                            ชุด {selectedExamSet?.name || "A"} · เพิ่มเอกสารข้อสอบ
-                            PDF
+                            {activeScreen === "trial-exams"
+                              ? "เพิ่มเอกสารข้อสอบ PDF"
+                              : `ชุด ${selectedExamSet?.name || "A"} · เพิ่มเอกสารข้อสอบ PDF`}
                           </b>
                           <p className="mt-1 text-xs text-slate-500">
                             {selectedExamProduct?.name || "เลือกชุดข้อสอบ"} ·
@@ -4310,9 +4390,10 @@ export default function WebBAdminDemo({
                         </div>
                         <div className="grid gap-1 text-xs font-semibold text-slate-600">
                           ชุดข้อสอบ
-                          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal text-slate-800">
-                            {selectedExamProduct?.name || "—"} · ชุด{" "}
-                            {selectedExamSet?.name || "A"}
+                          <div className={`rounded-xl border border-slate-200 bg-white ${activeScreen === "trial-exams" ? "px-2 py-1.5 text-xs" : "px-3 py-2.5 text-sm"} font-normal text-slate-800`}>
+                            {activeScreen === "trial-exams"
+                              ? selectedExamProduct?.name || "—"
+                              : `${selectedExamProduct?.name || "—"} · ชุด ${selectedExamSet?.name || "A"}`}
                           </div>
                         </div>
                         {selectedExamProduct &&
@@ -4414,7 +4495,9 @@ export default function WebBAdminDemo({
                         {examDocuments.filter(
                           (document) =>
                             document.productId === selectedExamProduct?.id &&
-                            document.examSet === selectedExamSet?.name,
+                            document.examSet === selectedExamSet?.name &&
+                            Boolean(document.trial) ===
+                              (activeScreen === "trial-exams"),
                         ).length > 0 && (
                           <div className="space-y-2 border-t border-slate-200 pt-3">
                             <b className="text-xs text-slate-600">เอกสารในรายการ</b>
@@ -4422,7 +4505,9 @@ export default function WebBAdminDemo({
                               .filter(
                                 (document) =>
                                   document.productId === selectedExamProduct?.id &&
-                                  document.examSet === selectedExamSet?.name,
+                                  document.examSet === selectedExamSet?.name &&
+                                  Boolean(document.trial) ===
+                                    (activeScreen === "trial-exams"),
                               )
                               .map((document) => (
                                 <div
@@ -4434,8 +4519,9 @@ export default function WebBAdminDemo({
                                       {document.name}
                                     </b>
                                     <small className="text-slate-500">
-                                      {document.productName} · ชุด{" "}
-                                      {document.examSet}
+                                      {document.trial
+                                        ? document.productName
+                                        : `${document.productName} · ชุด ${document.examSet}`}
                                       {document.sectionTitle
                                         ? ` · ${document.sectionTitle}`
                                         : ""}{" "}
@@ -4471,43 +4557,46 @@ export default function WebBAdminDemo({
                                               : item,
                                           ),
                                         );
-                                        const hasPublishedDocument =
-                                          nextStatus === "เผยแพร่" ||
-                                          examDocuments.some(
-                                            (item) =>
-                                              item.id !== document.id &&
-                                              item.productId ===
-                                                document.productId &&
-                                              item.examSet === document.examSet &&
-                                              item.status === "เผยแพร่",
+                                        if (!document.trial) {
+                                          const hasPublishedDocument =
+                                            nextStatus === "เผยแพร่" ||
+                                            examDocuments.some(
+                                              (item) =>
+                                                item.id !== document.id &&
+                                                item.productId ===
+                                                  document.productId &&
+                                                item.examSet === document.examSet &&
+                                                !item.trial &&
+                                                item.status === "เผยแพร่",
+                                            );
+                                          setExamSets((current) =>
+                                            current.map((set) =>
+                                              set.productId === document.productId &&
+                                              set.name === document.examSet
+                                                ? {
+                                                    ...set,
+                                                    contentStatus:
+                                                      hasPublishedDocument
+                                                        ? "เผยแพร่"
+                                                        : "รอตรวจ",
+                                                  }
+                                                : set,
+                                            ),
                                           );
-                                        setExamSets((current) =>
-                                          current.map((set) =>
-                                            set.productId === document.productId &&
-                                            set.name === document.examSet
-                                              ? {
-                                                  ...set,
-                                                  contentStatus:
-                                                    hasPublishedDocument
-                                                      ? "เผยแพร่"
-                                                      : "รอตรวจ",
-                                                }
-                                              : set,
-                                          ),
-                                        );
-                                        setProducts((current) =>
-                                          current.map((item) =>
-                                            item.id === document.productId
-                                              ? {
-                                                  ...item,
-                                                  contentStatus:
-                                                    hasPublishedDocument
-                                                  ? "เผยแพร่"
-                                                  : "รอตรวจ",
-                                              }
-                                            : item,
-                                        ),
-                                      );
+                                          setProducts((current) =>
+                                            current.map((item) =>
+                                              item.id === document.productId
+                                                ? {
+                                                    ...item,
+                                                    contentStatus:
+                                                      hasPublishedDocument
+                                                        ? "เผยแพร่"
+                                                        : "รอตรวจ",
+                                                  }
+                                                : item,
+                                            ),
+                                          );
+                                        }
                                       logAction(
                                         nextStatus === "เผยแพร่"
                                           ? "เผยแพร่ไฟล์ข้อสอบ"
@@ -4530,13 +4619,14 @@ export default function WebBAdminDemo({
                 )}
               </div>
             )}
-            {!embedded && activeScreen !== "trial-exams" && (
+            {!embedded && (
                 <Panel>
-                  <div className="mt-4 grid gap-3 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-4">
+                <div className={`mt-4 grid gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 ${activeScreen === "trial-exams" ? "p-2" : "gap-3 p-4"}`}>
                     <div>
                       <b className="text-sm">
-                        ชุด {selectedExamSet?.name || "A"} · เพิ่มเอกสารข้อสอบ
-                        PDF
+                        {activeScreen === "trial-exams"
+                          ? "เพิ่มเอกสารข้อสอบ PDF"
+                          : `ชุด ${selectedExamSet?.name || "A"} · เพิ่มเอกสารข้อสอบ PDF`}
                       </b>
                       <p className="mt-1 text-xs text-slate-500">
                         {selectedExamProduct?.name || "เลือกชุดข้อสอบ"} ·
@@ -4545,9 +4635,10 @@ export default function WebBAdminDemo({
                     </div>
                     <div className="grid gap-1 text-xs font-semibold text-slate-600">
                       ชุดข้อสอบ
-                      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal text-slate-800">
-                        {selectedExamProduct?.name || "—"} · ชุด{" "}
-                        {selectedExamSet?.name || "A"}
+                      <div className={`rounded-xl border border-slate-200 bg-white ${activeScreen === "trial-exams" ? "px-2 py-1.5 text-xs" : "px-3 py-2.5 text-sm"} font-normal text-slate-800`}>
+                        {activeScreen === "trial-exams"
+                          ? selectedExamProduct?.name || "—"
+                          : `${selectedExamProduct?.name || "—"} · ชุด ${selectedExamSet?.name || "A"}`}
                       </div>
                     </div>
                     {selectedExamProduct &&
@@ -4649,7 +4740,9 @@ export default function WebBAdminDemo({
                     {examDocuments.filter(
                       (document) =>
                         document.productId === selectedExamProduct?.id &&
-                        document.examSet === selectedExamSet?.name,
+                        document.examSet === selectedExamSet?.name &&
+                        Boolean(document.trial) ===
+                          (activeScreen === "trial-exams"),
                     ).length > 0 && (
                       <div className="space-y-2 border-t border-slate-200 pt-3">
                         <b className="text-xs text-slate-600">เอกสารในรายการ</b>
@@ -4657,7 +4750,9 @@ export default function WebBAdminDemo({
                           .filter(
                             (document) =>
                               document.productId === selectedExamProduct?.id &&
-                              document.examSet === selectedExamSet?.name,
+                            document.examSet === selectedExamSet?.name &&
+                            Boolean(document.trial) ===
+                              (activeScreen === "trial-exams"),
                           )
                           .map((document) => (
                             <div
@@ -4669,8 +4764,9 @@ export default function WebBAdminDemo({
                                   {document.name}
                                 </b>
                                 <small className="text-slate-500">
-                                  {document.productName} · ชุด{" "}
-                                  {document.examSet}
+                                  {document.trial
+                                    ? document.productName
+                                    : `${document.productName} · ชุด ${document.examSet}`}
                                   {document.sectionTitle
                                     ? ` · ${document.sectionTitle}`
                                     : ""}{" "}
@@ -4706,43 +4802,45 @@ export default function WebBAdminDemo({
                                           : item,
                                       ),
                                     );
-                                    const hasPublishedDocument =
-                                      nextStatus === "เผยแพร่" ||
-                                      examDocuments.some(
-                                        (item) =>
-                                          item.id !== document.id &&
-                                          item.productId ===
-                                            document.productId &&
-                                          item.examSet === document.examSet &&
-                                          item.status === "เผยแพร่",
+                                    if (!document.trial) {
+                                      const hasPublishedDocument =
+                                        nextStatus === "เผยแพร่" ||
+                                        examDocuments.some(
+                                          (item) =>
+                                            item.id !== document.id &&
+                                            item.productId === document.productId &&
+                                            item.examSet === document.examSet &&
+                                            !item.trial &&
+                                            item.status === "เผยแพร่",
+                                        );
+                                      setExamSets((current) =>
+                                        current.map((set) =>
+                                          set.productId === document.productId &&
+                                          set.name === document.examSet
+                                            ? {
+                                                ...set,
+                                                contentStatus:
+                                                  hasPublishedDocument
+                                                    ? "เผยแพร่"
+                                                    : "รอตรวจ",
+                                              }
+                                            : set,
+                                        ),
                                       );
-                                    setExamSets((current) =>
-                                      current.map((set) =>
-                                        set.productId === document.productId &&
-                                        set.name === document.examSet
-                                          ? {
-                                              ...set,
-                                              contentStatus:
-                                                hasPublishedDocument
-                                                  ? "เผยแพร่"
-                                                  : "รอตรวจ",
-                                            }
-                                          : set,
-                                      ),
-                                    );
-                                    setProducts((current) =>
-                                      current.map((item) =>
-                                        item.id === document.productId
-                                          ? {
-                                              ...item,
-                                              contentStatus:
-                                                hasPublishedDocument
-                                                  ? "เผยแพร่"
-                                                  : "รอตรวจ",
-                                            }
-                                          : item,
-                                      ),
-                                    );
+                                      setProducts((current) =>
+                                        current.map((item) =>
+                                          item.id === document.productId
+                                            ? {
+                                                ...item,
+                                                contentStatus:
+                                                  hasPublishedDocument
+                                                    ? "เผยแพร่"
+                                                    : "รอตรวจ",
+                                              }
+                                            : item,
+                                        ),
+                                      );
+                                    }
                                     logAction(
                                       nextStatus === "เผยแพร่"
                                         ? "เผยแพร่ไฟล์ข้อสอบ"
@@ -4771,7 +4869,9 @@ export default function WebBAdminDemo({
                 >
                   <div className="shrink-0">
                     <h3 className="font-bold">
-                      เฉลยรายข้อ  ชุด {selectedExamSet?.name || "A"}
+                      {activeScreen === "trial-exams"
+                        ? "เฉลยรายข้อ"
+                        : `เฉลยรายข้อ ชุด ${selectedExamSet?.name || "A"}`}
                     </h3>
 
                     {answerKeyProductId === "tgat-full" && (
@@ -5067,7 +5167,7 @@ export default function WebBAdminDemo({
           title="คำสั่งซื้อและการชำระเงิน"
           detail="ค้นหาและตรวจสอบสถานะคำสั่งซื้อ และเปลี่ยนสถานะคำสั่งซื้อ"
           action={
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-nowrap items-center gap-2">
               {orderTabs}
               <Button variant="outline" onClick={exportOrders}>
                 ดาวน์โหลด CSV
@@ -5960,13 +6060,13 @@ export default function WebBAdminDemo({
                 Ranking
               </button>
             </div>
-            <p className="mb-4 text-xs leading-5 text-slate-500">
+            {/* <p className="mb-4 text-xs leading-5 text-slate-500">
               {resultsView === "overview"
                 ? "รายงานตัวอย่าง TGAT ชุด A · สมชายใช้คะแนนและวันสอบเดียวกับหน้าผลสอบผู้เรียน ส่วนรายชื่ออื่นใช้สาธิตการกรองข้อมูล"
                 : storedRankingRows.length
                   ? "รายการอันดับที่บันทึกในเบราว์เซอร์นี้ · กรองเทียบสินค้า ชุด และเวอร์ชันเดียวกัน"
                   : "อันดับตัวอย่าง TGAT ชุด A · แสดงเพื่อสาธิตตารางและตัวกรอง โดยจัดอันดับแยกตามสินค้า ชุด และเวอร์ชัน"}
-            </p>
+            </p> */}
             {resultsView === "overview" && (
               <div className="mb-5 space-y-4">
                 <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -6151,9 +6251,7 @@ export default function WebBAdminDemo({
                     </table>
                   </div>
                 </Panel>
-                <p className="rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-900">
-                  แถวและตัวกรองเป็นข้อมูลตัวอย่างหลังบ้านหลายรายการ · ตัวอย่างรายงานของสมชายอ้างอิงค่าที่ Client แสดงในหน้ารายงาน (60.7/100 และคะแนนรายพาร์ท 60.7 · 67.4 · 54.6) ส่วน Modal Ranking ของ Client คำนวณจากผลสอบที่ส่งสำเร็จใน Browser และอาจเริ่มต้นเป็นค่าว่าง · การเผยแพร่ในหน้านี้ไม่เปลี่ยนหน้าผู้เรียน
-                </p>
+
               </div>
             )}
             <div className="mb-4 flex flex-wrap items-end gap-4 rounded-xl bg-slate-50 p-4">
@@ -6315,8 +6413,9 @@ export default function WebBAdminDemo({
                       type="button"
                       onClick={() => setSelectedResultReport(null)}
                       className={adminSecondaryButtonClass}
+                      aria-label="ปิดรายงานผลสอบ"
                     >
-                      ปิด ×
+                      <LuX aria-hidden="true" className="size-4" />
                     </button>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -6476,8 +6575,9 @@ export default function WebBAdminDemo({
                       type="button"
                       className={adminSecondaryButtonClass}
                       onClick={() => setSelectedResultPart(null)}
+                      aria-label="ปิดคะแนนรายข้อ"
                     >
-                      ปิด ×
+                      <LuX aria-hidden="true" className="size-4" />
                     </button>
                   </div>
                   <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
@@ -6812,8 +6912,9 @@ export default function WebBAdminDemo({
                   type="button"
                   onClick={() => setSolutionDraft(null)}
                   className="rounded-lg px-3 py-2 text-sm font-semibold"
+                  aria-label="ปิดหน้าต่าง"
                 >
-                  ปิด ×
+                  <LuX aria-hidden="true" className="size-4" />
                 </button>
               </div>
               <form onSubmit={saveSolutionDraft} className="mt-4 space-y-4">
@@ -7035,7 +7136,7 @@ export default function WebBAdminDemo({
                   title="ปิด"
                   className={adminSecondaryButtonClass}
                 >
-                  ปิด ×
+                  <LuX aria-hidden="true" className="size-4" />
                 </button>
               </div>
               <div className="mt-5 space-y-4">
@@ -7087,44 +7188,53 @@ export default function WebBAdminDemo({
 
         <Section
           id="finance"
-          title="รายงานการเงิน"
-          detail="แยกราคาสินค้า ยอดที่เรียกเก็บ ค่าบริการ Payso และ VAT ของค่าบริการ"
-          headerNoWrap
+          title=""
+          detail=""
           actionEnabledWhenReadOnly
+          actionFullWidth
           action={
-            <div className="flex flex-wrap items-end gap-2 2xl:flex-nowrap">
-              <WebBThaiDatePicker
-                label="ตั้งแต่วันที่"
-                value={fromDate}
-                max={toDate || undefined}
-                onChange={setFromDate}
-                className="w-40 min-w-0 shrink-0"
-              />
-              <WebBThaiDatePicker
-                label="ถึงวันที่"
-                value={toDate}
-                min={fromDate || undefined}
-                onChange={setToDate}
-                className="w-40 min-w-0 shrink-0"
-              />
-              <Button
-                variant="outline"
-                onClick={() => {
-                  const now = new Date();
-                  setFromDate(
-                    toDateInputValue(
-                      new Date(now.getFullYear(), now.getMonth(), 1),
-                    ),
-                  );
-                  setToDate(toDateInputValue(now));
-                }}
-              >
-                เดือนนี้
-              </Button>
-              <Button variant="outline" onClick={exportOrders}>
-                ดาวน์โหลด CSV
-              </Button>
-            </div>
+            <Panel>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="mr-auto text-base font-bold text-slate-900">
+                  รายงานการเงิน
+                </h3>
+                <span className="text-xs font-semibold text-slate-500">
+                  ช่วงวันที่
+                </span>
+                <WebBThaiDatePicker
+                  label="ตั้งแต่วันที่"
+                  value={fromDate}
+                  max={toDate || undefined}
+                  onChange={setFromDate}
+                  className="!min-w-0 w-36 [&_.wb-flatpickr-label]:sr-only"
+                />
+                <span className="text-slate-400">–</span>
+                <WebBThaiDatePicker
+                  label="ถึงวันที่"
+                  value={toDate}
+                  min={fromDate || undefined}
+                  onChange={setToDate}
+                  className="!min-w-0 w-36 [&_.wb-flatpickr-label]:sr-only"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const now = new Date();
+                    setFromDate(
+                      toDateInputValue(
+                        new Date(now.getFullYear(), now.getMonth(), 1),
+                      ),
+                    );
+                    setToDate(toDateInputValue(now));
+                  }}
+                >
+                  เดือนนี้
+                </Button>
+                <Button variant="outline" onClick={exportOrders}>
+                  ดาวน์โหลด CSV
+                </Button>
+              </div>
+            </Panel>
           }
         >
           <Panel>
@@ -7421,8 +7531,9 @@ export default function WebBAdminDemo({
           title="Audit Log และเหตุการณ์ระบบ"
           detail="ตัวอย่างประวัติการเปลี่ยน Payment, สิทธิ์สอบ, ผลสอบ และการตั้งค่าของ Admin"
           actionEnabledWhenReadOnly
+          actionFullWidth
           action={
-            <div className="grid w-full gap-2 sm:grid-cols-[minmax(150px,1.2fr)_minmax(125px,.8fr)_minmax(145px,1fr)] xl:w-auto">
+            <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1.2fr)_minmax(170px,.8fr)_minmax(190px,1fr)_auto] xl:w-auto">
               <WebBAdminInput
                 value={auditQuery}
                 onChange={(event) => setAuditQuery(event.target.value)}
@@ -7450,6 +7561,23 @@ export default function WebBAdminDemo({
                 ariaLabel="กรองการกระทำ"
                 className="min-w-0"
               />
+              <Button
+                variant="outline"
+                onClick={() =>
+                  downloadCsv(
+                    "webb-audit-log.csv",
+                    ["วันเวลา", "ผู้ดำเนินการ", "การกระทำ", "รายการอ้างอิง"],
+                    filteredAuditLogs.map((log) => [
+                      formatThaiDateTimeValue(log.time),
+                      log.actor,
+                      log.action,
+                      log.target,
+                    ]),
+                  )
+                }
+              >
+                ดาวน์โหลด CSV
+              </Button>
             </div>
           }
         >
@@ -7461,6 +7589,7 @@ export default function WebBAdminDemo({
               }
               ariaLabel="ตาราง Audit Log"
               hideSearch
+              hideCsvExport
               emptyMessage="ไม่พบประวัติตามตัวกรองนี้"
               resetKey={auditQuery + auditActorFilter + auditActionFilter}
             >

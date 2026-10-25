@@ -7596,7 +7596,10 @@
   background: #f4f4f4;
 }
 .wb-subject-card h3 {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 6px;
   min-height: 47px;
   align-content: center;
   margin: 12px 0 8px;
@@ -7605,7 +7608,10 @@
   line-height: 1.15;
 }
 .wb-subject-card h3 span {
-  display: block;
+  display: inline;
+  color: #626779;
+  font-size: 0.82em;
+  font-weight: 600;
 }
 .wb-subject-card .wb-pill-button {
   width: 100%;

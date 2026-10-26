@@ -6100,6 +6100,99 @@
   color: #111;
   font-family: var(--font-sarabun), Arial, sans-serif;
 }
+.wb-preview-summary-page {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #f8f8f7;
+}
+.wb-preview-summary-card {
+  width: min(480px, 100%);
+  border: 1px solid #eee;
+  border-radius: 20px;
+  padding: 36px;
+  background: #fff;
+  box-shadow: 0 12px 40px #11110a0d;
+  text-align: center;
+}
+.wb-preview-summary-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 50%;
+  margin: 0 auto 18px;
+  background: #fff4bf;
+  color: #806300;
+  font-size: 25px;
+  font-weight: 800;
+}
+.wb-preview-summary-eyebrow {
+  margin: 0 0 8px;
+  color: #806300;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+.wb-preview-summary-card h1 {
+  margin: 0;
+  font-size: 25px;
+}
+.wb-preview-summary-description {
+  margin: 8px 0 24px;
+  color: #777;
+  font-size: 14px;
+}
+.wb-preview-summary-score {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px 0;
+  border-block: 1px solid #eee;
+}
+.wb-preview-summary-score strong {
+  font-size: 48px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.wb-preview-summary-score span {
+  color: #777;
+  font-size: 14px;
+}
+.wb-preview-summary-counts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 20px 0 24px;
+}
+.wb-preview-summary-counts > div {
+  display: grid;
+  gap: 3px;
+  border-radius: 12px;
+  padding: 13px;
+  background: #f8f8f7;
+}
+.wb-preview-summary-counts strong {
+  font-size: 19px;
+}
+.wb-preview-summary-counts span {
+  color: #777;
+  font-size: 12px;
+}
+.wb-preview-summary-close {
+  width: 100%;
+  min-height: 46px;
+  border: 0;
+  border-radius: 99px;
+  padding: 10px 18px;
+  background: #ffce00;
+  color: #111;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
 .wb-answer-header {
   display: grid;
   min-height: 72px;
@@ -6962,6 +7055,15 @@
   font-size: 21px;
 }
 @media (max-width: 800px) {
+  .wb-preview-summary-card {
+    padding: 28px 20px;
+  }
+  .wb-preview-summary-card h1 {
+    font-size: 22px;
+  }
+  .wb-preview-summary-score strong {
+    font-size: 42px;
+  }
   .wb-answer-header {
     min-height: 72px;
     grid-template-columns: minmax(0, 1fr) auto auto;

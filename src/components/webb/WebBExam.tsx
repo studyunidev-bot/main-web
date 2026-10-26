@@ -16,7 +16,46 @@ import {
 
 const TOTAL_QUESTIONS = TOTAL_MOCK_QUESTIONS;
 type ExamAnswer = string | string[];
+type PreviewAnswerKeyEntry = { value: string; score: number };
 const initialAnswers: Record<number, ExamAnswer> = {};
+
+function calculatePreviewScore(
+  answers: Record<number, ExamAnswer>,
+  answerKey: PreviewAnswerKeyEntry[],
+  questionCount: number,
+  scoreMaximum?: number,
+) {
+  const answerRows = answerKey.slice(0, questionCount);
+  const keyedCount = answerRows.filter((item) => item.value.trim()).length;
+  if (!keyedCount) return { score: null, keyStatus: "missing" as const };
+  if (answerRows.length < questionCount || keyedCount < questionCount)
+    return { score: null, keyStatus: "incomplete" as const };
+
+  const normalize = (value: string) => value
+    .trim()
+    .toUpperCase()
+    .split(/[,+\s/]+/)
+    .filter(Boolean)
+    .map((choice) => (({ A: "1", B: "2", C: "3", D: "4", E: "5" } as Record<string, string>)[choice] || choice))
+    .sort()
+    .join(",");
+  const earned = answerRows.reduce((total, item, index) => {
+    const selected = answers[index];
+    const choices = Array.isArray(selected) ? selected : selected === undefined ? [] : [selected];
+    const normalizedSelection = choices
+      .map((choice) => String(Number(choice) + 1))
+      .sort()
+      .join(",");
+    return total + (normalizedSelection === normalize(item.value) ? item.score : 0);
+  }, 0);
+  const maximum = scoreMaximum && scoreMaximum > 0
+    ? scoreMaximum
+    : answerRows.reduce((total, item) => total + item.score, 0);
+  return {
+    score: maximum > 0 ? Math.min(100, Math.round((earned / maximum) * 1000) / 10) : 0,
+    keyStatus: "ready" as const,
+  };
+}
 
 function clearTrialAttempt(resultKey: string, answerKey: string, startedAtKey: string) {
   try {
@@ -377,6 +416,8 @@ export default function WebBExam({
   examSet = "A",
   purchaseRef,
   previewMode = false,
+  previewAnswerKey = [],
+  previewScoreMaximum,
   onPreviewExit,
 }: {
   product: ExamProduct;
@@ -384,6 +425,8 @@ export default function WebBExam({
   examSet?: string;
   purchaseRef?: string;
   previewMode?: boolean;
+  previewAnswerKey?: PreviewAnswerKeyEntry[];
+  previewScoreMaximum?: number;
   onPreviewExit?: () => void;
 }) {
   const answerStorageKey = examAnswersStorageKey(product.id, examType, undefined, examSet);
@@ -402,6 +445,13 @@ export default function WebBExam({
     "checking" | "ready" | "submitted" | "timeout" | "unsupported"
   >("checking");
   const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [previewSummary, setPreviewSummary] = useState<{
+    score: number | null;
+    keyStatus: "ready" | "missing" | "incomplete";
+    answeredCount: number;
+    questionCount: number;
+    timedOut: boolean;
+  } | null>(null);
   const [answerPaperExpanded, setAnswerPaperExpanded] = useState(true);
   const [page, setPage] = useState(1);
   const [activeSectionIndex, setActiveSectionIndex] = useState(0);
@@ -493,6 +543,18 @@ export default function WebBExam({
   }, [resultKey, answerStorageKey, product.id, examType, examSet, purchaseRef, examPlan.hasSuppliedExam, previewMode]);
 
   useEffect(() => {
+    if (!previewMode) return;
+    const closeAfterSummary = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (previewSummary) onPreviewExit?.();
+    };
+    window.addEventListener("keydown", closeAfterSummary);
+    return () => window.removeEventListener("keydown", closeAfterSummary);
+  }, [previewMode, previewSummary, onPreviewExit]);
+
+  useEffect(() => {
     if (previewMode) {
       setAnswers({});
       const nextDeadline = Date.now() + examDurationSeconds * 1000;
@@ -575,6 +637,14 @@ export default function WebBExam({
     if (remaining !== 0 || attemptStatus !== "ready") return;
     if (previewMode) {
       setConfirmSubmit(false);
+      const result = calculatePreviewScore(answers, previewAnswerKey, questionCount, previewScoreMaximum);
+      setPreviewSummary({
+        score: result.score,
+        keyStatus: result.keyStatus,
+        answeredCount,
+        questionCount,
+        timedOut: true,
+      });
       setAttemptStatus("timeout");
       return;
     }
@@ -655,7 +725,14 @@ export default function WebBExam({
     if (attemptStatus !== "ready") return;
     if (previewMode) {
       setConfirmSubmit(false);
-      onPreviewExit?.();
+      const result = calculatePreviewScore(answers, previewAnswerKey, questionCount, previewScoreMaximum);
+      setPreviewSummary({
+        score: result.score,
+        keyStatus: result.keyStatus,
+        answeredCount,
+        questionCount,
+        timedOut: false,
+      });
       return;
     }
     if (examType === "trial") {
@@ -693,6 +770,42 @@ export default function WebBExam({
     );
   }
 
+  if (previewMode && previewSummary) {
+    return (
+      <main className="wb-answer-page wb-preview-summary-page" aria-labelledby="wb-preview-summary-title">
+        <section className="wb-preview-summary-card">
+          <span className="wb-preview-summary-icon" aria-hidden="true">✓</span>
+          <h1 id="wb-preview-summary-title">ทำข้อสอบเสร็จแล้ว</h1>
+          {previewSummary.keyStatus !== "ready" && (
+            <p className="wb-preview-summary-eyebrow">PREVIEW · โหมดทดสอบ</p>
+          )}
+          <p className="wb-preview-summary-description">
+            {previewSummary.keyStatus === "missing"
+              ? "ยังไม่ลงเฉลยสำหรับข้อมูลนี้"
+              : previewSummary.keyStatus === "incomplete"
+                ? "เฉลยยังไม่ครบ จึงยังสรุปคะแนนไม่ได้"
+                : previewSummary.timedOut
+                  ? "หมดเวลาทดลองสอบแล้ว"
+                  : "นี่คือผลคะแนนจากการทดลองทำข้อสอบครั้งนี้"}
+          </p>
+          {previewSummary.score !== null && (
+            <div className="wb-preview-summary-score">
+              <strong>{previewSummary.score}</strong>
+              <span>/ 100 คะแนน</span>
+            </div>
+          )}
+          <div className="wb-preview-summary-counts">
+            <div><strong>{previewSummary.answeredCount}</strong><span>ข้อที่ตอบ</span></div>
+            <div><strong>{Math.max(0, previewSummary.questionCount - previewSummary.answeredCount)}</strong><span>ข้อที่ยังไม่ตอบ</span></div>
+          </div>
+          <button type="button" className="wb-preview-summary-close" onClick={() => onPreviewExit?.()}>
+            ปิด Preview
+          </button>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="wb-answer-page">
       <header className="wb-answer-header">
@@ -720,7 +833,7 @@ export default function WebBExam({
           className="wb-answer-submit"
           onClick={() => setConfirmSubmit(true)}
         >
-          {previewMode ? "จบ Preview" : "ส่งคำตอบ"}
+         ส่งคำตอบ
         </button>
       </header>
 
@@ -795,8 +908,8 @@ export default function WebBExam({
             <span className="wb-confirm-icon" aria-hidden="true">
               ✏️
             </span>
-            <h2 id="wb-confirm-title">{previewMode ? "สิ้นสุด Preview?" : "ยืนยันการส่งคำตอบ?"}</h2>
-            <p>{previewMode ? "การทดลองทำข้อสอบนี้จะไม่บันทึกคำตอบหรือผลสอบ" : "เมื่อส่งแล้วจะไม่สามารถกลับมาแก้ไขได้"}</p>
+            <h2 id="wb-confirm-title">{previewMode ? "จบการทดลองสอบ?" : "ยืนยันการส่งคำตอบ?"}</h2>
+            <p>{previewMode ? "ระบบจะแสดงสรุปคะแนน โดยไม่บันทึกเป็นผลสอบจริง" : "เมื่อส่งแล้วจะไม่สามารถกลับมาแก้ไขได้"}</p>
             <div className="wb-confirm-actions">
               <button
                 type="button"
@@ -810,7 +923,7 @@ export default function WebBExam({
                 className="wb-confirm-send"
                 onClick={submit}
               >
-                {previewMode ? "ปิด Preview" : "ยืนยันส่งคำตอบ"}
+                {previewMode ? "ดูสรุปคะแนน" : "ยืนยันส่งคำตอบ"}
               </button>
             </div>
           </section>

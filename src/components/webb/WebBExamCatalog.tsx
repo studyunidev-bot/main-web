@@ -451,6 +451,8 @@ export default function WebBExamCatalog({
   });
   const [imagePreview, setImagePreview] = useState<ImagePreview | null>(null);
   const [examPreviewProductId, setExamPreviewProductId] = useState<string | null>(null);
+  const [examPreviewSettings, setExamPreviewSettings] = useState<CatalogPartSettings | null>(null);
+  const [examPreviewSetName, setExamPreviewSetName] = useState("A");
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [previewChoices, setPreviewChoices] = useState<Record<string, string>>(
     {},
@@ -541,13 +543,8 @@ export default function WebBExamCatalog({
     if (!examPreviewProductId) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setExamPreviewProductId(null);
-    };
-    window.addEventListener("keydown", closeOnEscape);
     return () => {
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", closeOnEscape);
     };
   }, [examPreviewProductId]);
 
@@ -1077,6 +1074,8 @@ export default function WebBExamCatalog({
       setMessage(`ยังไม่มีไฟล์ข้อสอบสำหรับ Preview ของ ${part} ชุด ${selectedSet.name}`);
       return;
     }
+    setExamPreviewSettings(selectedSet.partSettings?.[part] || null);
+    setExamPreviewSetName(selectedSet.name);
     setExamPreviewProductId(productId);
   }
 
@@ -3716,8 +3715,10 @@ export default function WebBExamCatalog({
             <WebBExam
               key={`preview-${examPreviewProductId}`}
               product={examProduct}
-              examSet="A"
+              examSet={examPreviewSetName}
               previewMode
+              previewAnswerKey={examPreviewSettings?.answers || []}
+              previewScoreMaximum={examPreviewSettings?.scoreMaximum}
               onPreviewExit={() => setExamPreviewProductId(null)}
             />
           </div>,

@@ -68,6 +68,7 @@ import WebBAdminTable, {
 import WebBModalPortal from "./WebBModalPortal";
 import WebBAdminClientReference from "./WebBAdminClientReference";
 import WebBDashboardMetrics from "./WebBDashboardMetrics";
+import { ExamPartDetails } from "./WebBStudentArea";
 import WebBTrendChart, { type TrendMetric, type TrendPoint } from "./WebBTrendChart";
 import { TOTAL_MOCK_QUESTIONS } from "./mock-exam-questions";
 import { Badge, Button, Panel } from "./WebBAdminPrimitives";
@@ -237,10 +238,16 @@ type DemoSolution = {
 type ResultOverviewRow = {
   id: string;
   student: string;
+  citizenId: string;
   grade: string;
+  school: string;
   province: string;
   submittedAt: string;
+  duration: string;
+  rank: number;
+  rankTotal: number;
   product: string;
+  packageName: string;
   set: string;
   total: number;
   tgat1: number;
@@ -248,6 +255,31 @@ type ResultOverviewRow = {
   tgat3: number;
   status: string;
 };
+
+const thaiResultMonths: Record<string, number> = {
+  "ม.ค.": 1,
+  "ก.พ.": 2,
+  "มี.ค.": 3,
+  "เม.ย.": 4,
+  "พ.ค.": 5,
+  "มิ.ย.": 6,
+  "ก.ค.": 7,
+  "ส.ค.": 8,
+  "ก.ย.": 9,
+  "ต.ค.": 10,
+  "พ.ย.": 11,
+  "ธ.ค.": 12,
+};
+
+function thaiResultDateKey(value: string) {
+  const [dayText, monthText, yearText] = value.trim().split(/\s+/);
+  const month = thaiResultMonths[monthText];
+  const day = Number(dayText);
+  const year = Number(yearText) - 543;
+  if (!month || !Number.isInteger(day) || !Number.isInteger(year)) return "";
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 type PermissionResource =
   | "overview"
   | "exams"
@@ -1223,10 +1255,14 @@ export default function WebBAdminDemo({
   const [resultProductFilter, setResultProductFilter] =
     useState("ทุกประเภทสอบ");
   const [resultSetFilter, setResultSetFilter] = useState("ทุกชุด");
+  const [resultPackageFilter, setResultPackageFilter] = useState("ทุกแพ็กเกจ");
   const [resultGradeFilter, setResultGradeFilter] = useState("ทุกระดับชั้น");
   const [resultProvinceFilter, setResultProvinceFilter] =
     useState("ทุกจังหวัด");
-  const [resultTimeFilter, setResultTimeFilter] = useState("ทุกช่วงเวลา");
+  const [resultStatusFilter, setResultStatusFilter] = useState("ทุกสถานะ");
+  const [resultSearch, setResultSearch] = useState("");
+  const [resultDateFrom, setResultDateFrom] = useState("");
+  const [resultDateTo, setResultDateTo] = useState("");
   useEffect(() => {
     if (!solutionDraft && !(offerTable && examView === "detail")) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1935,10 +1971,16 @@ export default function WebBAdminDemo({
     {
       id: "RES-1001",
       student: "สมชาย ศิริกุล",
+      citizenId: "1-67**-*****-34-1",
       grade: "ม.6",
+      school: "โรงเรียนตัวอย่างวิทยา",
       province: "ขอนแก่น",
       submittedAt: "15 ก.ค. 2569",
+      duration: "2 ชั่วโมง 41 นาที",
+      rank: 415,
+      rankTotal: 2709,
       product: "TGAT",
+      packageName: "Full TGAT",
       set: "A",
       total: 60.7,
       tgat1: 60.7,
@@ -1949,10 +1991,16 @@ export default function WebBAdminDemo({
     {
       id: "RES-1002",
       student: "ณิชา วัฒนกุล",
+      citizenId: "1-67**-*****-25-2",
       grade: "ม.6",
+      school: "โรงเรียนตัวอย่างเชียงใหม่",
       province: "เชียงใหม่",
       submittedAt: "4 ต.ค. 2569",
+      duration: "2 ชั่วโมง 18 นาที",
+      rank: 150,
+      rankTotal: 2709,
       product: "TGAT",
+      packageName: "Full TGAT",
       set: "A",
       total: 71.2,
       tgat1: 74.0,
@@ -1963,10 +2011,16 @@ export default function WebBAdminDemo({
     {
       id: "RES-1003",
       student: "ธนกร พิพัฒน์กุล",
+      citizenId: "1-67**-*****-19-3",
       grade: "ม.5",
+      school: "โรงเรียนขอนแก่นวิทยา",
       province: "ขอนแก่น",
       submittedAt: "3 ต.ค. 2569",
+      duration: "2 ชั่วโมง 35 นาที",
+      rank: 600,
+      rankTotal: 2709,
       product: "TGAT",
+      packageName: "Full TGAT",
       set: "A",
       total: 58.3,
       tgat1: 62.5,
@@ -1977,10 +2031,16 @@ export default function WebBAdminDemo({
     {
       id: "RES-1004",
       student: "พิมพ์ชนก สุขใจ",
+      citizenId: "1-67**-*****-53-4",
       grade: "ม.6",
+      school: "โรงเรียนตัวอย่างเชียงใหม่",
       province: "เชียงใหม่",
       submittedAt: "2 ต.ค. 2569",
+      duration: "2 ชั่วโมง 22 นาที",
+      rank: 207,
+      rankTotal: 2709,
       product: "TGAT",
+      packageName: "Full TGAT",
       set: "A",
       total: 66.5,
       tgat1: 69.2,
@@ -1989,22 +2049,80 @@ export default function WebBAdminDemo({
       status: "ส่งสำเร็จ",
     },
   ];
-  const filteredResultRows = resultOverviewRows.filter(
-    (row) =>
-      (resultProductFilter === "ทุกประเภทสอบ" ||
+  const resultFilterOptions = {
+    products: Array.from(new Set(resultOverviewRows.map((row) => row.product))).sort(
+      (left, right) => left.localeCompare(right, "th"),
+    ),
+    sets: Array.from(new Set(resultOverviewRows.map((row) => row.set))).sort(
+      (left, right) => left.localeCompare(right, "th"),
+    ),
+    packages: Array.from(new Set(resultOverviewRows.map((row) => row.packageName))).sort(
+      (left, right) => left.localeCompare(right, "th"),
+    ),
+    grades: Array.from(new Set(resultOverviewRows.map((row) => row.grade))).sort(
+      (left, right) => left.localeCompare(right, "th"),
+    ),
+    provinces: Array.from(
+      new Set(resultOverviewRows.map((row) => row.province)),
+    ).sort((left, right) => left.localeCompare(right, "th")),
+    statuses: Array.from(new Set(resultOverviewRows.map((row) => row.status))).sort(
+      (left, right) => left.localeCompare(right, "th"),
+    ),
+  };
+  const isScopedSetResults =
+    activeScreen === "exam-management" && embedded && examTab === "results";
+  const selectedResultScoreLabel =
+    !isScopedSetResults || selectedExamProductId === "tgat-full"
+      ? "คะแนนรวม"
+      : selectedExamProduct?.name || "คะแนน";
+  const selectedResultScoreMaximum =
+    isScopedSetResults && selectedExamProductId === "tgat23" ? 200 : 100;
+  const resultScoreForRow = (row: ResultOverviewRow) => {
+    if (!isScopedSetResults) return row.total;
+    if (selectedExamProductId === "tgat1") return row.tgat1;
+    if (selectedExamProductId === "tgat2") return row.tgat2;
+    if (selectedExamProductId === "tgat3") return row.tgat3;
+    if (selectedExamProductId === "tgat23") return row.tgat2 + row.tgat3;
+    return row.total;
+  };
+  const normalizedResultSearch = resultSearch.trim().toLocaleLowerCase("th");
+  const filteredResultRows = resultOverviewRows.filter((row) => {
+    const submittedDate = thaiResultDateKey(row.submittedAt);
+    const matchesSearch =
+      !normalizedResultSearch ||
+      [row.student, row.id, row.product, row.packageName, row.set]
+        .join(" ")
+        .toLocaleLowerCase("th")
+        .includes(normalizedResultSearch);
+    return (
+      matchesSearch &&
+      (isScopedSetResults ||
+        resultProductFilter === "ทุกประเภทสอบ" ||
         row.product === resultProductFilter) &&
-      (resultSetFilter === "ทุกชุด" || row.set === resultSetFilter) &&
+      (isScopedSetResults || resultSetFilter === "ทุกชุด" ||
+        row.set === resultSetFilter) &&
+      (isScopedSetResults || resultPackageFilter === "ทุกแพ็กเกจ" ||
+        row.packageName === resultPackageFilter) &&
       (resultGradeFilter === "ทุกระดับชั้น" ||
         row.grade === resultGradeFilter) &&
       (resultProvinceFilter === "ทุกจังหวัด" ||
         row.province === resultProvinceFilter) &&
-      (resultTimeFilter === "ทุกช่วงเวลา" ||
-        row.submittedAt === resultTimeFilter),
-  );
+      (resultStatusFilter === "ทุกสถานะ" ||
+        row.status === resultStatusFilter) &&
+      (!resultDateFrom || submittedDate >= resultDateFrom) &&
+      (!resultDateTo || submittedDate <= resultDateTo)
+    );
+  });
   const averageResultScore = filteredResultRows.length
-    ? filteredResultRows.reduce((sum, row) => sum + row.total, 0) /
+    ? filteredResultRows.reduce((sum, row) => sum + resultScoreForRow(row), 0) /
       filteredResultRows.length
     : 0;
+  const highestResultScore = filteredResultRows.length
+    ? Math.max(...filteredResultRows.map(resultScoreForRow))
+    : null;
+  const successfulResultCount = filteredResultRows.filter(
+    (row) => row.status === "ส่งสำเร็จ",
+  ).length;
 
   function hasActiveAttempt(productName: string) {
     return attempts.some(
@@ -2828,7 +2946,8 @@ export default function WebBAdminDemo({
           embedded &&
           !hideProductSelector &&
           !offerTable &&
-          examTab !== "overview" && (
+          examTab !== "overview" &&
+          examTab !== "results" && (
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <label className="block max-w-xl text-sm font-semibold text-slate-700">
                 ดูรายละเอียดสินค้า / พาร์ท
@@ -5953,93 +6072,83 @@ export default function WebBAdminDemo({
           </Panel>
         </Section>
 
-        <Section
-          id="results"
-          title="ผลสอบและ Ranking"
-          detail="ตรวจผล Ranking และสื่อเฉลยจากข้อมูลตัวอย่างของหลังบ้าน · สถานะเผยแพร่ใช้แสดงในหน้านี้เท่านั้น"
-        >
+        <Section id="results" title="">
           <Panel>
-            {selectedExamProduct && (
-              <div className="mb-4">
-                <WebBAdminClientReference
-                  productId={selectedExamProduct.id}
-                  examSet={selectedExamSet?.name || "A"}
-                  trial={false}
-                  section="results"
-                />
-              </div>
-            )}
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <b>
-                  ข้อมูลผลสอบ {selectedExamProduct?.name || "TGAT"} · ชุด{" "}
-                  {answerKeySetName}
+                  {isScopedSetResults
+                    ? "ผลสอบ TGAT ชุด A"
+                    : "ผลสอบรวมทุกประเภทและทุกชุด"}
                 </b>
                 <p className="mt-1 text-xs text-slate-500">
-                  ตารางนี้กรองตามสินค้าที่เลือก ·
-                  ข้อมูลผู้เข้าสอบจำลองเพื่อการนำเสนอ
+                  ข้อมูลผลสอบเป็น Mockup · เลือกดูรายงานเพื่อเปิดรายละเอียดผู้เข้าสอบ
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    const recalculatedAt = formatThaiDateTimeValue(new Date());
-                    setAttempts((current) =>
-                      current.map((a) =>
-                        a.status === "ส่งแล้ว" &&
-                        (!selectedExamProduct ||
-                          matchesSelectedExam(a.product)) &&
-                        a.product.includes("ชุด " + answerKeySetName)
-                          ? {
-                              ...a,
-                              events: [
-                                ...(a.events || []),
-                                {
-                                  time: recalculatedAt,
-                                  action: "คำนวณคะแนนใหม่",
-                                  detail:
-                                    "ชุด " +
-                                    answerKeySetName +
-                                    " · คะแนน " +
-                                    a.score,
-                                },
-                              ],
-                            }
-                          : a,
-                      ),
-                    );
-                    logAction(
-                      "บันทึกเหตุการณ์ตรวจคะแนนจำลอง",
-                      (selectedExamProduct?.name || "TGAT") +
-                        " · ชุด " +
-                        answerKeySetName,
-                    );
-                  }}
-                >
-                  บันทึกเหตุการณ์ตรวจคะแนน
-                </Button>
-                <Button
-                  onClick={() => {
-                    const next = !publishedResults;
-                    setPublishedResults(next);
-                    setDemoResultsPublished(next);
-                    logAction(
-                      next
-                        ? "เผยแพร่ผลสอบทุกชุด"
-                        : "พักการเผยแพร่ผลสอบทุกชุด",
-                      "ทุกสินค้าและทุกชุด · ข้อมูลหลังบ้าน",
-                    );
-                  }}
-                >
-                  {publishedResults ? "พักผลสอบทุกชุด" : "เผยแพร่ผลสอบทุกชุด"}
-                </Button>
+                {activeScreen !== "results" && !isScopedSetResults && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const recalculatedAt = formatThaiDateTimeValue(new Date());
+                      setAttempts((current) =>
+                        current.map((a) =>
+                          a.status === "ส่งแล้ว" &&
+                          (!selectedExamProduct ||
+                            matchesSelectedExam(a.product)) &&
+                          a.product.includes("ชุด " + answerKeySetName)
+                            ? {
+                                ...a,
+                                events: [
+                                  ...(a.events || []),
+                                  {
+                                    time: recalculatedAt,
+                                    action: "คำนวณคะแนนใหม่",
+                                    detail:
+                                      "ชุด " +
+                                      answerKeySetName +
+                                      " · คะแนน " +
+                                      a.score,
+                                  },
+                                ],
+                              }
+                            : a,
+                        ),
+                      );
+                      logAction(
+                        "บันทึกเหตุการณ์ตรวจคะแนนจำลอง",
+                        (selectedExamProduct?.name || "TGAT") +
+                          " · ชุด " +
+                          answerKeySetName,
+                      );
+                    }}
+                  >
+                    บันทึกเหตุการณ์ตรวจคะแนน
+                  </Button>
+                )}
+                {activeScreen !== "results" && !isScopedSetResults && (
+                  <Button
+                    onClick={() => {
+                      const next = !publishedResults;
+                      setPublishedResults(next);
+                      setDemoResultsPublished(next);
+                      logAction(
+                        next
+                          ? "เผยแพร่ผลสอบทุกชุด"
+                          : "พักการเผยแพร่ผลสอบทุกชุด",
+                        "ทุกสินค้าและทุกชุด · ข้อมูลหลังบ้าน",
+                      );
+                    }}
+                  >
+                    {publishedResults ? "พักผลสอบทุกชุด" : "เผยแพร่ผลสอบทุกชุด"}
+                  </Button>
+                )}
               </div>
             </div>
             <div
               className="mb-4 flex gap-2 border-b border-slate-200 pb-2"
               role="tablist"
-              aria-label="ผลสอบผู้เรียน"
+              aria-label="ภาพรวมผลสอบและ Ranking"
             >
               <button
                 type="button"
@@ -6069,36 +6178,106 @@ export default function WebBAdminDemo({
             </p> */}
             {resultsView === "overview" && (
               <div className="mb-5 space-y-4">
-                <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-5">
+                <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-4">
                   <label className="text-xs font-semibold">
-                    ประเภทสอบ
+                    ค้นหาผู้เข้าสอบ / รหัสผลสอบ
                     <div className="mt-1">
-                      <AdminSelect
-                        value={resultProductFilter}
-                        onChange={setResultProductFilter}
-                        options={["ทุกประเภทสอบ", "TGAT"].map((value) => ({ value, label: value }))}
-                        ariaLabel="กรองประเภทสอบ"
+                      <WebBAdminInput
+                        value={resultSearch}
+                        onChange={(event) => setResultSearch(event.target.value)}
+                        placeholder="ชื่อผู้สอบหรือ RES-1001"
+                        aria-label="ค้นหาผู้เข้าสอบหรือรหัสผลสอบ"
                       />
                     </div>
                   </label>
-                  <label className="text-xs font-semibold">
-                    ชุดข้อสอบ
-                    <div className="mt-1">
-                      <AdminSelect
-                        value={resultSetFilter}
-                        onChange={setResultSetFilter}
-                        options={["ทุกชุด", "A"].map((value) => ({ value, label: value }))}
-                        ariaLabel="กรองชุดข้อสอบ"
-                      />
-                    </div>
-                  </label>
+                  {isScopedSetResults && (
+                    <label className="text-xs font-semibold">
+                      ค้นหาสินค้า / พาร์ท
+                      <div className="mt-1">
+                        <AdminSelect
+                          value={selectedExamProductId}
+                          onChange={selectManagedExamProduct}
+                          options={examProducts.map((product) => ({
+                            value: product.id,
+                            label:
+                              product.id === "tgat-full"
+                                ? "ทั้งหมด · รวม TGAT1–3 · ชุด A"
+                                : `${product.name} · ชุด A`,
+                          }))}
+                          placeholder="ค้นหาสินค้าหรือพาร์ท"
+                          ariaLabel="ค้นหาสินค้าหรือพาร์ทในชุด A"
+                        />
+                      </div>
+                    </label>
+                  )}
+                  {!isScopedSetResults && (
+                    <>
+                      <label className="text-xs font-semibold">
+                        ประเภทสอบ
+                        <div className="mt-1">
+                          <AdminSelect
+                            value={resultProductFilter}
+                            onChange={setResultProductFilter}
+                            options={[
+                              { value: "ทุกประเภทสอบ", label: "ทุกประเภทสอบ" },
+                              ...resultFilterOptions.products.map((value) => ({
+                                value,
+                                label: value,
+                              })),
+                            ]}
+                            ariaLabel="กรองประเภทสอบ"
+                          />
+                        </div>
+                      </label>
+                      <label className="text-xs font-semibold">
+                        ชุดข้อสอบ
+                        <div className="mt-1">
+                          <AdminSelect
+                            value={resultSetFilter}
+                            onChange={setResultSetFilter}
+                            options={[
+                              { value: "ทุกชุด", label: "ทุกชุด" },
+                              ...resultFilterOptions.sets.map((value) => ({
+                                value,
+                                label: `ชุด ${value}`,
+                              })),
+                            ]}
+                            ariaLabel="กรองชุดข้อสอบ"
+                          />
+                        </div>
+                      </label>
+                      <label className="text-xs font-semibold">
+                        แพ็กเกจ
+                        <div className="mt-1">
+                          <AdminSelect
+                            value={resultPackageFilter}
+                            onChange={setResultPackageFilter}
+                            options={[
+                              { value: "ทุกแพ็กเกจ", label: "ทุกแพ็กเกจ" },
+                              ...resultFilterOptions.packages.map((value) => ({
+                                value,
+                                label: value,
+                              })),
+                            ]}
+                            ariaLabel="กรองแพ็กเกจผลสอบ"
+                          />
+                        </div>
+                      </label>
+                    </>
+                  )}
                   <label className="text-xs font-semibold">
                     ระดับชั้น
                     <div className="mt-1">
                       <AdminSelect
                         value={resultGradeFilter}
                         onChange={setResultGradeFilter}
-                        options={["ทุกระดับชั้น", "ม.5", "ม.6"].map((value) => ({ value, label: value }))}
+                        options={[
+                          { value: "ทุกระดับชั้น", label: "ทุกระดับชั้น" },
+                          ...resultFilterOptions.grades.map((value) => ({
+                            value,
+                            label: value,
+                          })),
+                        ]}
                         ariaLabel="กรองระดับชั้น"
                       />
                     </div>
@@ -6109,22 +6288,69 @@ export default function WebBAdminDemo({
                       <AdminSelect
                         value={resultProvinceFilter}
                         onChange={setResultProvinceFilter}
-                        options={["ทุกจังหวัด", ...Array.from(new Set(resultOverviewRows.map((row) => row.province)))].map((value) => ({ value, label: value }))}
+                        options={[
+                          { value: "ทุกจังหวัด", label: "ทุกจังหวัด" },
+                          ...resultFilterOptions.provinces.map((value) => ({
+                            value,
+                            label: value,
+                          })),
+                        ]}
                         ariaLabel="กรองจังหวัด"
                       />
                     </div>
                   </label>
                   <label className="text-xs font-semibold">
-                    ช่วงเวลาส่งผล
+                    สถานะผลสอบ
                     <div className="mt-1">
                       <AdminSelect
-                        value={resultTimeFilter}
-                        onChange={setResultTimeFilter}
-                        options={["ทุกช่วงเวลา", ...Array.from(new Set(resultOverviewRows.map((row) => row.submittedAt)))].map((value) => ({ value, label: value }))}
-                        ariaLabel="กรองช่วงเวลาส่งผล"
+                        value={resultStatusFilter}
+                        onChange={setResultStatusFilter}
+                        options={[
+                          { value: "ทุกสถานะ", label: "ทุกสถานะ" },
+                          ...resultFilterOptions.statuses.map((value) => ({
+                            value,
+                            label: value,
+                          })),
+                        ]}
+                        ariaLabel="กรองสถานะผลสอบ"
                       />
                     </div>
                   </label>
+                  <WebBThaiDatePicker
+                    label="ส่งผลตั้งแต่วันที่"
+                    value={resultDateFrom}
+                    max={resultDateTo || undefined}
+                    onChange={setResultDateFrom}
+                    className="!min-w-0"
+                  />
+                  <WebBThaiDatePicker
+                    label="ส่งผลถึงวันที่"
+                    value={resultDateTo}
+                    min={resultDateFrom || undefined}
+                    onChange={setResultDateTo}
+                    className="!min-w-0"
+                  />
+                  <div className="flex items-end">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setResultSearch("");
+                        setResultProductFilter("ทุกประเภทสอบ");
+                        setResultSetFilter("ทุกชุด");
+                        setResultPackageFilter("ทุกแพ็กเกจ");
+                        setResultGradeFilter("ทุกระดับชั้น");
+                        setResultProvinceFilter("ทุกจังหวัด");
+                        setResultStatusFilter("ทุกสถานะ");
+                        setResultDateFrom("");
+                        setResultDateTo("");
+                        if (isScopedSetResults) {
+                          selectManagedExamProduct("tgat-full");
+                        }
+                      }}
+                    >
+                      ล้างตัวกรอง
+                    </Button>
+                  </div>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <article className="rounded-xl border border-slate-200 p-4">
@@ -6133,122 +6359,76 @@ export default function WebBAdminDemo({
                       {filteredResultRows.length}
                     </b>
                     <span className="text-xs text-slate-500">
-                      รายการส่งสำเร็จ
+                      รายการตามตัวกรอง
                     </span>
                   </article>
                   <article className="rounded-xl border border-slate-200 p-4">
-                    <p className="text-xs text-slate-500">คะแนนรวมเฉลี่ย</p>
+                    <p className="text-xs text-slate-500">
+                      {isScopedSetResults && selectedExamProductId !== "tgat-full"
+                        ? `คะแนนเฉลี่ย · ${selectedExamProduct?.name || "พาร์ทที่เลือก"}`
+                        : "คะแนนรวมเฉลี่ย"}
+                    </p>
                     <b className="mt-1 block text-2xl">
                       {averageResultScore.toFixed(1)}
-                      <small className="text-sm">/100</small>
+                      <small className="text-sm">/{selectedResultScoreMaximum}</small>
                     </b>
                     <span className="text-xs text-slate-500">
                       จากรายการที่กรอง
                     </span>
                   </article>
                   <article className="rounded-xl border border-slate-200 p-4">
-                    <p className="text-xs text-slate-500">
-                      พาร์ทที่รวมในรายงาน
-                    </p>
-                    <b className="mt-1 block text-lg">TGAT1 · TGAT2 · TGAT3</b>
-                    <span className="text-xs text-slate-500">
-                      60 · 80 · 60 ข้อ
-                    </span>
+                    <p className="text-xs text-slate-500">คะแนนสูงสุด</p>
+                    <b className="mt-1 block text-2xl">
+                      {highestResultScore === null
+                        ? "—"
+                        : `${highestResultScore.toFixed(1)}/${selectedResultScoreMaximum}`}
+                    </b>
+                    <span className="text-xs text-slate-500">จากผลสอบหลังกรอง</span>
                   </article>
                   <article className="rounded-xl border border-slate-200 p-4">
-                    <p className="text-xs text-slate-500">Ranking</p>
-                    <b className="mt-1 block text-2xl">
-                      {rankingExampleRows.length}
-                    </b>
-                    <span className="text-xs text-slate-500">
-                      แสดงในแท็บ Ranking
-                    </span>
+                    <p className="text-xs text-slate-500">ส่งผลสำเร็จ</p>
+                    <b className="mt-1 block text-2xl">{successfulResultCount}</b>
+                    <span className="text-xs text-slate-500">รายการหลังกรอง</span>
                   </article>
                 </div>
                 <Panel className="p-0">
-                  <div className="flex flex-wrap items-center justify-between gap-2 p-4">
-                    <div>
-                      <h3 className="font-bold">รายการผลสอบ</h3>
-                      <p className="mt-1 text-xs text-slate-500">
-                        ดูรายงานรายบุคคลจากแถวที่เลือก
-                      </p>
+                  <div className="p-4">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h3 className="font-bold">ผลสอบรายบุคคลตามตัวกรอง</h3>
+                        <p className="mt-1 text-xs text-slate-500">แสดงรายการที่ตรงกับประเภทสอบ ชุด และแพ็กเกจที่เลือกทันที</p>
+                      </div>
+                      <Badge tone="blue">{filteredResultRows.length} ผู้เข้าสอบ</Badge>
                     </div>
-                    <Badge tone="blue">
-                      {filteredResultRows.length} รายการ
-                    </Badge>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[900px] text-left">
-                      <thead className="bg-slate-50">
-                        <tr>
-                          {[
-                            "ส่งเมื่อ",
-                            "ผู้เข้าสอบ",
-                            "ระดับชั้น / จังหวัด",
-                            "ประเภท / ชุด",
-                            "รวม",
-                            "TGAT1",
-                            "TGAT2",
-                            "TGAT3",
-                            "สถานะ",
-                            "รายงาน",
-                          ].map((heading) => (
-                            <th className={th} key={heading}>
-                              {heading}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredResultRows.map((row) => (
-                          <tr key={row.id}>
-                            <td className={td}>{row.submittedAt}</td>
-                            <td className={td}>
-                              <b>{row.student}</b>
-                              <small className="mt-1 block text-xs text-slate-400">
-                                {row.id}
-                              </small>
-                            </td>
-                            <td className={td}>
-                              {row.grade}
-                              <small className="mt-1 block text-xs text-slate-500">
-                                {row.province}
-                              </small>
-                            </td>
-                            <td className={td}>
-                              {row.product} · ชุด {row.set}
-                            </td>
-                            <td className={td}>
-                              <b>{row.total.toFixed(1)}/100</b>
-                            </td>
-                            <td className={td}>{row.tgat1}</td>
-                            <td className={td}>{row.tgat2}</td>
-                            <td className={td}>{row.tgat3}</td>
-                            <td className={td}>
-                              <Badge tone="green">{row.status}</Badge>
-                            </td>
-                            <td className={td}>
-                              <Button
-                                variant="outline"
-                                onClick={() => setSelectedResultReport(row)}
-                              >
-                                ดูรายงาน
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                        {filteredResultRows.length === 0 && (
-                          <tr>
-                            <td
-                              colSpan={10}
-                              className={`${td} py-8 text-center text-slate-500`}
-                            >
-                              ไม่พบผลสอบตามตัวกรอง
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
+                    <WebBAdminTable
+                      rows={filteredResultRows}
+                      getSearchText={(row) => `${row.student} ${row.id} ${row.product} ${row.set} ${row.packageName}`}
+                      hideSearch hideCsvExport
+                      ariaLabel="รายชื่อผลสอบรายบุคคลตามตัวกรอง"
+                      emptyMessage="ไม่พบผู้เข้าสอบตามตัวกรอง"
+                      resetKey={JSON.stringify([resultSearch, resultProductFilter, resultSetFilter, resultPackageFilter, resultGradeFilter, resultProvinceFilter, resultStatusFilter, resultDateFrom, resultDateTo])}
+                    >
+                      {(pageResultRows) => (
+                        <table className="w-full min-w-[1080px] text-left">
+                          <thead className="bg-slate-50"><tr>
+                            {["ส่งเมื่อ", "ผู้เข้าสอบ", "ระดับชั้น / จังหวัด", "ประเภท / ชุด", "แพ็กเกจ", "รวม", "TGAT1", "TGAT2", "TGAT3", "สถานะ", "รายงาน"].map((heading) => <th className={th} key={heading}>{heading}</th>)}
+                          </tr></thead>
+                          <tbody>{pageResultRows.map((row) => (
+                            <tr key={row.id}>
+                              <td className={td}>{row.submittedAt}</td>
+                              <td className={td}><b>{row.student}</b><small className="mt-1 block text-xs text-slate-400">{row.id}</small></td>
+                              <td className={td}>{row.grade}<small className="mt-1 block text-xs text-slate-500">{row.province}</small></td>
+                              <td className={td}>{row.product} · ชุด {row.set}</td>
+                              <td className={td}>{row.packageName}</td>
+                              <td className={td}><b>{row.total.toFixed(1)}/100</b></td>
+                              <td className={td}>{row.tgat1}</td><td className={td}>{row.tgat2}</td><td className={td}>{row.tgat3}</td>
+                              <td className={td}><Badge tone="green">{row.status}</Badge></td>
+                              <td className={td}><Button variant="outline" onClick={() => setSelectedResultReport(row)}>ดูรายงาน</Button></td>
+                            </tr>
+                          ))}</tbody>
+                        </table>
+                      )}
+                    </WebBAdminTable>
                   </div>
                 </Panel>
 
@@ -6386,250 +6566,109 @@ export default function WebBAdminDemo({
                       setSelectedResultReport(null);
                   }}
                 >
-                <section
-                  role="dialog"
-                  aria-modal="true"
-                  aria-labelledby="result-report-title"
-                  className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl"
-                >
-                  <div className="flex items-start justify-between gap-3 border-b border-slate-200 pb-4">
-                    <div>
-                      <p className="text-xs font-bold text-indigo-700">
-                        ผลสอบฉบับสมบูรณ์ · {selectedResultReport.product} ชุด{" "}
-                        {selectedResultReport.set}
+                  <section
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="result-report-title"
+                    className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-6"
+                  >
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-slate-700">
+                        ผลสอบรายบุคคล · {selectedResultReport.id}
                       </p>
-                      <h2
-                        id="result-report-title"
-                        className="mt-1 text-xl font-extrabold"
+                      <button
+                        type="button"
+                        onClick={() => setSelectedResultReport(null)}
+                        className={adminSecondaryButtonClass}
+                        aria-label="ปิดรายงานผลสอบ"
                       >
-                        {selectedResultReport.student}
-                      </h2>
-                      <p className="mt-1 text-sm text-slate-500">
-                        สอบเมื่อ {selectedResultReport.submittedAt} · เวลาที่ใช้
-                        2 ชั่วโมง 41 นาที · 200 ข้อ / 180 นาที
+                        <LuX aria-hidden="true" className="size-4" />
+                      </button>
+                    </div>
+                    <div className="wb-dashboard-view wb-detail-view">
+                      <section className="wb-detail-exam-head">
+                        <div className="wb-brand" aria-label="เรียนต่อมหาลัย TCAS Mock Exam">
+                          <span className="wb-brand-symbol" aria-hidden="true">
+                            <span className="wb-brand-person wb-brand-yellow"><i /><b /></span>
+                            <span className="wb-brand-person wb-brand-orange"><i /><b /></span>
+                            <span className="wb-brand-person wb-brand-blue"><i /><b /></span>
+                          </span>
+                          <span className="wb-brand-copy"><strong>เรียนต่อมหาลัย</strong><small>TCAS MOCK EXAM</small></span>
+                        </div>
+                        <h2 id="result-report-title">{selectedResultReport.product} ความถนัดทั่วไป</h2>
+                        <p>THAI GENERAL APTITUDE TEST · รายการผลการสอบฉบับสมบูรณ์ · {selectedResultReport.student} · {selectedResultReport.id}</p>
+                        <div>
+                          {[
+                            ["ชุดข้อสอบ", selectedResultReport.set],
+                            ["จำนวนข้อสอบ", "200 ข้อ"],
+                            ["ระยะเวลาสอบ", "180 นาที"],
+                            ["ประเภทข้อสอบ", "ปรนัย 4-5 ตัวเลือก"],
+                            ["คะแนน", "100 คะแนน"],
+                          ].map(([label, value]) => (
+                            <article key={label}><small>{label}</small><b>{value}</b></article>
+                          ))}
+                        </div>
+                      </section>
+                      <div className="wb-detail-columns">
+                        <section className="wb-dashboard-card">
+                          <h2>ข้อมูลผู้เข้าสอบ</h2>
+                          <dl>
+                            <dt>ชื่อ-นามสกุล</dt><dd>{selectedResultReport.student}</dd>
+                            <dt>เลขบัตรประชาชน</dt><dd>{selectedResultReport.citizenId}</dd>
+                            <dt>ระดับชั้น</dt><dd>{selectedResultReport.grade}</dd>
+                            <dt>โรงเรียน / จังหวัด</dt><dd>{selectedResultReport.school} · {selectedResultReport.province}</dd>
+                            <dt>วันที่สอบ</dt><dd>{selectedResultReport.submittedAt}</dd>
+                            <dt>เวลาที่ใช้ทำข้อสอบ</dt><dd>{selectedResultReport.duration}</dd>
+                          </dl>
+                        </section>
+                        <section className="wb-detail-rank">
+                          <h2>🏆 อันดับของผู้เข้าสอบ</h2>
+                          <div className="wb-detail-score"><span>คะแนน</span><b>{selectedResultReport.total.toFixed(1)}/100</b></div>
+                          <div className="wb-detail-place">
+                            <p>ลำดับที่ <strong>{selectedResultReport.rank}</strong>/{selectedResultReport.rankTotal}</p>
+                            <small>ชุดและเวอร์ชันเดียวกัน · คิดจากการสอบครั้งที่ 1 เท่านั้น</small>
+                          </div>
+                        </section>
+                      </div>
+                      <section className="wb-dashboard-card wb-total-score">
+                        <h2>{selectedResultReport.product} ความถนัดทั่วไป <b>{selectedResultReport.total.toFixed(1)} / 100</b></h2>
+                        <i><em style={{ width: `${Math.min(100, selectedResultReport.total)}%` }} /></i>
+                        <div><span>0</span><span>{selectedResultReport.total.toFixed(1)}</span><span>100</span></div>
+                      </section>
+                      <div className="wb-score-detail-grid">
+                        {[
+                          { id: "TGAT1", name: "การสื่อสารภาษาอังกฤษ", score: selectedResultReport.tgat1, color: "#0066a7" },
+                          { id: "TGAT2", name: "การคิดอย่างมีเหตุผล", score: selectedResultReport.tgat2, color: "#ff673f" },
+                          { id: "TGAT3", name: "สมรรถนะการทำงาน", score: selectedResultReport.tgat3, color: "#4168ff" },
+                        ].map((part) => (
+                          <article className="wb-dashboard-card" key={part.id}>
+                            <h3><i style={{ background: part.color }} />{part.id} {part.name}<b>{part.score}/100</b></h3>
+                            <i className="wb-score-line"><em style={{ width: `${Math.min(100, Number(part.score))}%`, background: part.color }} /></i>
+                            <button style={{ background: part.color }} onClick={() => setSelectedResultPart(part.id as "TGAT1" | "TGAT2" | "TGAT3")}>ดูรายละเอียดรายข้อ</button>
+                          </article>
+                        ))}
+                      </div>
+                      <p className="rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                        รายงานนี้เป็น Mockup · คะแนน อันดับ และคำตอบรายข้อเป็นข้อมูลตัวอย่าง · การแก้ไขหรือเผยแพร่ในหลังบ้านนี้ไม่เปลี่ยนข้อมูล Client
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedResultReport(null)}
-                      className={adminSecondaryButtonClass}
-                      aria-label="ปิดรายงานผลสอบ"
-                    >
-                      <LuX aria-hidden="true" className="size-4" />
-                    </button>
-                  </div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <article className="rounded-xl bg-indigo-50 p-4">
-                      <p className="text-xs text-indigo-700">คะแนนรวม</p>
-                      <b className="mt-1 block text-2xl">
-                        {selectedResultReport.total.toFixed(1)}
-                        <small className="text-sm">/100</small>
-                      </b>
-                    </article>
-                    <article className="rounded-xl border border-slate-200 p-4">
-                      <p className="text-xs text-slate-500">อันดับ</p>
-                      <b className="mt-1 block text-2xl">
-                        {selectedResultReport.id === "RES-1001"
-                          ? "415 / 2709"
-                          : "—"}
-                      </b>
-                      <p className="text-xs text-slate-500">
-                        ชุดและเวอร์ชันเดียวกัน
-                      </p>
-                    </article>
-                    <article className="rounded-xl border border-slate-200 p-4">
-                      <p className="text-xs text-slate-500">ระดับชั้น</p>
-                      <b className="mt-1 block">{selectedResultReport.grade}</b>
-                    </article>
-                    <article className="rounded-xl border border-slate-200 p-4">
-                      <p className="text-xs text-slate-500">ดาวน์โหลด</p>
-                      <b className="mt-1 block text-sm text-indigo-700">
-                        ใบวิเคราะห์ (PDF)
-                      </b>
-                    </article>
-                  </div>
-                  <div className="mt-4 grid gap-3 md:grid-cols-3">
-                    {[
-                      {
-                        id: "TGAT1" as const,
-                        title: "การสื่อสารภาษาอังกฤษ",
-                        score: selectedResultReport.tgat1,
-                        correct:
-                          selectedResultReport.id === "RES-1001" ? "36" : "—",
-                        wrong:
-                          selectedResultReport.id === "RES-1001" ? "14" : "—",
-                        total: 60,
-                        skills: [
-                          "Speaking Skill 31.7/50",
-                          "Reading Skill 29/50",
-                        ],
-                      },
-                      {
-                        id: "TGAT2" as const,
-                        title: "การคิดอย่างมีเหตุผล",
-                        score: selectedResultReport.tgat2,
-                        correct:
-                          selectedResultReport.id === "RES-1001" ? "54" : "—",
-                        wrong:
-                          selectedResultReport.id === "RES-1001" ? "14" : "—",
-                        total: 80,
-                        skills: [
-                          "ความสามารถทางภาษา 15/20",
-                          "ความสามารถทางตัวเลข 14/20",
-                          "มิติสัมพันธ์ 14/20",
-                          "เหตุผล 13/20",
-                        ],
-                      },
-                      {
-                        id: "TGAT3" as const,
-                        title: "สมรรถนะการทำงาน",
-                        score: selectedResultReport.tgat3,
-                        correct:
-                          selectedResultReport.id === "RES-1001" ? "41" : "—",
-                        wrong:
-                          selectedResultReport.id === "RES-1001" ? "19" : "—",
-                        total: 60,
-                        skills: [
-                          "สร้างคุณค่าและนวัตกรรม 15.42/25",
-                          "แก้ปัญหาซับซ้อน 7.50/25",
-                          "บริหารอารมณ์ 15/25",
-                          "พลเมืองมีส่วนร่วม 16.67/25",
-                        ],
-                      },
-                    ].map((part) => (
-                      <article
-                        key={part.id}
-                        className="rounded-xl border border-slate-200 p-4"
-                      >
-                        <div className="flex justify-between gap-2">
-                          <div>
-                            <b>{part.id}</b>
-                            <p className="text-sm text-slate-600">
-                              {part.title}
-                            </p>
-                          </div>
-                          <strong>
-                            {part.score}
-                            <small className="text-xs">/100</small>
-                          </strong>
-                        </div>
-                        <p className="mt-2 text-xs text-slate-500">
-                          ถูก {part.correct} · ผิด {part.wrong} · {part.total}{" "}
-                          ข้อ
-                        </p>
-                        <p className="mt-2 text-xs font-semibold">
-                          โปรไฟล์ความถนัด
-                        </p>
-                        <ul className="mt-1 space-y-1 text-xs text-slate-600">
-                          {part.skills.map((skill) => (
-                            <li key={skill}>• {skill}</li>
-                          ))}
-                        </ul>
-                        <div className="mt-3">
-                          <Button
-                            variant="outline"
-                            onClick={() => setSelectedResultPart(part.id)}
-                          >
-                            ดูรายละเอียดรายข้อ
-                          </Button>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                  <p className="mt-4 rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-900">
-                    รายงานนี้เป็นตัวอย่างสำหรับนำเสนอ · คะแนนรวมและคะแนนรายพาร์ทแสดงตามหน้ารายงาน Client ที่มีอยู่ · อันดับ 415/2709 เป็นค่าตัวอย่างคงที่ในรายงาน ส่วน Modal Ranking ฝั่ง Client ใช้ผลสอบที่บันทึกใน Browser ซึ่งอาจยังไม่มีรายการ · การแก้หรือเผยแพร่ในหลังบ้านนี้ไม่เปลี่ยนข้อมูล Client
-                  </p>
-                </section>
-              </div>
-            </WebBModalPortal>
-          )}
+                  </section>
+                </div>
+              </WebBModalPortal>
+            )}
           {selectedResultPart && (
             <WebBModalPortal>
-              <div
-                className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/80 p-3 backdrop-blur-sm"
-                onMouseDown={(event) => {
-                  if (event.target === event.currentTarget)
-                    setSelectedResultPart(null);
-                }}
-              >
+              <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/80 p-3 backdrop-blur-sm sm:p-6">
                 <section
                   role="dialog"
                   aria-modal="true"
-                  aria-labelledby="question-result-title"
-                  className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl"
+                  aria-label={`${selectedResultPart} รายละเอียดคะแนนรายข้อ`}
+                  className="max-h-[94vh] w-full max-w-[96vw] overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-6"
                 >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3
-                        id="question-result-title"
-                        className="text-lg font-bold"
-                      >
-                        {selectedResultPart} · คะแนนรายข้อ
-                      </h3>
-                      <p className="mt-1 text-sm text-slate-500">
-                        ตัวอย่างคำตอบจากรายงานผู้เรียน · TGAT3
-                        รองรับคำตอบหลายรูปแบบและคะแนนบางส่วน
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className={adminSecondaryButtonClass}
-                      onClick={() => setSelectedResultPart(null)}
-                      aria-label="ปิดคะแนนรายข้อ"
-                    >
-                      <LuX aria-hidden="true" className="size-4" />
-                    </button>
-                  </div>
-                  <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full min-w-[560px] text-left text-sm">
-                      <thead className="bg-slate-50 text-xs text-slate-500">
-                        <tr>
-                          <th className="px-3 py-2">ข้อ</th>
-                          <th className="px-3 py-2">คำตอบ</th>
-                          <th className="px-3 py-2">ผล / ค่าตรวจ</th>
-                          <th className="px-3 py-2">คะแนนที่ได้</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {(selectedResultPart === "TGAT1"
-                          ? [
-                              ["1", "A", "ถูก", 1],
-                              ["2", "C", "ถูก", 1],
-                              ["3", "B", "ถูก", 1],
-                              ["4", "C", "ถูก", 1],
-                              ["5", "B", "ถูก", 1],
-                            ]
-                          : selectedResultPart === "TGAT2"
-                            ? [
-                                ["1", "A", "ถูก", 1],
-                                ["2", "C", "ผิด", 0],
-                                ["3", "B", "ถูก", 1],
-                                ["4", "C", "ผิด", 0],
-                                ["5", "B", "ถูก", 1],
-                              ]
-                            : [
-                                ["1", "C", "1", 0],
-                                ["2", "2,3,4", "1", 1],
-                              ["3–4", "D/C", "✓✓ ถูกทั้งคู่", 2],
-                                ["5", "2,4", "0.5", 0.5],
-                              ]
-                        ).map(([number, answer, result, score]) => (
-                          <tr key={number}>
-                            <td className="px-3 py-2">{number}</td>
-                            <td className="px-3 py-2">{answer}</td>
-                            <td className="px-3 py-2">{result}</td>
-                            <td className="px-3 py-2">
-                              {Number(score).toFixed(2)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="mt-3 text-xs text-slate-500">
-                    แสดงตัวอย่างคำตอบรายข้อ · ผลสอบแสดงครบ 60 / 80
-                    / 60 ข้อตามพาร์ท
-                  </p>
+                  <ExamPartDetails
+                    partId={selectedResultPart.toLowerCase()}
+                    onBack={() => setSelectedResultPart(null)}
+                  />
                 </section>
               </div>
             </WebBModalPortal>

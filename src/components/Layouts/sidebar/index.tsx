@@ -174,6 +174,19 @@ export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
         },
       ],
     },
+    {
+      label: "รายงาน",
+      roles: [1],
+      items: [
+        {
+          title: "ภาพรวมผลสอบ",
+          icon: LuChartNoAxesCombined,
+          url: "/webb/admin/results",
+          roles: ["DEMO"],
+          items: [],
+        },
+      ],
+    },
   ];
   const userRole = demoSite === "webb" ? 1 : Number(session?.user?.role_id);
   const isLinkActive = (url: string) => {

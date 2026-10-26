@@ -1765,7 +1765,7 @@ export function getSubResultQuestions(
   });
 }
 
-function ExamPartDetails({
+export function ExamPartDetails({
   partId,
   onBack,
 }: {

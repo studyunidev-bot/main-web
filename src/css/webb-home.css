@@ -6101,10 +6101,17 @@
   font-family: var(--font-sarabun), Arial, sans-serif;
 }
 .wb-preview-summary-page {
-  display: grid;
-  place-items: center;
+  display: block;
   padding: 24px;
   background: #f8f8f7;
+}
+.wb-preview-report-layout {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 8px 0 32px;
+}
+@media (max-width: 640px) {
+  .wb-preview-summary-page { padding: 12px; }
 }
 .wb-preview-summary-card {
   width: min(480px, 100%);

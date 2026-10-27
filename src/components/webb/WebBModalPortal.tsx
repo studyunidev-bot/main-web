@@ -6,21 +6,24 @@ import { createPortal } from "react-dom";
 export default function WebBModalPortal({
   children,
   enabled = true,
+  lockScroll = true,
 }: {
   children: ReactNode;
   enabled?: boolean;
+  lockScroll?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     if (!enabled) return;
     setMounted(true);
+    if (!lockScroll) return;
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = originalOverflow;
     };
-  }, [enabled]);
+  }, [enabled, lockScroll]);
 
   if (!enabled) return <>{children}</>;
   if (!mounted || typeof document === "undefined") return null;

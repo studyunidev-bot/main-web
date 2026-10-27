@@ -37,7 +37,7 @@ import {
   getTutorsForCategory,
   saveTutorsForCategory,
 } from "./webb-tutors";
-import { safeRead, type DemoPurchase } from "./demo-store";
+import { productComponents, safeRead, type DemoPurchase } from "./demo-store";
 import { getExamPlan } from "./exam-documents";
 import WebBExam from "./WebBExam";
 import WebBExamApprovals, { readExamRequests } from "./WebBExamApprovals";
@@ -938,12 +938,91 @@ export default function WebBExamCatalog({
     );
   }
 
+  function getOfferClosureBlockers(offer: CatalogOffer, examSet = selectedSet.name) {
+    const offerComponents = new Set([
+      ...productComponents(offer.productId || offer.id),
+      ...offer.parts.flatMap((part) => {
+        const code = part.match(/^TGAT([123])\b/i)?.[0];
+        return code ? [code.toLowerCase()] : [];
+      }),
+    ]);
+    const matchesOffer = (productOrName: string) => {
+      const partCode = productOrName.match(/\bTGAT([123])\b/i)?.[0].toLowerCase();
+      const components = new Set([
+        ...productComponents(productOrName),
+        ...(partCode ? [partCode] : []),
+      ]);
+      return [...components].some((component) => offerComponents.has(component));
+    };
+    const sameSet = (value?: string) =>
+      (value || "A").toLocaleUpperCase() === examSet.toLocaleUpperCase();
+    const purchases = adminMockData.purchases.filter(
+      (purchase) =>
+        purchase.paymentStatus !== "refunded" &&
+        purchase.examStatus !== "submitted" &&
+        sameSet(purchase.examSet) &&
+        matchesOffer(purchase.productId),
+    );
+    const attempts = adminMockData.attempts.filter(
+      (attempt) =>
+        attempt.status === "กำลังสอบ" &&
+        sameSet(attempt.product.match(/ชุด\s+([A-D])/i)?.[1]) &&
+        matchesOffer(attempt.product),
+    );
+    return { purchases, attempts };
+  }
+
+  function alertOfferCannotClose(
+    offer: CatalogOffer,
+    examSet = selectedSet.name,
+  ) {
+    const blockers = getOfferClosureBlockers(offer, examSet);
+    if (!blockers.purchases.length && !blockers.attempts.length) return false;
+    const details = [
+      blockers.attempts.length ? `กำลังสอบ ${blockers.attempts.length} คน` : "",
+      blockers.purchases.length ? `ซื้อสิทธิ์แล้วแต่ยังสอบไม่เสร็จ ${blockers.purchases.length} สิทธิ์` : "",
+    ].filter(Boolean).join(" และ ");
+    window.alert(
+      `ไม่สามารถปิดการขาย ${offer.name} ชุด ${examSet} ได้ เนื่องจากมี${details} กรุณารอให้สอบเสร็จก่อน`,
+    );
+    return true;
+  }
+
+  function setOfferSalesStatus(offer: CatalogOffer, status: CatalogStatus) {
+    if (!canEdit || !selectedSet || offer.status === status) return;
+    if (status === "draft" && alertOfferCannotClose(offer)) return;
+    updateSet(
+      (set) => ({
+        ...set,
+        offers: set.offers.map((item) =>
+          item.id === offer.id ? { ...item, status } : item,
+        ),
+      }),
+      status === "open"
+        ? `เปิดขาย ${offer.name} แล้ว`
+        : `ปิดการขาย ${offer.name} แล้ว`,
+    );
+  }
+
   function updateSelectedSets(status: CatalogStatus) {
     if (!selected || !canEdit || selectedSetIds.length === 0) return;
     const selectedIds = new Set(selectedSetIds);
     const selectedSets = familySets(selected).filter((set) =>
       selectedIds.has(set.id),
     );
+    if (status === "draft") {
+      const blockedOffer = selectedSets
+        .flatMap((set) => set.offers.map((offer) => ({ offer, setName: set.name })))
+        .find(({ offer, setName }) => {
+          if (offer.status !== "open") return false;
+          const blockers = getOfferClosureBlockers(offer, setName);
+          return blockers.purchases.length > 0 || blockers.attempts.length > 0;
+        });
+      if (blockedOffer) {
+        alertOfferCannotClose(blockedOffer.offer, blockedOffer.setName);
+        return;
+      }
+    }
     if (
       selectedSets.every((set) =>
         set.offers.every((offer) => offer.status === status),
@@ -993,6 +1072,18 @@ export default function WebBExamCatalog({
       if (selected.status === "draft") {
         setMessage("หมวดนี้พักการขายอยู่แล้ว");
       } else {
+        const blockedOffer = familySets(selected)
+          .flatMap((set) => set.offers.map((offer) => ({ offer, setName: set.name })))
+          .find(({ offer, setName }) => {
+            if (offer.status !== "open") return false;
+            const blockers = getOfferClosureBlockers(offer, setName);
+            return blockers.purchases.length > 0 || blockers.attempts.length > 0;
+          });
+        if (blockedOffer) {
+          alertOfferCannotClose(blockedOffer.offer, blockedOffer.setName);
+          setSalesAction("");
+          return;
+        }
         updateFamily(
           (family) => ({ ...family, status: "draft" }),
           "พักการขายทั้งหมวดแล้ว",
@@ -1269,6 +1360,18 @@ export default function WebBExamCatalog({
         selectedSet.parts.includes(part),
       ),
     };
+    const currentOffer = selectedSet.offers.find((item) => item.id === id);
+    if (
+      currentOffer?.status === "open" &&
+      offer.status === "draft" &&
+      alertOfferCannotClose(currentOffer)
+    ) {
+      setOfferModal({
+        ...offerModal,
+        error: "ยังปิดการขายไม่ได้ เนื่องจากมีสิทธิ์สอบที่ยังไม่เสร็จ",
+      });
+      return;
+    }
     updateSet(
       (set) => ({
         ...set,
@@ -2552,7 +2655,7 @@ export default function WebBExamCatalog({
                                     )}
                                   </div>
                                   <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">
-                                    <table className="w-full min-w-[740px] text-left text-sm">
+                                    <table className="w-full min-w-[680px] text-left text-sm">
                                       <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                                         <tr>
                                           <th className="px-4 py-3">
@@ -2564,7 +2667,6 @@ export default function WebBExamCatalog({
                                           <th className="px-4 py-3">
                                             ราคาสินค้าจริง / ยอดรวม Payso
                                           </th>
-                                          <th className="px-4 py-3">สถานะ</th>
                                           <th className="px-4 py-3 text-right">
                                             จัดการ
                                           </th>
@@ -2606,16 +2708,21 @@ export default function WebBExamCatalog({
                                               </small>
                                             </td>
                                             <td className="px-4 py-3">
-                                              <span
-                                                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${offer.status === "open" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}
-                                              >
-                                                {offer.status === "open"
-                                                  ? "เปิดขาย"
-                                                  : "ยังไม่เปิดขาย"}
-                                              </span>
-                                            </td>
-                                            <td className="px-4 py-3">
                                               <div className="flex justify-end gap-2">
+                                                <button
+                                                  type="button"
+                                                  disabled={!canEdit}
+                                                  onClick={() =>
+                                                    setOfferSalesStatus(
+                                                      offer,
+                                                      offer.status === "open" ? "draft" : "open",
+                                                    )
+                                                  }
+                                                  aria-label={`${offer.status === "open" ? "ปิดการขาย" : "เปิดขาย"} ${offer.name}`}
+                                                  className={`rounded-xl border px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${offer.status === "open" ? "border-amber-200 text-amber-800 hover:bg-amber-50" : "border-emerald-200 text-emerald-800 hover:bg-emerald-50"}`}
+                                                >
+                                                  {offer.status === "open" ? "ปิดการขาย" : "เปิดขาย"}
+                                                </button>
                                                 <button
                                                   type="button"
                                                   aria-label={`แก้ไข ${offer.name}`}

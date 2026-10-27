@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LuChevronDown, LuChevronUp } from "react-icons/lu";
 import type { ExamProduct } from "./data";
+import { WebBPreviewResultReport } from "./WebBStudentArea";
 import { getExamPlan, getExamQuestionDetails, getExamResponseDetails, type ExamPlan, type ExamResponseType } from "./exam-documents";
 import PurchasedExamPdfViewer from "./PurchasedExamPdfViewer";
 import { addDemoEmail, calculateDemoScore, currentPurchaseForExam, currentPurchaseForRef, examAnswersStorageKey, examResultStorageKey, isDemoContentPublished, readDemoAccount, recordDemoRankingResult, setPurchaseExamStatus, updateAdminAttempt } from "./demo-store";
@@ -451,6 +452,7 @@ export default function WebBExam({
     answeredCount: number;
     questionCount: number;
     timedOut: boolean;
+    durationSeconds: number;
   } | null>(null);
   const [answerPaperExpanded, setAnswerPaperExpanded] = useState(true);
   const [page, setPage] = useState(1);
@@ -644,6 +646,7 @@ export default function WebBExam({
         answeredCount,
         questionCount,
         timedOut: true,
+        durationSeconds: examDurationSeconds - remaining,
       });
       setAttemptStatus("timeout");
       return;
@@ -732,6 +735,7 @@ export default function WebBExam({
         answeredCount,
         questionCount,
         timedOut: false,
+        durationSeconds: examDurationSeconds - remaining,
       });
       return;
     }
@@ -772,37 +776,13 @@ export default function WebBExam({
 
   if (previewMode && previewSummary) {
     return (
-      <main className="wb-answer-page wb-preview-summary-page" aria-labelledby="wb-preview-summary-title">
-        <section className="wb-preview-summary-card">
-          <span className="wb-preview-summary-icon" aria-hidden="true">✓</span>
-          <h1 id="wb-preview-summary-title">ทำข้อสอบเสร็จแล้ว</h1>
-          {previewSummary.keyStatus !== "ready" && (
-            <p className="wb-preview-summary-eyebrow">PREVIEW · โหมดทดสอบ</p>
-          )}
-          <p className="wb-preview-summary-description">
-            {previewSummary.keyStatus === "missing"
-              ? "ยังไม่ลงเฉลยสำหรับข้อมูลนี้"
-              : previewSummary.keyStatus === "incomplete"
-                ? "เฉลยยังไม่ครบ จึงยังสรุปคะแนนไม่ได้"
-                : previewSummary.timedOut
-                  ? "หมดเวลาทดลองสอบแล้ว"
-                  : "นี่คือผลคะแนนจากการทดลองทำข้อสอบครั้งนี้"}
-          </p>
-          {previewSummary.score !== null && (
-            <div className="wb-preview-summary-score">
-              <strong>{previewSummary.score}</strong>
-              <span>/ 100 คะแนน</span>
-            </div>
-          )}
-          <div className="wb-preview-summary-counts">
-            <div><strong>{previewSummary.answeredCount}</strong><span>ข้อที่ตอบ</span></div>
-            <div><strong>{Math.max(0, previewSummary.questionCount - previewSummary.answeredCount)}</strong><span>ข้อที่ยังไม่ตอบ</span></div>
-          </div>
-          <button type="button" className="wb-preview-summary-close" onClick={() => onPreviewExit?.()}>
-            ปิด Preview
-          </button>
-        </section>
-      </main>
+      <div className="wb-answer-page wb-preview-summary-page" aria-label="รายงานผลสอบ Preview">
+        <WebBPreviewResultReport
+          productId={product.id}
+          examSet={examSet}
+          onClose={() => onPreviewExit?.()}
+        />
+      </div>
     );
   }
 

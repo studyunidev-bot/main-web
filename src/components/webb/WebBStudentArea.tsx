@@ -1768,9 +1768,11 @@ export function getSubResultQuestions(
 export function ExamPartDetails({
   partId,
   onBack,
+  backLabel = "กลับใบวิเคราะห์รวม",
 }: {
   partId: string;
   onBack: () => void;
+  backLabel?: string;
 }) {
   const part = examPartReports[partId] ?? examPartReports.tgat1;
   const [openSkills, setOpenSkills] = useState<Record<string, boolean>>({
@@ -1806,7 +1808,7 @@ export function ExamPartDetails({
           onClick={onBack}
         >
           <LuArrowLeft size={20} />
-          <span>กลับใบวิเคราะห์รวม</span>
+          <span>{backLabel}</span>
         </button>
       </div>
 
@@ -2340,6 +2342,141 @@ function Ranking({
         </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+export function WebBPreviewResultReport({
+  productId,
+  examSet,
+  onClose,
+}: {
+  productId: string;
+  examSet: string;
+  onClose: () => void;
+}) {
+  const partId = /^tgat2/i.test(productId)
+    ? "tgat2"
+    : /^tgat3/i.test(productId)
+      ? "tgat3"
+      : "tgat1";
+  const [showDetails, setShowDetails] = useState(false);
+  const [student, setStudent] = useState<StudentInfo>(defaultStudent);
+
+  useEffect(() => {
+    setStudent(readStudent());
+  }, []);
+
+  return (
+    <div className="wb-dashboard is-detail-view wb-preview-client-report">
+      <main className="wb-dashboard-container wb-preview-report-layout">
+        <section className="wb-dashboard-main">
+          {showDetails ? (
+            <ExamPartDetails
+              partId={partId}
+              onBack={() => setShowDetails(false)}
+            />
+          ) : (
+            <PreviewPartOverview
+              partId={partId}
+              examSet={examSet}
+              student={student}
+              onOpenDetails={() => setShowDetails(true)}
+              onClose={onClose}
+            />
+          )}
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function PreviewPartOverview({
+  partId,
+  examSet,
+  student,
+  onOpenDetails,
+  onClose,
+}: {
+  partId: string;
+  examSet: string;
+  student: StudentInfo;
+  onOpenDetails: () => void;
+  onClose: () => void;
+}) {
+  const part = examPartReports[partId] ?? examPartReports.tgat1;
+  const score = Number(part.score);
+  const duration = 60;
+  const choiceType = part.id === "TGAT2"
+    ? "ปรนัย 5 ตัวเลือก"
+    : part.id === "TGAT3"
+      ? "เลือกตอบได้หลายตัวเลือก"
+      : "ปรนัย 4 ตัวเลือก";
+
+  return (
+    <div className="wb-dashboard-view wb-detail-view">
+      <div className="wb-detail-back">
+        <button type="button" className="wb-detail-back-btn" onClick={onClose}>
+          <LuArrowLeft aria-hidden="true" />
+          <span>ผลสอบทั้งหมด</span>
+        </button>
+        <button type="button" className="wb-btn-download wb-detail-download-btn" onClick={() => window.print()}>
+          <LuDownload aria-hidden="true" />
+          <span>ดาวน์โหลดใบวิเคราะห์ (PDF)</span>
+        </button>
+      </div>
+      <section className="wb-detail-exam-head">
+        <WebBBrand />
+        <h2>{part.id} {part.title}</h2>
+        <p>THAI GENERAL APTITUDE TEST · รายการผลการสอบฉบับสมบูรณ์ · {student.name} · {part.label}</p>
+        <div>
+          {[
+            ["ชุดข้อสอบ", examSet],
+            ["จำนวนข้อสอบ", `${part.total} ข้อ`],
+            ["ระยะเวลาสอบ", `${duration} นาที`],
+            ["ประเภทข้อสอบ", choiceType],
+            ["คะแนน", "100 คะแนน"],
+          ].map(([label, value]) => (
+            <article key={label}><small>{label}</small><b>{value}</b></article>
+          ))}
+        </div>
+      </section>
+      <div className="wb-detail-columns">
+        <section className="wb-dashboard-card">
+          <h2>ข้อมูลผู้เข้าสอบ</h2>
+          <dl>
+            <dt>ชื่อ-นามสกุล</dt><dd>{student.name}</dd>
+            <dt>เลขบัตรประชาชน</dt><dd>{maskCitizenId(student.citizenId)}</dd>
+            <dt>วันที่สอบ</dt><dd>15 ก.ค. 2569</dd>
+            <dt>เวลาที่ใช้ทำข้อสอบ</dt><dd>2 ชั่วโมง 41 นาที</dd>
+          </dl>
+        </section>
+        <section className="wb-detail-rank">
+          <h2>ผลสอบรายบุคคล · {part.id}</h2>
+          <div className="wb-detail-score"><span>คะแนน</span><b>{part.score}/100</b></div>
+          <div className="wb-detail-place">
+            <p>ถูก {part.correct} · ผิด {part.wrong} · {part.total} ข้อ</p>
+            <small>ผลสอบตัวอย่างจากหน้า Client</small>
+          </div>
+        </section>
+      </div>
+      <section className="wb-dashboard-card wb-total-score">
+        <h2>{part.id} {part.title} <b>{part.score} / 100</b></h2>
+        <i><em style={{ width: `${Math.min(100, score)}%` }} /></i>
+        <div><span>0</span><span>{part.score}</span><span>100</span></div>
+      </section>
+      <div className="wb-score-detail-grid">
+        <article className="wb-dashboard-card">
+          <h3>
+            <i style={{ background: part.color }} />{part.id} {part.title}
+            <b>{part.score}/100</b>
+          </h3>
+          <i className="wb-score-line"><em style={{ width: `${Math.min(100, score)}%`, background: part.color }} /></i>
+          <button type="button" style={{ background: part.color }} onClick={onOpenDetails}>
+            ดูรายละเอียดรายข้อ
+          </button>
+        </article>
+      </div>
     </div>
   );
 }

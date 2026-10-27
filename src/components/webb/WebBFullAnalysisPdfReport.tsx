@@ -68,7 +68,7 @@ export default function WebBFullAnalysisPdfReport({
   ];
 
   return (
-    <WebBModalPortal>
+    <WebBModalPortal lockScroll={false}>
       <div id="wb-print-container" aria-hidden="true">
         {/* ========================================================================= */}
         {/* PAGE 1: ข้อมูลทั้งหมดจากหน้า view=detail (ภาพรวมและผลการสอบฉบับสมบูรณ์)     */}

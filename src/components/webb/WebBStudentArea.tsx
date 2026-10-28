@@ -16,9 +16,11 @@ import {
   LuEyeOff,
   LuFileText,
   LuHeadset,
+  LuInfo,
   LuLogOut,
   LuMapPin,
   LuMaximize2,
+  LuMessageSquare,
   LuPause,
   LuPlay,
   LuRotateCcw,
@@ -45,6 +47,8 @@ import {
   readCurrentDemoPurchases,
   readDemoAccount,
   readSocialSettings,
+  defaultWebBHomeSettings,
+  readWebBHomeSettings,
   isDemoStudentSuspended,
   isDemoSolutionPublished,
   productsOverlap,
@@ -563,6 +567,7 @@ function StudentHeader({
   onSelect: (view: StudentView) => void;
 }) {
   const [helpOpen, setHelpOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   function handleLogout() {
     localStorage.removeItem(DEMO_AUTH_KEY);
     window.dispatchEvent(new Event("webb-demo-auth-updated"));
@@ -650,6 +655,17 @@ function StudentHeader({
                 <LuHeadset aria-hidden="true" />
                 ขอความช่วยเหลือ
               </button>
+              <button
+                className="wb-dashboard-account-action"
+                type="button"
+                onClick={() => {
+                  onClose();
+                  setFeedbackOpen(true);
+                }}
+              >
+                <LuMessageSquare aria-hidden="true" />
+                ส่งความคิดเห็น
+              </button>
               <Link
                 className="wb-dashboard-account-action"
                 href="/webb"
@@ -732,6 +748,16 @@ function StudentHeader({
               <LuHeadset aria-hidden="true" />
               ขอความช่วยเหลือ
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                setFeedbackOpen(true);
+              }}
+            >
+              <LuMessageSquare aria-hidden="true" />
+              ส่งความคิดเห็น
+            </button>
             <Link href="/webb" onClick={handleLogout}>
               <LuLogOut aria-hidden="true" />
               ออกจากระบบ
@@ -747,6 +773,7 @@ function StudentHeader({
         </nav>
       </div>
       {helpOpen && <StudentHelpDialog onClose={() => setHelpOpen(false)} />}
+      {feedbackOpen && <StudentFeedbackDialog student={student} onClose={() => setFeedbackOpen(false)} />}
     </>
   );
 }
@@ -808,6 +835,74 @@ function StudentHelpDialog({ onClose }: { onClose: () => void }) {
           )}
         </div>
       </section>
+    </div>
+  );
+}
+
+function StudentFeedbackDialog({ student, onClose }: { student: StudentInfo; onClose: () => void }) {
+  const [kind, setKind] = useState("ข้อเสนอแนะ");
+  const [message, setMessage] = useState("");
+  const settings = readSocialSettings();
+  const feedbackTypes = ["มีบางอย่างไม่ทำงาน", "ข้อเสนอแนะ", "อื่นๆ"];
+
+  function sendFeedback(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const subject = `[ความคิดเห็น Web B] ${kind}`;
+    const body = [
+      message.trim(),
+      "",
+      `ผู้เรียน: ${student.name}`,
+      `อีเมล: ${student.email}`,
+      `หน้าเว็บ: ${window.location.href}`,
+      `อุปกรณ์/เบราว์เซอร์: ${navigator.userAgent}`,
+    ].join("\n");
+    window.location.href = `mailto:${settings.supportEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    onClose();
+  }
+
+  return (
+    <div className="wb-contact-overlay" role="presentation" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose();
+    }}>
+      <form className="wb-contact-dialog wb-feedback-dialog" role="dialog" aria-modal="true" aria-labelledby="wb-feedback-title" onSubmit={sendFeedback}>
+        <button type="button" className="wb-contact-close" aria-label="ปิด" onClick={onClose}><LuX aria-hidden="true" /></button>
+        <h2 id="wb-feedback-title">ส่งความคิดเห็น</h2>
+        <p>บอกเราได้เลยว่าอยากให้ปรับปรุงอะไร</p>
+        <fieldset className="wb-feedback-fieldset">
+          <legend>เป็นความคิดเห็นแบบไหน?</legend>
+          <div className="wb-feedback-types">
+            {feedbackTypes.map((type) => (
+              <button
+                className={kind === type ? "is-selected" : ""}
+                key={type}
+                type="button"
+                aria-pressed={kind === type}
+                onClick={() => setKind(type)}
+              >
+                {kind === type && <LuCheck aria-hidden="true" />}
+                {type}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        <label className="wb-feedback-message">
+          เล่าให้เราฟังเพิ่มเติม
+          <textarea
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            placeholder="อะไรจะทำให้ประสบการณ์ใช้งานดีขึ้นสำหรับคุณ?"
+            rows={5}
+            required
+          />
+        </label>
+        <div className="wb-feedback-note">
+          <LuInfo aria-hidden="true" />
+          <span>ความคิดเห็นนี้จะถูกส่งไปยังอีเมลของบริษัท</span>
+        </div>
+        <button className="wb-feedback-submit" type="submit" disabled={!message.trim() || !settings.supportEmail}>
+          ส่งความคิดเห็น
+        </button>
+      </form>
     </div>
   );
 }
@@ -918,15 +1013,25 @@ function MobileEnrollCard({
 }
 
 function StudentBanner() {
+  const [cover, setCover] = useState(defaultWebBHomeSettings.studentCover);
+
+  useEffect(() => {
+    const refresh = () => setCover(readWebBHomeSettings().studentCover);
+    refresh();
+    window.addEventListener("storage", refresh);
+    window.addEventListener("webb-home-settings-updated", refresh);
+    return () => {
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("webb-home-settings-updated", refresh);
+    };
+  }, []);
+
   return (
     <div className="wb-dashboard-banner">
-      <Image
-        src="/images/webb/student-hero.png"
-        width={1654}
-        height={423}
+      <WebBImage
+        src={cover}
         className="wb-dashboard-banner-image"
         alt="เตรียมพร้อมสู่ความสำเร็จด้วยการสอบ TCAS MOCK EXAM"
-        priority
       />
     </div>
   );
@@ -1582,9 +1687,20 @@ export type QuestionResult = {
   ans: string;
   correct?: boolean;
   score: string;
+  maxScore?: string;
   badge?: string;
   note?: string;
   isWrong?: boolean;
+};
+
+export type PreviewQuestionScore = {
+  questionIndex: number;
+  questionNumber: string;
+  answer: string;
+  earned: number;
+  maximum: number;
+  correct: boolean;
+  groupIndex?: number;
 };
 
 export const TGAT3_SKILL1_QUESTIONS: QuestionResult[] = [
@@ -1677,6 +1793,9 @@ export const TGAT3_SKILL4_QUESTIONS: QuestionResult[] = [
 ];
 
 function renderResultBadge(q: QuestionResult) {
+  if (q.badge === "partial") {
+    return <span className="wb-badge-circle wb-badge-circle-yellow">บางส่วน</span>;
+  }
   if (q.badge === "double-check") {
     return <span className="wb-badge-pill-doublecheck">✓✓</span>;
   }
@@ -1767,14 +1886,21 @@ export function getSubResultQuestions(
 
 export function ExamPartDetails({
   partId,
+  score,
+  previewQuestionScores,
   onBack,
   backLabel = "กลับใบวิเคราะห์รวม",
 }: {
   partId: string;
+  score?: number | null;
+  previewQuestionScores?: PreviewQuestionScore[];
   onBack: () => void;
   backLabel?: string;
 }) {
-  const part = examPartReports[partId] ?? examPartReports.tgat1;
+  const reportPart = examPartReports[partId] ?? examPartReports.tgat1;
+  const part = score === undefined || score === null
+    ? reportPart
+    : { ...reportPart, score: score.toFixed(1) };
   const [openSkills, setOpenSkills] = useState<Record<string, boolean>>({
     "Speaking Skill": true,
     "Reading Skill": false,
@@ -1839,12 +1965,28 @@ export function ExamPartDetails({
       <div className={`wb-subresults-grid is-${part.skills.length}-skills`}>
         {part.skills.map((skill, skillIndex) => {
           const isOpen = openSkills[skill.name] ?? skillIndex === 0;
-          const questions = getSubResultQuestions(
-            part.id,
-            skill.name,
-            skillIndex,
-            skill,
-          );
+          const questions = previewQuestionScores?.length
+            ? previewQuestionScores
+                .filter((question) => {
+                  if (question.groupIndex !== undefined) {
+                    return question.groupIndex === skillIndex + 1;
+                  }
+                  const groupSize = Math.ceil(previewQuestionScores.length / part.skills.length);
+                  return Math.floor(question.questionIndex / groupSize) === skillIndex;
+                })
+                .map((question) => ({
+                  no: question.questionNumber,
+                  ans: question.answer,
+                  correct: question.correct,
+                  score: question.earned.toFixed(2),
+                  maxScore: question.maximum.toFixed(2),
+                  badge: question.correct
+                    ? "check"
+                    : question.earned > 0
+                      ? "partial"
+                      : "cross",
+                }))
+            : getSubResultQuestions(part.id, skill.name, skillIndex, skill);
 
           return (
             <div
@@ -1950,6 +2092,7 @@ export function ExamPartDetails({
                       const isZero =
                         q.isWrong || q.score === "0.00" || q.score === "0";
                       const isAmber =
+                        q.badge === "partial" ||
                         q.score === "0.5" ||
                         q.score === "0.50" ||
                         q.score === "0.25" ||
@@ -1964,7 +2107,9 @@ export function ExamPartDetails({
                           <td
                             className={`wb-col-score ${isZero ? "is-wrong-score" : isAmber ? "is-amber-score" : "is-correct-score"}`}
                           >
-                            <div className="wb-score-val">{q.score}</div>
+                            <div className="wb-score-val">
+                              {q.score}{q.maxScore ? ` / ${q.maxScore}` : ""}
+                            </div>
                             {q.note && (
                               <div className="wb-score-note">{q.note}</div>
                             )}
@@ -2349,10 +2494,14 @@ function Ranking({
 export function WebBPreviewResultReport({
   productId,
   examSet,
+  score,
+  questionScores,
   onClose,
 }: {
   productId: string;
   examSet: string;
+  score: number | null;
+  questionScores: PreviewQuestionScore[];
   onClose: () => void;
 }) {
   const partId = /^tgat2/i.test(productId)
@@ -2374,6 +2523,8 @@ export function WebBPreviewResultReport({
           {showDetails ? (
             <ExamPartDetails
               partId={partId}
+              score={score}
+              previewQuestionScores={questionScores}
               onBack={() => setShowDetails(false)}
             />
           ) : (
@@ -2381,6 +2532,7 @@ export function WebBPreviewResultReport({
               partId={partId}
               examSet={examSet}
               student={student}
+              score={score}
               onOpenDetails={() => setShowDetails(true)}
               onClose={onClose}
             />
@@ -2395,17 +2547,19 @@ function PreviewPartOverview({
   partId,
   examSet,
   student,
+  score,
   onOpenDetails,
   onClose,
 }: {
   partId: string;
   examSet: string;
   student: StudentInfo;
+  score: number | null;
   onOpenDetails: () => void;
   onClose: () => void;
 }) {
   const part = examPartReports[partId] ?? examPartReports.tgat1;
-  const score = Number(part.score);
+  const displayedScore = score ?? Number(part.score);
   const duration = 60;
   const choiceType = part.id === "TGAT2"
     ? "ปรนัย 5 ตัวเลือก"
@@ -2453,7 +2607,7 @@ function PreviewPartOverview({
         </section>
         <section className="wb-detail-rank">
           <h2>ผลสอบรายบุคคล · {part.id}</h2>
-          <div className="wb-detail-score"><span>คะแนน</span><b>{part.score}/100</b></div>
+          <div className="wb-detail-score"><span>คะแนน</span><b>{displayedScore.toFixed(1)}/100</b></div>
           <div className="wb-detail-place">
             <p>ถูก {part.correct} · ผิด {part.wrong} · {part.total} ข้อ</p>
             <small>ผลสอบตัวอย่างจากหน้า Client</small>
@@ -2461,17 +2615,17 @@ function PreviewPartOverview({
         </section>
       </div>
       <section className="wb-dashboard-card wb-total-score">
-        <h2>{part.id} {part.title} <b>{part.score} / 100</b></h2>
-        <i><em style={{ width: `${Math.min(100, score)}%` }} /></i>
-        <div><span>0</span><span>{part.score}</span><span>100</span></div>
+        <h2>{part.id} {part.title} <b>{displayedScore.toFixed(1)} / 100</b></h2>
+        <i><em style={{ width: `${Math.min(100, displayedScore)}%` }} /></i>
+        <div><span>0</span><span>{displayedScore.toFixed(1)}</span><span>100</span></div>
       </section>
       <div className="wb-score-detail-grid">
         <article className="wb-dashboard-card">
           <h3>
             <i style={{ background: part.color }} />{part.id} {part.title}
-            <b>{part.score}/100</b>
+            <b>{displayedScore.toFixed(1)}/100</b>
           </h3>
-          <i className="wb-score-line"><em style={{ width: `${Math.min(100, score)}%`, background: part.color }} /></i>
+          <i className="wb-score-line"><em style={{ width: `${Math.min(100, displayedScore)}%`, background: part.color }} /></i>
           <button type="button" style={{ background: part.color }} onClick={onOpenDetails}>
             ดูรายละเอียดรายข้อ
           </button>

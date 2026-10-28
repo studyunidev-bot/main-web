@@ -22,6 +22,7 @@ import {
   LuPanelLeftClose,
   LuPanelLeftOpen,
   LuScrollText,
+  LuBookOpen,
   LuSettings,
   LuShoppingCart,
   LuUsersRound,
@@ -132,6 +133,13 @@ export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
           roles: ["DEMO"],
           items: [],
         },
+        {
+          title: "คู่มือ",
+          icon: LuBookOpen,
+          url: "/webb/admin/manual",
+          roles: ["DEMO"],
+          items: [],
+        },
       ],
     },
     {
@@ -202,6 +210,7 @@ export function Sidebar({ demoSite }: { demoSite?: "webb" }) {
   };
   const canViewDemoMenu = (url: string) => {
     if (activeDemoRole === "Super Admin") return true;
+    if (url.endsWith("/manual")) return true;
     if (url.endsWith("/audit") || url.endsWith("/settings")) return false;
     if (url.endsWith("/exam-catalog")) {
       return ["exams", "students", "results"].some((resource) =>

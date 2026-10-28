@@ -136,6 +136,7 @@ function RulesScreen({
     : `${product.name} ${product.parts}`;
   const router = useRouter();
   const [warningOpen, setWarningOpen] = useState(false);
+  const [mobileWarningOpen, setMobileWarningOpen] = useState(false);
   const [hasEntitlement, setHasEntitlement] = useState(examType === "trial");
   const [attemptState, setAttemptState] = useState("");
   const [resetNotice, setResetNotice] = useState<string | null>(null);
@@ -197,13 +198,24 @@ function RulesScreen({
   }
 
   useEffect(() => {
-    if (!warningOpen) return;
+    if (!warningOpen && !mobileWarningOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setWarningOpen(false);
+      if (event.key === "Escape") {
+        setWarningOpen(false);
+        setMobileWarningOpen(false);
+      }
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [warningOpen]);
+  }, [warningOpen, mobileWarningOpen]);
+
+  function startExamFromRules() {
+    if (window.matchMedia("(max-width: 767px)").matches) {
+      setMobileWarningOpen(true);
+      return;
+    }
+    setWarningOpen(true);
+  }
 
   return (
     <main className="wb-rules-page">
@@ -308,7 +320,7 @@ function RulesScreen({
             className="wb-rules-start"
             type="button"
             disabled={!hasEntitlement || !canUseExam}
-            onClick={() => setWarningOpen(true)}
+            onClick={startExamFromRules}
           >
             {!hasEntitlement
               ? "ไม่มีสิทธิ์สอบชุดนี้"
@@ -441,6 +453,31 @@ function RulesScreen({
               >
                 {attemptState === "in-progress" ? "รับทราบ ทำข้อสอบต่อ" : "รับทราบเริ่มทำข้อสอบ"}
               </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {mobileWarningOpen && (
+        <div className="wb-rules-modal-overlay">
+          <button
+            className="wb-rules-modal-backdrop"
+            type="button"
+            aria-label="ปิดหน้าต่างแจ้งเตือน"
+            onClick={() => setMobileWarningOpen(false)}
+          />
+          <section className="wb-rules-modal wb-mobile-exam-warning" role="alertdialog" aria-modal="true" aria-labelledby="wb-mobile-warning-title">
+            <button type="button" className="wb-rules-modal-close" aria-label="ปิด" onClick={() => setMobileWarningOpen(false)}>
+              <LuX aria-hidden="true" className="size-5" />
+            </button>
+            <span className="wb-rules-warning-icon" aria-hidden="true">!</span>
+            <h2 id="wb-mobile-warning-title">แนะนำให้ใช้คอมพิวเตอร์หรือแท็บเล็ต</h2>
+            <p>หน้าจอมือถืออาจไม่เหมาะกับการอ่านข้อสอบและฝนคำตอบ กรุณาเปลี่ยนไปใช้ Desktop หรือ Tablet เพื่อประสบการณ์สอบที่สะดวกขึ้น</p>
+            <div className="wb-rules-modal-actions">
+              <button className="wb-rules-back" type="button" onClick={() => setMobileWarningOpen(false)}>กลับ</button>
+              <button className="wb-rules-start" type="button" onClick={() => {
+                setMobileWarningOpen(false);
+                setWarningOpen(true);
+              }}>รับทราบและไปต่อ</button>
             </div>
           </section>
         </div>

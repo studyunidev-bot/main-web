@@ -76,6 +76,13 @@ const primaryButton =
 const choiceButton =
   "rounded-lg border px-3 py-2 text-sm font-semibold transition-colors";
 
+function getTgatDefaultChoiceCount(part?: string) {
+  const productId = part?.match(/^(TGAT[123])\b/i)?.[1].toLowerCase();
+  return productId
+    ? getExamPlan(productId, "A").sections[0]?.choiceCount || 4
+    : 1;
+}
+
 
 type PartModalState = {
   mode: "add" | "edit" | "manage";
@@ -609,6 +616,8 @@ export default function WebBExamCatalog({
       : sets.find((set) => set.id === setId) || sets[0]) || fallbackSet;
   const isTgatA =
     isSetPage && selected?.id === "tgat" && selectedSet?.id === "tgat-a";
+  const lockTgatAnswerRows =
+    selected?.id === "tgat" && /^TGAT[123]\b/i.test(partModal?.part || "");
   const managedPartProductId = partModal?.part
     ?.match(/^TGAT[123]\b/i)?.[0]
     .toLowerCase();
@@ -1143,7 +1152,15 @@ export default function WebBExamCatalog({
       name: part || "",
       questionCount: settings?.questionCount?.toString() || "",
       durationMinutes: settings?.durationMinutes?.toString() || "",
-      choiceCount: settings?.choiceCount?.toString() || "",
+      choiceCount:
+        settings?.choiceCount === undefined
+          ? ""
+          : String(
+              Math.max(
+                settings.choiceCount,
+                getTgatDefaultChoiceCount(part),
+              ),
+            ),
       scoreMaximum: settings?.scoreMaximum?.toString() || "",
       examFileName: settings?.examFileName || "",
       answerFileName: settings?.answerFileName || "",
@@ -1207,6 +1224,19 @@ export default function WebBExamCatalog({
         ...partModal,
         error:
           "จำนวนข้อ เวลา ตัวเลือก และคะแนน ต้องเป็นจำนวนเต็มมากกว่า 0 หรือเว้นว่างไว้",
+      });
+    }
+    if (
+      partModal.choiceCount.trim() &&
+      selected?.id === "tgat" &&
+      (Number(partModal.choiceCount) <
+        getTgatDefaultChoiceCount(partModal.part) ||
+        Number(partModal.choiceCount) > 10)
+    ) {
+      return setPartModal({
+        ...partModal,
+        choiceCount: String(getTgatDefaultChoiceCount(partModal.part)),
+        error: `จำนวนตัวเลือกต้องไม่น้อยกว่า ${getTgatDefaultChoiceCount(partModal.part)} และไม่เกิน 10 ตัวเลือก`,
       });
     }
     if (
@@ -3316,21 +3346,61 @@ export default function WebBExamCatalog({
                           ).map(([key, label]) => (
                             <label key={key} className="text-sm font-semibold">
                               {label}
-                              <WebBAdminInput
-                                type="number"
-                                min="1"
-                                step="1"
-                                value={partModal[key]}
-                                onChange={(event) =>
-                                  setPartModal({
-                                    ...partModal,
-                                    [key]: event.target.value,
-                                    error: undefined,
-                                  })
-                                }
-                                className={`mt-1 ${inputClass}`}
-                                placeholder="ยังไม่กำหนด"
-                              />
+                              {key === "choiceCount" && selected?.id === "tgat" && (
+                                <small className="mt-1 block font-normal text-slate-500">
+                                  ค่าเริ่มต้น {getTgatDefaultChoiceCount(partModal.part)} ตัวเลือก · เพิ่มได้สูงสุด 10
+                                </small>
+                              )}
+                              {key === "choiceCount" && selected?.id === "tgat" ? (
+                                <div className="mt-1">
+                                  <AdminSelect
+                                    value={
+                                      partModal.choiceCount ||
+                                      String(getTgatDefaultChoiceCount(partModal.part))
+                                    }
+                                    onChange={(value) =>
+                                      setPartModal({
+                                        ...partModal,
+                                        choiceCount: value,
+                                        error: undefined,
+                                      })
+                                    }
+                                    options={Array.from(
+                                      {
+                                        length:
+                                          11 -
+                                          getTgatDefaultChoiceCount(partModal.part),
+                                      },
+                                      (_, index) => {
+                                        const count =
+                                          getTgatDefaultChoiceCount(partModal.part) +
+                                          index;
+                                        return {
+                                          value: String(count),
+                                          label: `${count} ตัวเลือก`,
+                                        };
+                                      },
+                                    )}
+                                    ariaLabel="จำนวนตัวเลือก"
+                                  />
+                                </div>
+                              ) : (
+                                <WebBAdminInput
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  value={partModal[key]}
+                                  onChange={(event) =>
+                                    setPartModal({
+                                      ...partModal,
+                                      [key]: event.target.value,
+                                      error: undefined,
+                                    })
+                                  }
+                                  className={`mt-1 ${inputClass}`}
+                                  placeholder="ยังไม่กำหนด"
+                                />
+                              )}
                             </label>
                           ))}
                         </div>
@@ -3398,9 +3468,11 @@ export default function WebBExamCatalog({
                                   <th className="px-3 py-2.5">ข้อ</th>
                                   <th className="px-3 py-2.5">คำตอบ</th>
                                   <th className="px-3 py-2.5">คะแนน</th>
-                                  <th className="px-3 py-2.5 text-right">
-                                    จัดการ
-                                  </th>
+                                  {!lockTgatAnswerRows && (
+                                    <th className="px-3 py-2.5 text-right">
+                                      จัดการ
+                                    </th>
+                                  )}
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100">
@@ -3457,34 +3529,36 @@ export default function WebBExamCatalog({
                                         className="w-24 rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
                                       />
                                     </td>
-                                    <td className="px-3 py-2.5 text-right">
-                                      <button
-                                        type="button"
-                                        aria-label={`ลบเฉลยข้อ ${index + 1}`}
-                                        title={`ลบเฉลยข้อ ${index + 1}`}
-                                        onClick={() =>
-                                          setPartModal({
-                                            ...partModal,
-                                            answers: partModal.answers.filter(
-                                              (_, itemIndex) =>
-                                                itemIndex !== index,
-                                            ),
-                                          })
-                                        }
-                                        className="inline-flex size-10 items-center justify-center rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50"
-                                      >
-                                        <LuTrash2
-                                          aria-hidden="true"
-                                          className="size-4"
-                                        />
-                                      </button>
-                                    </td>
+                                    {!lockTgatAnswerRows && (
+                                      <td className="px-3 py-2.5 text-right">
+                                        <button
+                                          type="button"
+                                          aria-label={`ลบเฉลยข้อ ${index + 1}`}
+                                          title={`ลบเฉลยข้อ ${index + 1}`}
+                                          onClick={() =>
+                                            setPartModal({
+                                              ...partModal,
+                                              answers: partModal.answers.filter(
+                                                (_, itemIndex) =>
+                                                  itemIndex !== index,
+                                              ),
+                                            })
+                                          }
+                                          className="inline-flex size-10 items-center justify-center rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50"
+                                        >
+                                          <LuTrash2
+                                            aria-hidden="true"
+                                            className="size-4"
+                                          />
+                                        </button>
+                                      </td>
+                                    )}
                                   </tr>
                                 ))}
                                 {partModal.answers.length === 0 && (
                                   <tr>
                                     <td
-                                      colSpan={4}
+                                      colSpan={lockTgatAnswerRows ? 3 : 4}
                                       className="px-3 py-5 text-center text-xs text-slate-500"
                                     >
                                       ยังไม่มีเฉลยรายข้อ

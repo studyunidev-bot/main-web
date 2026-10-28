@@ -78,7 +78,7 @@ const tgatPartSettings: Record<string, CatalogPartSettings> = {
     contentStatus: "Draft",
     answers: Array.from({ length: 60 }, (_, i) => ({
       value: ["B", "A", "D", "C"][i % 4],
-      score: 1.67,
+      score: 100 / 60,
     })),
   },
   [tgatParts[1]]: {
@@ -104,7 +104,7 @@ const tgatPartSettings: Record<string, CatalogPartSettings> = {
     contentStatus: "Draft",
     answers: Array.from({ length: 60 }, (_, i) => ({
       value: ["C", "B", "A", "D"][i % 4],
-      score: 1.67,
+      score: 100 / 60,
     })),
   },
 };

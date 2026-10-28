@@ -84,6 +84,21 @@ export type SocialSettings = {
   supportEmail: string;
 };
 
+export type WebBHomeBenefit = {
+  id: string;
+  title: string;
+  detail: string;
+  image: string;
+};
+
+export type WebBHomeSettings = {
+  studentCover: string;
+  confidenceCover: string;
+  freeTrialCover: string;
+  tcasMockCover: string;
+  benefits: WebBHomeBenefit[];
+};
+
 export const DEMO_ACCOUNT_KEY = "webb-demo-account";
 export const DEMO_PURCHASES_KEY = "webb-demo-purchases";
 export const DEMO_EMAILS_KEY = "webb-demo-emails";
@@ -93,6 +108,34 @@ export const DEMO_AUTH_KEY = "webb-demo-student-auth";
 export const DEMO_RANKINGS_KEY = "webb-demo-ranking-results";
 export const DEMO_ORDERS_KEY = "webb-demo-orders";
 export const DEMO_SALES_OPEN_KEY = "webb-demo-sales-open";
+export const WEBB_HOME_SETTINGS_KEY = "webb-admin-mock:home-page-settings";
+
+export const defaultWebBHomeSettings: WebBHomeSettings = {
+  studentCover: "/images/webb/student-hero.png",
+  confidenceCover: "/images/webb/students-demo.png",
+  freeTrialCover: "/images/webb/students-demo.png",
+  tcasMockCover: "/images/webb/students-demo.png",
+  benefits: [
+    { id: "benefit-1", title: "จำลองบรรยากาศสอบจริง", detail: "ฝึกทำข้อสอบเสมือนจริง คุ้นเคยกับบรรยากาศการสอบ ลดความตื่นเต้น และเพิ่มความมั่นใจก่อนลงสนามจริง", image: "/images/webb/students-demo.png" },
+    { id: "benefit-2", title: "แนวข้อสอบอัปเดตล่าสุด", detail: "ฝึกฝนข้อสอบคุณภาพที่อัปเดตตามโครงสร้างปีล่าสุด คัดสรรโดยทีมติวเตอร์ผู้เชี่ยวชาญ เพื่อให้พร้อมกับข้อสอบจริง", image: "/images/webb/students-demo.png" },
+    { id: "benefit-3", title: "สอบ ONLINE ทุกที่เวลา", detail: "สอบออนไลน์ได้ทุกที่ ทุกเวลา สะดวกและยืดหยุ่น พร้อมเลือกเวลาที่สอบได้ทันที ไม่ต้องเสียเวลาเดินทาง", image: "/images/webb/students-demo.png" },
+    { id: "benefit-4", title: "วิเคราะห์ผลและ Ranking", detail: "วิเคราะห์ผลสอบอย่างละเอียด พร้อมดู Ranking เทียบกับผู้สอบทั่วประเทศ เพื่อรู้จุดที่ต้องพัฒนาและวางแผนเพิ่มคะแนน", image: "/images/webb/students-demo.png" },
+  ],
+};
+
+export function readWebBHomeSettings(): WebBHomeSettings {
+  const saved = safeRead<Partial<WebBHomeSettings>>(WEBB_HOME_SETTINGS_KEY, {});
+  return {
+    ...defaultWebBHomeSettings,
+    ...saved,
+    benefits: Array.isArray(saved.benefits) ? saved.benefits : defaultWebBHomeSettings.benefits,
+  };
+}
+
+export function writeWebBHomeSettings(settings: WebBHomeSettings) {
+  safeWrite(WEBB_HOME_SETTINGS_KEY, settings);
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("webb-home-settings-updated"));
+}
 
 export const defaultSocialSettings: SocialSettings = {
   lineId: "@เรียนต่อมหาลัย",

@@ -3,8 +3,6 @@
 import { useMemo, useState } from "react";
 import {
   LuPlus,
-  LuTrash2,
-  LuCopy,
   LuSparkles,
   LuRotateCcw,
   LuCheck,
@@ -16,7 +14,9 @@ import {
 } from "react-icons/lu";
 import AdminSelect from "@/components/ui/AdminSelect";
 import WebBAdminInput from "./WebBAdminInput";
+import WebBAdminPagination from "./WebBAdminPagination";
 import {
+  gradeMultipleResponse,
   type TGAT3AnswerRule,
   type TGAT3ScoringType,
 } from "./tgat3-scoring";
@@ -24,6 +24,8 @@ import {
 type WebBTGAT3AnswerKeyManagerProps = {
   rules: TGAT3AnswerRule[];
   onChange: (rules: TGAT3AnswerRule[]) => void;
+  questionNumberOffset?: number;
+  choiceCount?: number;
   disabled?: boolean;
 };
 
@@ -34,24 +36,102 @@ const SCORING_TYPE_OPTIONS = [
   { value: "linked", label: "คำตอบสัมพันธ์กัน " },
 ];
 
-const CHOICE_ITEMS = [
-  { key: "1", label: "1" },
-  { key: "2", label: "2" },
-  { key: "3", label: "3" },
-  { key: "4", label: "4" },
+const DEFAULT_ACCEPTED_PAIRS = [
+  { q1: "1", q2: "1", score: 2.0 },
+  { q1: "2", q2: "3", score: 2.0 },
+  { q1: "3", q2: "2", score: 2.0 },
+  { q1: "4", q2: "4", score: 2.0 },
 ];
 
+function getMultipleResponseCaseGroups(rule: TGAT3AnswerRule) {
+  const choices = ["1", "2", "3", "4"];
+  const scoringRule = { ...rule, maxScore: 1, choiceCount: 4 };
+  const cases = Array.from({ length: 16 }, (_, mask) => {
+    const selected = choices.filter((_, index) => mask & (1 << index));
+    return {
+      key: mask,
+      selection: selected,
+      score: gradeMultipleResponse(scoringRule, selected),
+    };
+  });
 
+  return Array.from({ length: 5 }, (_, count) => ({
+    count,
+    label:
+      count === 0
+        ? "ไม่ฝนเลย"
+        : `ฝน ${count} ตัวเลือก`,
+    cases: cases.filter((item) => item.selection.length === count),
+  }));
+}
+
+function MultipleResponseScoringSummary({
+  rule,
+}: {
+  rule: TGAT3AnswerRule;
+}) {
+  const groups = getMultipleResponseCaseGroups(rule);
+
+  return (
+    <details className="rounded-md border border-slate-200 bg-white">
+      <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2 text-[11px] hover:bg-slate-50">
+        <span className="font-bold text-slate-800">
+          ชุดเฉลย: {rule.targetChoices?.length ? rule.targetChoices.join(", ") : "ยังไม่ได้เลือก"}
+        </span>
+        <span className="text-slate-600">สรุปคะแนนครบ 16 เคส · คะแนนเต็ม 1</span>
+      </summary>
+      <div className="space-y-2 border-t border-slate-100 px-3 py-2">
+        <p className="text-[10px] leading-4 text-slate-600">
+          ตัวเลือกที่ฝนถูกและไม่ฝนตัวเลือกที่ผิดได้ข้อละ 0.25 คะแนน · ไม่ฝนเลยได้ 0 คะแนน
+        </p>
+        {groups.map((group) => (
+          <div
+            key={group.count}
+            className="grid grid-cols-[100px_1fr] gap-2 text-[10px]"
+          >
+            <span className="pt-1 font-semibold text-slate-600">{group.label}</span>
+            <div className="flex flex-wrap gap-1">
+              {group.cases.map((item) => (
+                <span
+                  key={item.key}
+                  className="inline-flex items-center gap-1 rounded bg-slate-50 px-2 py-1 text-slate-700"
+                >
+                  <span>{item.selection.length ? item.selection.join("+") : "เว้นว่าง"}</span>
+                  <span aria-hidden="true">→</span>
+                  <b className="text-slate-900">{item.score.toFixed(2)}</b>
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
 
 export default function WebBTGAT3AnswerKeyManager({
   rules,
   onChange,
+  questionNumberOffset = 0,
+  choiceCount = 4,
   disabled = false,
 }: WebBTGAT3AnswerKeyManagerProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState<"card" | "table">("card");
-  const [page, setPage] = useState(1);
-  const pageSize = viewMode === "card" ? 10 : 20;
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+  const choiceItems = Array.from({ length: choiceCount }, (_, index) => ({
+    key: String(index + 1),
+    label: String(index + 1),
+  }));
+  const multipleChoiceItems = Array.from({ length: 4 }, (_, index) => ({
+    key: String(index + 1),
+    label: String(index + 1),
+  }));
+  const choiceOptions = choiceItems.map((item) => ({
+    value: item.key,
+    label: `ตัวเลือก ${item.label}`,
+  }));
 
   // Statistics & Part summary (No "ตรวจแล้ว" needed - automatically valid)
   const stats = useMemo(() => {
@@ -64,13 +144,14 @@ export default function WebBTGAT3AnswerKeyManager({
     };
 
     rules.forEach((rule) => {
-      totalRaw += rule.maxScore;
+      const maxScore = rule.responseType === "multiple" ? 1 : rule.maxScore;
+      totalRaw += maxScore;
       const pid = rule.partId || "part1";
       if (!partCounts[pid]) {
         partCounts[pid] = { count: 0, raw: 0, title: rule.partTitle || pid };
       }
       partCounts[pid].count += 1;
-      partCounts[pid].raw += rule.maxScore;
+      partCounts[pid].raw += maxScore;
     });
 
     return {
@@ -86,22 +167,31 @@ export default function WebBTGAT3AnswerKeyManager({
     const term = searchTerm.toLowerCase();
     return rules.filter(
       (r) =>
-        String(r.questionNumber).includes(term) ||
+        String(r.questionNumber + questionNumberOffset).includes(term) ||
         r.partTitle?.toLowerCase().includes(term) ||
         r.responseType.toLowerCase().includes(term)
     );
-  }, [rules, searchTerm]);
+  }, [rules, searchTerm, questionNumberOffset]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRules.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
+  const currentPage = Math.min(page, totalPages - 1);
   const pageRules = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
+    const start = currentPage * pageSize;
     return filteredRules.slice(start, start + pageSize);
   }, [filteredRules, currentPage, pageSize]);
 
+  const displayQuestionNumber = (questionNumber?: number) =>
+    questionNumber && questionNumber > 0
+      ? questionNumber + questionNumberOffset
+      : 0;
+
   // Rule updater
   const updateRule = (id: string, updates: Partial<TGAT3AnswerRule>) => {
-    onChange(rules.map((r) => (r.id === id ? { ...r, ...updates } : r)));
+    onChange(
+      rules.map((r) =>
+        r.id === id ? { ...r, ...updates, choiceCount } : { ...r, choiceCount },
+      ),
+    );
   };
 
   // Add question
@@ -110,6 +200,7 @@ export default function WebBTGAT3AnswerKeyManager({
     const newRule: TGAT3AnswerRule = {
       id: `q_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       questionNumber: nextNum,
+      choiceCount,
       partId: "part1",
       partTitle: "1. การสร้างคุณค่าและนวัตกรรม",
       responseType: "single",
@@ -119,34 +210,11 @@ export default function WebBTGAT3AnswerKeyManager({
     onChange([...rules, newRule]);
   };
 
-  // Duplicate question
-  const handleDuplicateQuestion = (index: number) => {
-    const target = rules[index];
-    if (!target) return;
-    const nextNum = rules.length + 1;
-    const duplicated: TGAT3AnswerRule = {
-      ...target,
-      id: `q_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      questionNumber: nextNum,
-    };
-    onChange([...rules.slice(0, index + 1), duplicated, ...rules.slice(index + 1)]);
-  };
-
-  // Delete question
-  const handleDeleteQuestion = (id: string) => {
-    const nextRules = rules
-      .filter((r) => r.id !== id)
-      .map((r, i) => ({ ...r, questionNumber: i + 1 }));
-    onChange(nextRules);
-  };
-
-
-
   // Clear all
   const handleClearAll = () => {
     if (!window.confirm("คุณแน่ใจหรือไม่ว่าต้องการล้างเฉลยทั้งหมด?")) return;
     onChange([]);
-    setPage(1);
+    setPage(0);
   };
 
   return (
@@ -249,7 +317,7 @@ export default function WebBTGAT3AnswerKeyManager({
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              setPage(1);
+              setPage(0);
             }}
             placeholder="ค้นหาข้อ, พาร์ท, หรือประเภท..."
             className="w-72 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs shadow-sm"
@@ -261,29 +329,6 @@ export default function WebBTGAT3AnswerKeyManager({
           )}
         </div>
 
-        {totalPages > 1 && (
-          <div className="flex items-center gap-1.5 text-xs">
-            <button
-              type="button"
-              disabled={currentPage <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-medium shadow-sm hover:bg-slate-50 disabled:opacity-40"
-            >
-              ก่อนหน้า
-            </button>
-            <span className="px-2 font-semibold text-slate-700">
-              หน้า {currentPage} จาก {totalPages}
-            </span>
-            <button
-              type="button"
-              disabled={currentPage >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-medium shadow-sm hover:bg-slate-50 disabled:opacity-40"
-            >
-              ถัดไป
-            </button>
-          </div>
-        )}
       </div>
 
       {/* VIEW MODE 1: SPACIOUS CARD VIEW (Default - No cramping, breathes easily!) */}
@@ -297,7 +342,15 @@ export default function WebBTGAT3AnswerKeyManager({
             </div>
           ) : (
             pageRules.map((rule) => {
-              const fullIndex = rules.findIndex((r) => r.id === rule.id);
+              const linkedParent = rules.find(
+                (candidate) =>
+                  candidate.id !== rule.id &&
+                  candidate.responseType === "linked" &&
+                  !candidate.isSecondOfLinkedPair &&
+                  candidate.linkedPairQuestionNumber === rule.questionNumber,
+              );
+              const isLockedLinkedSecond =
+                Boolean(linkedParent) || Boolean(rule.isSecondOfLinkedPair);
               return (
                 <div
                   key={rule.id}
@@ -308,7 +361,7 @@ export default function WebBTGAT3AnswerKeyManager({
                     {/* Left: Number + Part + Type */}
                     <div className="flex flex-wrap items-center gap-2.5">
                       <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-sm font-black text-white shadow-sm">
-                        {rule.questionNumber}
+                        {displayQuestionNumber(rule.questionNumber)}
                       </div>
 
                       <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700">
@@ -318,7 +371,7 @@ export default function WebBTGAT3AnswerKeyManager({
                       <div className="w-64">
                         <AdminSelect
                           value={rule.responseType}
-                          disabled={disabled}
+                          disabled={disabled || isLockedLinkedSecond}
                           options={SCORING_TYPE_OPTIONS}
                           onChange={(val) => {
                             const nextType = val as TGAT3ScoringType;
@@ -347,7 +400,9 @@ export default function WebBTGAT3AnswerKeyManager({
                             } else if (nextType === "multiple") {
                               nextUpdates = {
                                 ...nextUpdates,
-                                targetChoices: rule.targetChoices || ["1", "3"],
+                                targetChoices: rule.targetChoices?.length
+                                  ? rule.targetChoices
+                                  : ["1", "3"],
                                 maxScore: 1.0,
                                 isSecondOfLinkedPair: false,
                               };
@@ -359,18 +414,16 @@ export default function WebBTGAT3AnswerKeyManager({
                                   (rule.questionNumber % 2 === 1
                                     ? rule.questionNumber + 1
                                     : rule.questionNumber - 1),
-                                acceptedPairs: rule.acceptedPairs || [
-                                  { q1: "1", q2: "1", score: 2.0 },
-                                  { q1: "2", q2: "3", score: 2.0 },
-                                  { q1: "3", q2: "2", score: 2.0 },
-                                  { q1: "4", q2: "4", score: 2.0 },
-                                ],
+                                acceptedPairs:
+                                  rule.acceptedPairs?.length
+                                    ? rule.acceptedPairs
+                                    : DEFAULT_ACCEPTED_PAIRS,
                                 maxScore: 2.0,
                               };
                             }
                             updateRule(rule.id, nextUpdates);
                           }}
-                          ariaLabel={`ประเภทการตรวจข้อ ${rule.questionNumber}`}
+                          ariaLabel={`ประเภทการตรวจข้อ ${displayQuestionNumber(rule.questionNumber)}`}
                           className="w-full text-xs font-bold text-slate-800"
                         />
                       </div>
@@ -378,7 +431,7 @@ export default function WebBTGAT3AnswerKeyManager({
 
                     {/* Right: Max Score & Actions */}
                     <div className="flex items-center gap-3">
-                      {!rule.isSecondOfLinkedPair && (
+                      {!isLockedLinkedSecond && (
                         <div className="flex items-center gap-1.5 text-xs text-slate-600">
                           <span className="font-medium">คะแนนเต็ม:</span>
                           <WebBAdminInput
@@ -386,65 +439,51 @@ export default function WebBTGAT3AnswerKeyManager({
                             step="0.25"
                             min="0.25"
                             max="10"
-                            disabled={disabled}
-                            value={rule.maxScore}
+                            disabled={disabled || rule.responseType === "multiple"}
+                            value={rule.responseType === "multiple" ? 1 : rule.maxScore}
                             onChange={(e) =>
                               updateRule(rule.id, {
                                 maxScore: Number(e.target.value) || 1.0,
                               })
                             }
                             className="w-16 rounded-lg border border-slate-300 bg-white px-2 py-1 text-center font-bold text-slate-800"
-                            aria-label={`คะแนนเต็มข้อ ${rule.questionNumber}`}
+                            aria-label={`คะแนนเต็มข้อ ${displayQuestionNumber(rule.questionNumber)}`}
                           />
                         </div>
                       )}
 
-                      <div className="flex items-center gap-1 border-l border-slate-200 pl-3">
-                        <button
-                          type="button"
-                          disabled={disabled}
-                          onClick={() => handleDuplicateQuestion(fullIndex)}
-                          className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                          title="คัดลอกข้อนี้"
-                          aria-label={`คัดลอกข้อ ${rule.questionNumber}`}
-                        >
-                          <LuCopy className="text-sm" />
-                        </button>
-                        <button
-                          type="button"
-                          disabled={disabled}
-                          onClick={() => handleDeleteQuestion(rule.id)}
-                          className="rounded-lg p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600"
-                          title="ลบข้อนี้"
-                          aria-label={`ลบข้อ ${rule.questionNumber}`}
-                        >
-                          <LuTrash2 className="text-sm" />
-                        </button>
-                      </div>
                     </div>
                   </div>
 
                   {/* Card Body - Spacious Inputs per Type */}
                   <div className="mt-4">
                     {/* 1. SINGLE CHOICE */}
-                    {rule.responseType === "single" && (
+                    {rule.responseType === "single" && !isLockedLinkedSecond && (
                       <div className="rounded-xl bg-slate-50/70 p-4 border border-slate-100">
                         <span className="text-xs font-bold text-slate-700">
                           เลือกตัวเลือกที่เป็นคำตอบที่ถูกต้อง:
                         </span>
                         <div className="mt-2.5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-                          {CHOICE_ITEMS.map((item) => {
+                          {choiceItems.map((item) => {
                             const isSelected =
                               (rule.singleCorrectChoice || "1") === item.key;
                             return (
                               <button
                                 key={item.key}
                                 type="button"
-                                disabled={disabled}
+                                disabled={
+                                  disabled ||
+                                  (isSelected && (rule.targetChoices?.length || 0) <= 1)
+                                }
                                 onClick={() =>
                                   updateRule(rule.id, {
                                     singleCorrectChoice: item.key,
                                   })
+                                }
+                                title={
+                                  isSelected && (rule.targetChoices?.length || 0) <= 1
+                                    ? "ต้องกำหนดเฉลยอย่างน้อย 1 ตัวเลือก"
+                                    : undefined
                                 }
                                 className={`flex items-center justify-between rounded-xl border p-3 text-xs font-bold transition-all ${isSelected
                                   ? "border-blue-600 bg-blue-600 text-white shadow-sm"
@@ -468,7 +507,7 @@ export default function WebBTGAT3AnswerKeyManager({
                     )}
 
                     {/* 2. WEIGHTED SINGLE CHOICE (Spacious 4-column cards) */}
-                    {rule.responseType === "weighted" && (
+                    {rule.responseType === "weighted" && !isLockedLinkedSecond && (
                       <div className="rounded-xl bg-amber-50/40 p-4 border border-amber-200/60">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-amber-950">
@@ -477,7 +516,7 @@ export default function WebBTGAT3AnswerKeyManager({
 
                         </div>
                         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                          {CHOICE_ITEMS.map((item) => (
+                          {choiceItems.map((item) => (
                             <div
                               key={item.key}
                               className="rounded-xl border border-amber-200/80 bg-white p-3 shadow-sm"
@@ -504,7 +543,7 @@ export default function WebBTGAT3AnswerKeyManager({
                                     });
                                   }}
                                   className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-center text-xs font-bold text-blue-700 focus:border-blue-500"
-                                  aria-label={`คะแนนตัวเลือก ${item.key} ข้อ ${rule.questionNumber}`}
+                                  aria-label={`คะแนนตัวเลือก ${item.key} ข้อ ${displayQuestionNumber(rule.questionNumber)}`}
                                 />
                                 <span className="text-xs text-slate-500">คะแนน</span>
                               </div>
@@ -516,19 +555,20 @@ export default function WebBTGAT3AnswerKeyManager({
                     )}
 
                     {/* 3. MULTIPLE RESPONSE (Spacious Cards) */}
-                    {rule.responseType === "multiple" && (
-                      <div className="rounded-xl bg-blue-50/50 p-4 border border-blue-200/60">
-                        <span className="text-xs font-bold text-blue-950">
-                          คลิกเลือกตัวเลือกที่ต้องตอบ (เลือกได้หลายตัวเลือก):
-                        </span>
-                        <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                          {CHOICE_ITEMS.map((item) => {
+                    {rule.responseType === "multiple" && !isLockedLinkedSecond && (
+                      <div className="space-y-2 border-t border-slate-100 pt-3">
+                        <MultipleResponseScoringSummary rule={rule} />
+                        <div className="flex flex-wrap gap-1.5">
+                          {multipleChoiceItems.map((item) => {
                             const isChecked = (rule.targetChoices || []).includes(item.key);
                             return (
                               <button
                                 key={item.key}
                                 type="button"
-                                disabled={disabled}
+                                disabled={
+                                  disabled ||
+                                  (isChecked && (rule.targetChoices?.length || 0) <= 1)
+                                }
                                 onClick={() => {
                                   const curr = rule.targetChoices || [];
                                   const next = isChecked
@@ -536,49 +576,48 @@ export default function WebBTGAT3AnswerKeyManager({
                                     : [...curr, item.key].sort();
                                   updateRule(rule.id, { targetChoices: next });
                                 }}
-                                className={`flex items-center justify-between rounded-xl border p-3 text-xs font-bold transition-all ${isChecked
-                                  ? "border-blue-600 bg-white text-blue-700 shadow-sm ring-2 ring-blue-500/20"
-                                  : "border-slate-200 bg-white/70 text-slate-600 hover:bg-white hover:border-slate-300"
+                                className={`inline-flex min-w-12 items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-bold transition-colors ${isChecked
+                                  ? "border-blue-600 bg-blue-600 text-white"
+                                  : "border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:bg-blue-50"
                                   }`}
+                                title={
+                                  isChecked && (rule.targetChoices?.length || 0) <= 1
+                                    ? "ต้องกำหนดเฉลยอย่างน้อย 1 ตัวเลือก"
+                                    : undefined
+                                }
                               >
-                                <span>{item.label}</span>
-                                <span
-                                  className={`flex h-5 w-5 items-center justify-center rounded-md text-xs ${isChecked
-                                    ? "bg-blue-600 text-white"
-                                    : "border border-slate-300 bg-white"
-                                    }`}
-                                >
-                                  {isChecked && <LuCheck className="text-xs font-black" />}
-                                </span>
+                                {isChecked && <LuCheck aria-hidden="true" className="size-3.5" />}
+                                ตัวเลือก {item.label}
                               </button>
                             );
                           })}
                         </div>
-
                       </div>
                     )}
 
                     {/* 4. LINKED QUESTIONS (Spacious Pair Configuration) */}
                     {rule.responseType === "linked" && (
                       <div>
-                        {rule.isSecondOfLinkedPair ? (
+                        {rule.isSecondOfLinkedPair || linkedParent ? (
                           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-purple-50 p-4 border border-purple-200">
                             <div className="flex items-center gap-2.5 text-xs text-purple-950">
                               <LuLink className="text-base text-purple-600" />
                               <span>
-                                ข้อนี้เป็นคำตอบส่วนที่สอง สัมพันธ์กับ <b>ข้อ {rule.linkedPairQuestionNumber}</b> (คิดคะแนนรวม 2 คะแนนที่ข้อแรก)
+                                ข้อนี้เป็นคำตอบส่วนที่สอง สัมพันธ์กับ <b>ข้อ {displayQuestionNumber(linkedParent?.questionNumber || rule.linkedPairQuestionNumber)}</b> (ตั้งคำตอบและคิดคะแนนที่ข้อหลัก)
                               </span>
                             </div>
-                            <button
-                              type="button"
-                              disabled={disabled}
-                              onClick={() =>
-                                updateRule(rule.id, { isSecondOfLinkedPair: false })
-                              }
-                              className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-purple-700 border border-purple-300 shadow-sm hover:bg-purple-100"
-                            >
-                              เปลี่ยนเป็นข้อคิดคะแนนหลัก
-                            </button>
+                            {!linkedParent && rule.isSecondOfLinkedPair && (
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={() =>
+                                  updateRule(rule.id, { isSecondOfLinkedPair: false })
+                                }
+                                className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-purple-700 border border-purple-300 shadow-sm hover:bg-purple-100"
+                              >
+                                เปลี่ยนเป็นข้อคิดคะแนนหลัก
+                              </button>
+                            )}
                           </div>
                         ) : (
                           <div className="rounded-xl bg-purple-50/50 p-4 border border-purple-200/70">
@@ -608,22 +647,38 @@ export default function WebBTGAT3AnswerKeyManager({
                                 {rule.linkedPairQuestionNumber && rule.linkedPairQuestionNumber > 0 ? (
                                   <div className="flex items-center gap-1.5">
                                     <span className="text-xs text-purple-900">
-                                      ข้อ {rule.questionNumber} คู่กับ
+                                      ข้อ {displayQuestionNumber(rule.questionNumber)} คู่กับ
                                     </span>
                                     <WebBAdminInput
                                       type="number"
                                       min="0"
                                       disabled={disabled}
-                                      value={rule.linkedPairQuestionNumber ?? 0}
+                                      value={rule.linkedPairQuestionNumber ? displayQuestionNumber(rule.linkedPairQuestionNumber) : 0}
                                       onChange={(e) => {
                                         const val = e.target.value === "" ? 0 : Number(e.target.value);
+                                        const targetQuestionNumber = val
+                                          ? val - questionNumberOffset
+                                          : 0;
+                                        const alreadyPairedBy = rules.find(
+                                          (candidate) =>
+                                            candidate.id !== rule.id &&
+                                            candidate.responseType === "linked" &&
+                                            !candidate.isSecondOfLinkedPair &&
+                                            candidate.linkedPairQuestionNumber === targetQuestionNumber,
+                                        );
+                                        if (alreadyPairedBy) {
+                                          window.alert(
+                                            `ข้อ ${displayQuestionNumber(val)} ถูกจับคู่กับข้อ ${displayQuestionNumber(alreadyPairedBy.questionNumber)} แล้ว`,
+                                          );
+                                          return;
+                                        }
                                         updateRule(rule.id, {
-                                          linkedPairQuestionNumber: val,
+                                          linkedPairQuestionNumber: targetQuestionNumber,
                                         });
                                       }}
                                       placeholder="0"
                                       className="w-16 rounded-lg border border-purple-300 bg-white px-2 py-1 text-center font-bold text-purple-950 text-xs"
-                                      aria-label={`ข้อที่สัมพันธ์กับข้อ ${rule.questionNumber}`}
+                                      aria-label={`ข้อที่สัมพันธ์กับข้อ ${displayQuestionNumber(rule.questionNumber)}`}
                                     />
                                   </div>
                                 ) : (
@@ -632,80 +687,93 @@ export default function WebBTGAT3AnswerKeyManager({
                                   </span>
                                 )}
                               </div>
-
                               {rule.linkedPairQuestionNumber && rule.linkedPairQuestionNumber > 0 && (
                                 <button
                                   type="button"
                                   disabled={disabled}
-                                  onClick={() => {
-                                    const currentPairs = rule.acceptedPairs || [];
+                                  onClick={() =>
                                     updateRule(rule.id, {
                                       acceptedPairs: [
-                                        ...currentPairs,
-                                        { q1: "1", q2: "1", score: rule.maxScore || 2.0 },
+                                        ...(rule.acceptedPairs || []),
+                                        {
+                                          q1: "1",
+                                          q2: "1",
+                                          score: rule.maxScore || 2.0,
+                                        },
                                       ],
-                                    });
-                                  }}
-                                  className="inline-flex items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-purple-700"
+                                    })
+                                  }
+                                  className="inline-flex items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-purple-700 disabled:opacity-50"
                                 >
-                                  <LuPlus className="text-xs" /> เพิ่มคู่ยอมรับ
+                                  <LuPlus aria-hidden="true" className="size-3.5" />
+                                  เพิ่มคู่คำตอบที่ยอมรับ
                                 </button>
                               )}
                             </div>
 
                             {rule.linkedPairQuestionNumber && rule.linkedPairQuestionNumber > 0 ? (
                               <div className="mt-3">
-                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-4">
-                                  {(rule.acceptedPairs || []).map((pair, pIdx) => (
-                                    <div
-                                      key={pIdx}
-                                      className="flex items-center justify-between rounded-xl border border-purple-200 bg-white p-2.5 shadow-sm"
-                                    >
-                                      <div className="flex items-center gap-2 text-xs">
-                                        <span className="font-semibold text-slate-500">
-                                          คู่ {pIdx + 1}:
-                                        </span>
-                                        <WebBAdminInput
+                                <div className="overflow-x-auto rounded-xl border border-purple-200 bg-white">
+                                  <div className="min-w-[620px]">
+                                    <div className="grid grid-cols-[120px_1fr_44px_1fr_48px] items-center gap-3 border-b border-purple-100 bg-purple-50 px-3 py-2 text-[11px] font-bold text-purple-900">
+                                      <span>คู่ที่ยอมรับ</span>
+                                      <span>คำตอบข้อ {displayQuestionNumber(rule.questionNumber)}</span>
+                                      <span className="text-center">สัมพันธ์</span>
+                                      <span>คำตอบข้อ {displayQuestionNumber(rule.linkedPairQuestionNumber)}</span>
+                                      <span />
+                                    </div>
+                                    {(rule.acceptedPairs || []).map((pair, pIdx, visiblePairs) => (
+                                      <div
+                                        key={`${rule.id}-${pIdx}`}
+                                        className="grid grid-cols-[120px_1fr_44px_1fr_48px] items-center gap-3 border-b border-slate-100 px-3 py-2 last:border-b-0"
+                                      >
+                                        <span className="text-xs font-bold text-slate-700">คู่ {pIdx + 1}</span>
+                                        <AdminSelect
                                           value={pair.q1}
                                           disabled={disabled}
-                                          onChange={(e) => {
-                                            const nextPairs = [...(rule.acceptedPairs || [])];
-                                            nextPairs[pIdx] = { ...pair, q1: e.target.value.trim() };
+                                          onChange={(value) => {
+                                            const nextPairs = [{ ...pair, q1: value }];
                                             updateRule(rule.id, { acceptedPairs: nextPairs });
                                           }}
-                                          className="w-8 rounded border border-slate-300 px-1 py-0.5 text-center font-bold text-purple-950"
-                                          aria-label={`คู่ข้อที่ ${rule.questionNumber} ตัวเลือกที่ 1`}
+                                          options={choiceOptions}
+                                          ariaLabel={`คำตอบข้อ ${displayQuestionNumber(rule.questionNumber)}`}
+                                          className="w-full text-xs"
                                         />
-                                        <span className="font-bold text-purple-400">🔗</span>
-                                        <WebBAdminInput
+                                        <LuLink aria-hidden="true" className="mx-auto text-purple-500" />
+                                        <AdminSelect
                                           value={pair.q2}
                                           disabled={disabled}
-                                          onChange={(e) => {
-                                            const nextPairs = [...(rule.acceptedPairs || [])];
-                                            nextPairs[pIdx] = { ...pair, q2: e.target.value.trim() };
+                                          onChange={(value) => {
+                                            const nextPairs = [{ ...pair, q2: value }];
                                             updateRule(rule.id, { acceptedPairs: nextPairs });
                                           }}
-                                          className="w-8 rounded border border-slate-300 px-1 py-0.5 text-center font-bold text-purple-950"
-                                          aria-label={`คู่ข้อที่ ${rule.questionNumber} ตัวเลือกที่ 2`}
+                                          options={choiceOptions}
+                                          ariaLabel={`คำตอบข้อ ${displayQuestionNumber(rule.linkedPairQuestionNumber)}`}
+                                          className="w-full text-xs"
                                         />
+                                        <button
+                                          type="button"
+                                          disabled={disabled || visiblePairs.length <= 1}
+                                          onClick={() => {
+                                            if (visiblePairs.length <= 1) return;
+                                            updateRule(rule.id, {
+                                              acceptedPairs: visiblePairs.filter((_, index) => index !== pIdx),
+                                            });
+                                          }}
+                                          className="ml-auto rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                                          title={visiblePairs.length <= 1 ? "ต้องเหลืออย่างน้อย 1 คู่คำตอบ" : "ลบคู่นี้"}
+                                          aria-label={`ลบคู่ที่ ${pIdx + 1}`}
+                                        >
+                                          <LuX aria-hidden="true" className="size-4" />
+                                        </button>
                                       </div>
-                                      <button
-                                        type="button"
-                                        disabled={disabled}
-                                        onClick={() => {
-                                          const nextPairs = (rule.acceptedPairs || []).filter(
-                                            (_, i) => i !== pIdx
-                                          );
-                                          updateRule(rule.id, { acceptedPairs: nextPairs });
-                                        }}
-                                        className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                                        title="ลบคู่นี้"
-                                        aria-label={`ลบคู่ที่ ${pIdx + 1}`}
-                                      >
-                                        <LuX aria-hidden="true" className="size-4" />
-                                      </button>
-                                    </div>
-                                  ))}
+                                    ))}
+                                    {(!rule.acceptedPairs || rule.acceptedPairs.length === 0) && (
+                                      <p className="px-3 py-4 text-center text-xs text-slate-500">
+                                        กำลังเตรียมคู่คำตอบ
+                                      </p>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             ) : (
@@ -713,6 +781,14 @@ export default function WebBTGAT3AnswerKeyManager({
                             )}
                           </div>
                         )}
+                      </div>
+                    )}
+                    {isLockedLinkedSecond && rule.responseType !== "linked" && (
+                      <div className="flex items-center gap-2.5 rounded-xl border border-purple-200 bg-purple-50 p-4 text-xs text-purple-950">
+                        <LuLink className="text-base text-purple-600" />
+                        <span>
+                          ข้อนี้ถูกล็อกเป็นข้อคู่ของข้อ {displayQuestionNumber(linkedParent?.questionNumber || rule.linkedPairQuestionNumber)} แล้ว ตั้งคำตอบและคะแนนที่ข้อหลักเท่านั้น
+                        </span>
                       </div>
                     )}
                   </div>
@@ -728,11 +804,10 @@ export default function WebBTGAT3AnswerKeyManager({
         <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
           <table className="w-full min-w-[1020px] table-fixed text-left text-xs">
             <colgroup>
-              <col className="w-[12%]" />
-              <col className="w-[18%]" />
-              <col className="w-[52%]" />
+              <col className="w-[14%]" />
+              <col className="w-[20%]" />
+              <col className="w-[56%]" />
               <col className="w-[10%]" />
-              <col className="w-[8%]" />
             </colgroup>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 font-bold text-slate-700">
@@ -740,26 +815,33 @@ export default function WebBTGAT3AnswerKeyManager({
                 <th className="p-3.5">รูปแบบการตรวจ</th>
                 <th className="p-3.5">เฉลย & กำหนดเกณฑ์คะแนน</th>
                 <th className="p-3.5 text-center">คะแนนเต็ม</th>
-                <th className="p-3.5 text-center">จัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {pageRules.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-slate-400">
+                  <td colSpan={4} className="p-8 text-center text-slate-400">
                     ไม่พบข้อสอบ
                   </td>
                 </tr>
               ) : (
                 pageRules.map((rule) => {
-                  const fullIndex = rules.findIndex((r) => r.id === rule.id);
+                  const linkedParent = rules.find(
+                    (candidate) =>
+                      candidate.id !== rule.id &&
+                      candidate.responseType === "linked" &&
+                      !candidate.isSecondOfLinkedPair &&
+                      candidate.linkedPairQuestionNumber === rule.questionNumber,
+                  );
+                  const isLockedLinkedSecond =
+                    Boolean(linkedParent) || Boolean(rule.isSecondOfLinkedPair);
                   return (
                     <tr key={rule.id} className="hover:bg-slate-50/70">
                       {/* Column 1: Number & Part */}
                       <td className="p-3.5 align-top">
                         <div className="flex items-center gap-1.5">
                           <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-900 text-xs font-bold text-white">
-                            {rule.questionNumber}
+                            {displayQuestionNumber(rule.questionNumber)}
                           </span>
                         </div>
                         <div className="mt-1.5">
@@ -773,24 +855,29 @@ export default function WebBTGAT3AnswerKeyManager({
                       <td className="p-3.5 align-top">
                         <AdminSelect
                           value={rule.responseType}
-                          disabled={disabled}
+                          disabled={disabled || isLockedLinkedSecond}
                           options={SCORING_TYPE_OPTIONS}
                           onChange={(val) => {
                             const nextType = val as TGAT3ScoringType;
                             updateRule(rule.id, { responseType: nextType });
                           }}
-                          ariaLabel={`ประเภทการตรวจข้อ ${rule.questionNumber}`}
+                          ariaLabel={`ประเภทการตรวจข้อ ${displayQuestionNumber(rule.questionNumber)}`}
                           className="w-full text-xs font-semibold"
                         />
                       </td>
 
                       {/* Column 3: Answer Inputs (Roomy 52% width) */}
                       <td className="p-3.5 align-top">
-                        {rule.responseType === "single" && (
+                        {isLockedLinkedSecond ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-lg bg-purple-50 px-2.5 py-1.5 font-semibold text-purple-900">
+                            <LuLink aria-hidden="true" />
+                            ล็อกเป็นข้อคู่ของข้อ {displayQuestionNumber(linkedParent?.questionNumber || rule.linkedPairQuestionNumber)} · ตั้งคำตอบที่ข้อหลัก
+                          </span>
+                        ) : rule.responseType === "single" && (
                           <div className="flex items-center gap-3">
                             <span className="font-medium text-slate-700">ตอบถูก:</span>
                             <div className="flex gap-1.5">
-                              {CHOICE_ITEMS.map((item) => (
+                              {choiceItems.map((item) => (
                                 <button
                                   key={item.key}
                                   type="button"
@@ -810,9 +897,9 @@ export default function WebBTGAT3AnswerKeyManager({
                           </div>
                         )}
 
-                        {rule.responseType === "weighted" && (
+                        {!isLockedLinkedSecond && rule.responseType === "weighted" && (
                           <div className="flex flex-wrap items-center gap-2">
-                            {CHOICE_ITEMS.map((item) => (
+                            {choiceItems.map((item) => (
                               <div
                                 key={item.key}
                                 className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1"
@@ -835,22 +922,27 @@ export default function WebBTGAT3AnswerKeyManager({
                                     });
                                   }}
                                   className="w-14 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-center text-xs font-bold"
-                                  aria-label={`คะแนนตัวเลือก ${item.key} ข้อ ${rule.questionNumber}`}
+                                  aria-label={`คะแนนตัวเลือก ${item.key} ข้อ ${displayQuestionNumber(rule.questionNumber)}`}
                                 />
                               </div>
                             ))}
                           </div>
                         )}
 
-                        {rule.responseType === "multiple" && (
-                          <div className="flex items-center gap-2">
-                            {CHOICE_ITEMS.map((item) => {
+                        {!isLockedLinkedSecond && rule.responseType === "multiple" && (
+                          <div className="space-y-2">
+                            <MultipleResponseScoringSummary rule={rule} />
+                            <div className="flex items-center gap-2">
+                            {multipleChoiceItems.map((item) => {
                               const isChecked = (rule.targetChoices || []).includes(item.key);
                               return (
                                 <button
                                   key={item.key}
                                   type="button"
-                                  disabled={disabled}
+                                  disabled={
+                                    disabled ||
+                                    (isChecked && (rule.targetChoices?.length || 0) <= 1)
+                                  }
                                   onClick={() => {
                                     const curr = rule.targetChoices || [];
                                     const next = isChecked
@@ -858,6 +950,11 @@ export default function WebBTGAT3AnswerKeyManager({
                                       : [...curr, item.key].sort();
                                     updateRule(rule.id, { targetChoices: next });
                                   }}
+                                  title={
+                                    isChecked && (rule.targetChoices?.length || 0) <= 1
+                                      ? "ต้องกำหนดเฉลยอย่างน้อย 1 ตัวเลือก"
+                                      : undefined
+                                  }
                                   className={`rounded-lg px-2.5 py-1 font-bold ${isChecked
                                     ? "bg-blue-600 text-white"
                                     : "border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
@@ -867,23 +964,24 @@ export default function WebBTGAT3AnswerKeyManager({
                                 </button>
                               );
                             })}
+                            </div>
                           </div>
                         )}
 
-                        {rule.responseType === "linked" && (
+                        {!isLockedLinkedSecond && rule.responseType === "linked" && (
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-purple-900 font-semibold text-xs">
                               {rule.linkedPairQuestionNumber && rule.linkedPairQuestionNumber > 0
-                                ? `คู่กับข้อ ${rule.linkedPairQuestionNumber}:`
+                                ? `คู่กับข้อ ${displayQuestionNumber(rule.linkedPairQuestionNumber)}:`
                                 : "ไม่มีคู่สัมพันธ์ (0)"}
                             </span>
                             {rule.linkedPairQuestionNumber && rule.linkedPairQuestionNumber > 0 &&
                               (rule.acceptedPairs || []).map((pair, pIdx) => (
                                 <span
-                                  key={pIdx}
+                                  key={`${rule.id}-${pIdx}`}
                                   className="rounded bg-purple-100 px-2 py-0.5 font-bold text-purple-900 text-xs"
                                 >
-                                  {pair.q1}-{pair.q2}
+                                  ข้อ {displayQuestionNumber(rule.questionNumber)}: {pair.q1} ↔ ข้อ {displayQuestionNumber(rule.linkedPairQuestionNumber)}: {pair.q2}
                                 </span>
                               ))}
                           </div>
@@ -897,43 +995,18 @@ export default function WebBTGAT3AnswerKeyManager({
                           step="0.25"
                           min="0.25"
                           max="10"
-                          disabled={disabled}
-                          value={rule.maxScore}
+                          disabled={disabled || isLockedLinkedSecond || rule.responseType === "multiple"}
+                          value={isLockedLinkedSecond ? 0 : rule.responseType === "multiple" ? 1 : rule.maxScore}
                           onChange={(e) =>
                             updateRule(rule.id, {
                               maxScore: Number(e.target.value) || 1.0,
                             })
                           }
                           className="w-16 rounded-lg border border-slate-300 px-2 py-1 text-center font-bold"
-                          aria-label={`คะแนนเต็มข้อ ${rule.questionNumber}`}
+                          aria-label={`คะแนนเต็มข้อ ${displayQuestionNumber(rule.questionNumber)}`}
                         />
                       </td>
 
-                      {/* Column 5: Actions */}
-                      <td className="p-3.5 text-center align-top">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            type="button"
-                            disabled={disabled}
-                            onClick={() => handleDuplicateQuestion(fullIndex)}
-                            className="rounded p-1 text-slate-500 hover:bg-slate-100"
-                            title="คัดลอกข้อนี้"
-                            aria-label={`คัดลอกข้อ ${rule.questionNumber}`}
-                          >
-                            <LuCopy className="text-sm" />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={disabled}
-                            onClick={() => handleDeleteQuestion(rule.id)}
-                            className="rounded p-1 text-slate-500 hover:bg-red-50 hover:text-red-600"
-                            title="ลบข้อนี้"
-                            aria-label={`ลบข้อ ${rule.questionNumber}`}
-                          >
-                            <LuTrash2 className="text-sm" />
-                          </button>
-                        </div>
-                      </td>
                     </tr>
                   );
                 })
@@ -942,6 +1015,19 @@ export default function WebBTGAT3AnswerKeyManager({
           </table>
         </div>
       )}
+
+      <WebBAdminPagination
+        totalItems={filteredRules.length}
+        pageSize={pageSize}
+        page={currentPage}
+        pageCount={totalPages}
+        onPageChange={setPage}
+        onPageSizeChange={(nextPageSize) => {
+          setPageSize(nextPageSize);
+          setPage(0);
+        }}
+        ariaLabel="เปลี่ยนหน้าเฉลย TGAT3"
+      />
 
       {/* Bottom Note */}
       <div className="flex items-center justify-end pt-2">

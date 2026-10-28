@@ -23,6 +23,7 @@ import {
   LuLayoutDashboard,
   LuLifeBuoy,
   LuPencil,
+  LuPlus,
   LuTag,
   LuTrash2,
   LuX,
@@ -38,6 +39,7 @@ import WebBThaiDatePicker from "./WebBThaiDatePicker";
 import AdminSelect from "@/components/ui/AdminSelect";
 import WebBAdminInput from "./WebBAdminInput";
 import WebBAdminTextarea from "./WebBAdminTextarea";
+import { WebBImage } from "./WebBImage";
 import { confirmWebBAction, inputWebBValue } from "./confirm";
 import { toast } from "react-toastify";
 import { WebBAdminRoleContext } from "./WebBAdminAccess";
@@ -53,12 +55,17 @@ import {
 } from "./tgat3-scoring";
 import {
   defaultSocialSettings,
+  defaultWebBHomeSettings,
+  readWebBHomeSettings,
+  writeWebBHomeSettings,
   productsOverlap,
   safeRead,
   safeWrite,
+  writeSocialSettings,
   setDemoResultsPublished,
   type DemoPurchase,
   type SocialSettings,
+  type WebBHomeSettings,
 } from "./demo-store";
 import WebBExamApprovals from "./WebBExamApprovals";
 import WebBAdminTable, {
@@ -976,6 +983,40 @@ function downloadCsv(
   URL.revokeObjectURL(url);
 }
 
+function compressHomeCover(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    if (!file.type.startsWith("image/")) {
+      reject(new Error("เลือกไฟล์รูปภาพก่อน"));
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      reject(new Error("รูปภาพต้องมีขนาดไม่เกิน 8 MB"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("อ่านไฟล์รูปภาพไม่สำเร็จ"));
+    reader.onload = () => {
+      const image = new window.Image();
+      image.onerror = () => reject(new Error("เปิดไฟล์รูปภาพไม่สำเร็จ"));
+      image.onload = () => {
+        const scale = Math.min(1, 1400 / image.width, 900 / image.height);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) {
+          reject(new Error("เตรียมรูปภาพไม่สำเร็จ"));
+          return;
+        }
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/webp", 0.78));
+      };
+      image.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function WebBAdminDemo({
   activeScreen = "overview",
   initialExamTab,
@@ -1126,6 +1167,9 @@ export default function WebBAdminDemo({
   const [openSales, setOpenSales] = useDemoData("open-sales", true);
   const [socialSettings, setSocialSettings] = useState<SocialSettings>(
     defaultSocialSettings,
+  );
+  const [homePageSettings, setHomePageSettings] = useState<WebBHomeSettings>(
+    defaultWebBHomeSettings,
   );
   const paymentProvider = "Payso";
   const [webhookEvents, setWebhookEvents] = useDemoData("webhooks", [
@@ -1324,6 +1368,7 @@ export default function WebBAdminDemo({
       const section = {
         ...original,
         ...source,
+        choiceCount: Math.max(source.choiceCount, original.choiceCount),
         questionStart,
         answerIndexStart,
       };
@@ -1344,9 +1389,22 @@ export default function WebBAdminDemo({
       hasSuppliedExam: sections.length > 0 && base.hasSuppliedExam,
     };
   };
-  const selectedSectionSetting = activeExamSectionSettings.find(
+  const selectedSectionSettingSource = activeExamSectionSettings.find(
     (section) => section.id === answerKeyProductId,
   );
+  const selectedSectionDefaultChoiceCount = selectedSectionSettingSource
+    ? getExamPlan(selectedSectionSettingSource.id, "A").sections[0]
+        ?.choiceCount || 2
+    : 2;
+  const selectedSectionSetting = selectedSectionSettingSource
+    ? {
+        ...selectedSectionSettingSource,
+        choiceCount: Math.max(
+          selectedSectionSettingSource.choiceCount,
+          selectedSectionDefaultChoiceCount,
+        ),
+      }
+    : null;
   useEffect(() => {
     setSectionSettingsDraft(
       selectedSectionSetting ? { ...selectedSectionSetting } : null,
@@ -1362,6 +1420,8 @@ export default function WebBAdminDemo({
   function saveSectionSettings() {
     if (!sectionSettingsDraft) return;
     const setting = { ...sectionSettingsDraft };
+    const defaultChoiceCount =
+      getExamPlan(setting.id, "A").sections[0]?.choiceCount || 2;
     if (
       ![
         setting.questionCount,
@@ -1371,6 +1431,19 @@ export default function WebBAdminDemo({
       ].every((value) => Number.isInteger(value) && value > 0)
     )
       return toast.error("จำนวนข้อ เวลา ตัวเลือก และคะแนนเต็มต้องมากกว่า 0");
+    if (
+      setting.choiceCount < defaultChoiceCount ||
+      setting.choiceCount > 10
+    ) {
+      setSectionSettingsDraft({
+        ...setting,
+        choiceCount: defaultChoiceCount,
+      });
+      toast.error(
+        `จำนวนตัวเลือก ${setting.title} ต้องไม่น้อยกว่า ${defaultChoiceCount} และไม่เกิน 10 ตัวเลือก`,
+      );
+      return;
+    }
     const nextSettings = activeExamSectionSettings.map((section) =>
       section.id === setting.id ? setting : section,
     );
@@ -1378,6 +1451,33 @@ export default function WebBAdminDemo({
       setTrialExamSectionSettings(nextSettings);
     } else {
       setExamSectionSettings(nextSettings);
+      if (setting.id === "tgat3") {
+        const isAvailableChoice = (value: string) => {
+          const choice = Number(value);
+          return Number.isInteger(choice) && choice >= 1 && choice <= setting.choiceCount;
+        };
+        setTgat3Rules((current) =>
+          current.map((rule) => ({
+            ...rule,
+            choiceCount: setting.choiceCount,
+            singleCorrectChoice: isAvailableChoice(rule.singleCorrectChoice || "")
+              ? rule.singleCorrectChoice
+              : "1",
+            targetChoices: rule.targetChoices?.filter(isAvailableChoice),
+            weightedScores: rule.weightedScores
+              ? Object.fromEntries(
+                  Object.entries(rule.weightedScores).filter(([choice]) =>
+                    isAvailableChoice(choice),
+                  ),
+                )
+              : undefined,
+            acceptedPairs: rule.acceptedPairs?.filter(
+              (pair) =>
+                isAvailableChoice(pair.q1) && isAvailableChoice(pair.q2),
+            ),
+          })),
+        );
+      }
       setExamSets((current) =>
         current.map((set) => {
           if (set.name !== "A") return set;
@@ -1409,6 +1509,35 @@ export default function WebBAdminDemo({
     answerKeyProductId,
     answerKeySetName,
   );
+  const showPartialScoreColumn =
+    answerKeyProductId !== "tgat1" && answerKeyProductId !== "tgat2";
+  const tgatPartOrder = ["tgat1", "tgat2", "tgat3"];
+  const selectedTgatPartIndex = tgatPartOrder.indexOf(answerKeyProductId);
+  const answerKeyQuestionNumberOffset =
+    selectedTgatPartIndex > 0
+      ? tgatPartOrder
+          .slice(0, selectedTgatPartIndex)
+          .reduce(
+            (total, id) =>
+              total +
+              (activeExamSectionSettings.find((section) => section.id === id)
+                ?.questionCount || 0),
+            0,
+          )
+      : 0;
+  let nextTgatQuestionNumber = 1;
+  const tgatQuestionRanges = tgatPartOrder.map((id) => {
+    const questionCount =
+      activeExamSectionSettings.find((section) => section.id === id)
+        ?.questionCount || 0;
+    const range = {
+      id,
+      start: nextTgatQuestionNumber,
+      end: nextTgatQuestionNumber + questionCount - 1,
+    };
+    nextTgatQuestionNumber += questionCount;
+    return range;
+  });
   const expectedAnswerCount = answerKeyPlan.questionCount;
   const [answerScoringRules, setAnswerScoringRules, answerScoringRulesLoaded] =
     useDemoData<DemoAnswerScoringRule[]>(
@@ -1602,6 +1731,7 @@ export default function WebBAdminDemo({
     if (defaultSet) setSelectedExamSetId(defaultSet.id);
   }, [selectedExamProductId]);
   useEffect(() => setSocialSettings(safeRead(adminMockKey("social-settings"), defaultSocialSettings)), []);
+  useEffect(() => setHomePageSettings(readWebBHomeSettings()), []);
   useEffect(() => setRolePermissionDraft(rolePermissions), [rolePermissions]);
   useEffect(() => {
     const syncPurchases = () => setDemoPurchases(readAdminMockPurchases());
@@ -2391,6 +2521,15 @@ export default function WebBAdminDemo({
     const next = [purchase, ...purchases];
     writeAdminMockPurchases(next);
     setDemoPurchases(next);
+  }
+
+  function handleHomeCoverUpload(file: File | undefined, onReady: (src: string) => void) {
+    if (!file) return;
+    void compressHomeCover(file)
+      .then(onReady)
+      .catch((error: unknown) => {
+        toast.error(error instanceof Error ? error.message : "อัปโหลดรูปภาพไม่สำเร็จ");
+      });
   }
 
   function logAction(
@@ -4322,18 +4461,35 @@ export default function WebBAdminDemo({
                   </label>
                   <label className="grid gap-1 text-xs font-semibold">
                     จำนวนตัวเลือก
-                    <WebBAdminInput
-                      type="number"
-                      min="2"
-                      max="10"
-                      value={sectionSettingsDraft.choiceCount}
-                      onChange={(event) =>
+                    <small className="font-normal text-slate-500">
+                      ค่าเริ่มต้น {getExamPlan(sectionSettingsDraft.id, "A").sections[0]?.choiceCount || 2} ตัวเลือก · เพิ่มได้สูงสุด 10
+                    </small>
+                    <AdminSelect
+                      value={String(sectionSettingsDraft.choiceCount)}
+                      onChange={(value) =>
                         setSectionSettingsDraft({
                           ...sectionSettingsDraft,
-                          choiceCount: Number(event.target.value),
+                          choiceCount: Number(value),
                         })
                       }
-                      className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal"
+                      ariaLabel="จำนวนตัวเลือกของพาร์ท"
+                      options={Array.from(
+                        {
+                          length:
+                            11 -
+                            (getExamPlan(sectionSettingsDraft.id, "A").sections[0]
+                              ?.choiceCount || 2),
+                        },
+                        (_, index) => {
+                          const count =
+                            (getExamPlan(sectionSettingsDraft.id, "A").sections[0]
+                              ?.choiceCount || 2) + index;
+                          return {
+                            value: String(count),
+                            label: `${count} ตัวเลือก`,
+                          };
+                        },
+                      )}
                     />
                   </label>
                   <label className="grid gap-1 text-xs font-semibold">
@@ -4438,18 +4594,35 @@ export default function WebBAdminDemo({
                         </label>
                         <label className="grid gap-1 text-xs font-semibold">
                           จำนวนตัวเลือก
-                          <WebBAdminInput
-                            type="number"
-                            min="2"
-                            max="10"
-                            value={sectionSettingsDraft.choiceCount}
-                            onChange={(event) =>
+                          <small className="font-normal text-slate-500">
+                            ค่าเริ่มต้น {getExamPlan(sectionSettingsDraft.id, "A").sections[0]?.choiceCount || 2} ตัวเลือก · เพิ่มได้สูงสุด 10
+                          </small>
+                          <AdminSelect
+                            value={String(sectionSettingsDraft.choiceCount)}
+                            onChange={(value) =>
                               setSectionSettingsDraft({
                                 ...sectionSettingsDraft,
-                                choiceCount: Number(event.target.value),
+                                choiceCount: Number(value),
                               })
                             }
-                            className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal"
+                            ariaLabel="จำนวนตัวเลือกของพาร์ท"
+                            options={Array.from(
+                              {
+                                length:
+                                  11 -
+                                  (getExamPlan(sectionSettingsDraft.id, "A").sections[0]
+                                    ?.choiceCount || 2),
+                              },
+                              (_, index) => {
+                                const count =
+                                  (getExamPlan(sectionSettingsDraft.id, "A").sections[0]
+                                    ?.choiceCount || 2) + index;
+                                return {
+                                  value: String(count),
+                                  label: `${count} ตัวเลือก`,
+                                };
+                              },
+                            )}
                           />
                         </label>
                         <label className="grid gap-1 text-xs font-semibold">
@@ -4992,10 +5165,15 @@ export default function WebBAdminDemo({
                         ? "เฉลยรายข้อ"
                         : `เฉลยรายข้อ ชุด ${selectedExamSet?.name || "A"}`}
                     </h3>
-
-                    {answerKeyProductId === "tgat-full" && (
+                    {(answerKeyProductId === "tgat-full" ||
+                      selectedTgatPartIndex >= 0) && (
                       <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
-                        เรียงพาร์ทตามหน้าสอบ: TGAT1 → TGAT2 → TGAT3
+                        เลขข้อเรียงต่อเนื่องทั้งชุด: {tgatQuestionRanges
+                          .map(
+                            (range) =>
+                              `${range.id.toUpperCase()} ${range.start}–${range.end}`,
+                          )
+                          .join(" · ")}
                       </p>
                     )}
                   </div>
@@ -5005,9 +5183,17 @@ export default function WebBAdminDemo({
                       <div>
                         <WebBTGAT3AnswerKeyManager
                           rules={tgat3Rules}
+                          questionNumberOffset={answerKeyQuestionNumberOffset}
+                          choiceCount={answerKeyPlan.sections[0]?.choiceCount || 4}
                           disabled={answerEntryLocked}
                       onChange={(newRules) => {
-                        setTgat3Rules(newRules);
+                        setTgat3Rules(
+                          newRules.map((rule) => ({
+                            ...rule,
+                            choiceCount:
+                              answerKeyPlan.sections[0]?.choiceCount || 4,
+                          })),
+                        );
                         const nextAnswers = newRules.map((r) => {
                           if (r.responseType === "single") return r.singleCorrectChoice || "1";
                           if (r.responseType === "multiple") return (r.targetChoices || ["1"]).join(",");
@@ -5048,7 +5234,12 @@ export default function WebBAdminDemo({
                   rows={answerKey.map((answer, index) => ({
                     answer,
                     index,
-                    question: getExamQuestionDetails(answerKeyPlan, index),
+                    question: {
+                      ...getExamQuestionDetails(answerKeyPlan, index),
+                      questionNumber:
+                        getExamQuestionDetails(answerKeyPlan, index)
+                          .questionNumber + answerKeyQuestionNumberOffset,
+                    },
                     section: answerKeyPlan.sections.find(
                       (item) =>
                         index >= item.answerIndexStart &&
@@ -5070,11 +5261,22 @@ export default function WebBAdminDemo({
                     <div className="w-full">
                       <table className="w-full min-w-[900px] table-fixed text-left">
                         <colgroup>
-                          <col className="w-[15%]" />
-                          <col className="w-[25%]" />
-                          <col className="w-[25%]" />
-                          <col className="w-[18%]" />
-                          <col className="w-[17%]" />
+                          {showPartialScoreColumn ? (
+                            <>
+                              <col className="w-[15%]" />
+                              <col className="w-[25%]" />
+                              <col className="w-[25%]" />
+                              <col className="w-[18%]" />
+                              <col className="w-[17%]" />
+                            </>
+                          ) : (
+                            <>
+                              <col className="w-[20%]" />
+                              <col className="w-[27%]" />
+                              <col className="w-[27%]" />
+                              <col className="w-[26%]" />
+                            </>
+                          )}
                         </colgroup>
                         <thead>
                           <tr>
@@ -5083,7 +5285,7 @@ export default function WebBAdminDemo({
                               "รูปแบบตอบ",
                               "เฉลย",
                               "คะแนนเต็ม",
-                              "คะแนนบางส่วน",
+                              ...(showPartialScoreColumn ? ["คะแนนบางส่วน"] : []),
                             ].map((x) => (
                               <th className={th} key={x}>
                                 {x}
@@ -5227,24 +5429,26 @@ export default function WebBAdminDemo({
                                   className="w-24 rounded-lg border border-slate-200 px-2.5 py-2 text-sm disabled:bg-slate-100"
                                 />
                               </td>
-                              <td className={td}>
-                                {isTgat3 && rule.responseType !== "single" ? (
-                                  <WebBAdminInput
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={rule.partialScore}
-                                    disabled={answerEntryLocked}
-                                    onChange={(event) =>
-                                      updateRule({ partialScore: Number(event.target.value) })
-                                    }
-                                    aria-label={`คะแนนบางส่วนข้อ ${i + 1}`}
-                                    className="w-24 rounded-lg border border-slate-200 px-2.5 py-2 text-sm disabled:bg-slate-100"
-                                  />
-                                ) : (
-                                  <span className="text-xs text-slate-400">—</span>
-                                )}
-                              </td>
+                              {showPartialScoreColumn && (
+                                <td className={td}>
+                                  {isTgat3 && rule.responseType !== "single" ? (
+                                    <WebBAdminInput
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={rule.partialScore}
+                                      disabled={answerEntryLocked}
+                                      onChange={(event) =>
+                                        updateRule({ partialScore: Number(event.target.value) })
+                                      }
+                                      aria-label={`คะแนนบางส่วนข้อ ${i + 1}`}
+                                      className="w-24 rounded-lg border border-slate-200 px-2.5 py-2 text-sm disabled:bg-slate-100"
+                                    />
+                                  ) : (
+                                    <span className="text-xs text-slate-400">—</span>
+                                  )}
+                                </td>
+                              )}
                             </tr>
                           );})}
                         </tbody>
@@ -5260,7 +5464,13 @@ export default function WebBAdminDemo({
                   disabled={answerEntryLocked}
                   onClick={() => {
                     if (isTgat3Product) {
-                      setTgat3Rules([...tgat3Rules]);
+                      setTgat3Rules(
+                        tgat3Rules.map((rule) => ({
+                          ...rule,
+                          choiceCount:
+                            answerKeyPlan.sections[0]?.choiceCount || 4,
+                        })),
+                      );
                     }
                     setAnswerKey([...answerKey]);
                     logAction(
@@ -7746,6 +7956,7 @@ export default function WebBAdminDemo({
                 <Button
                   onClick={() => {
                     safeWrite(adminMockKey("social-settings"), socialSettings);
+                    writeSocialSettings(socialSettings);
                     logAction("บันทึกช่องทางติดต่อ", "WEB-B Admin");
                   }}
                 >
@@ -7785,6 +7996,129 @@ export default function WebBAdminDemo({
               </div>
             </Panel>
           </div>
+          <Panel>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="font-bold">ภาพหน้าปกและเนื้อหาหน้าแรก</h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  อัปโหลดภาพหน้าปก และจัดการข้อมูลในหัวข้อ “ทำไมต้องสอบกับเรา?”
+                </p>
+              </div>
+              <Button
+                onClick={() => {
+                  writeWebBHomeSettings(homePageSettings);
+                  logAction("บันทึกภาพและเนื้อหาหน้าแรก", "หน้า Web B");
+                }}
+              >
+                บันทึกหน้าแรก
+              </Button>
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {([
+                ["studentCover", "หน้าปกเว็บบ์ / หน้านักเรียน"],
+                ["confidenceCover", "เพิ่มความมั่นใจก่อนสอบจริง!"],
+                ["freeTrialCover", "ทดลองระบบสอบฟรี"],
+                ["tcasMockCover", "ภาพ เรียนต่อมหาลัย TCAS 70 MOCK Exam"],
+              ] as const).map(([key, label]) => (
+                <label className="grid content-start gap-2 text-xs font-semibold text-slate-700" key={key}>
+                  {label}
+                  <WebBImage
+                    src={homePageSettings[key]}
+                    alt={`ตัวอย่าง ${label}`}
+                    className="h-32 w-full rounded-xl border border-slate-200 object-cover"
+                  />
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    aria-label={`เลือกรูป ${label}`}
+                    className="block max-w-full text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:font-semibold file:text-slate-700"
+                    onChange={(event) => handleHomeCoverUpload(event.target.files?.[0], (src) =>
+                      setHomePageSettings((current) => ({ ...current, [key]: src })),
+                    )}
+                  />
+                </label>
+              ))}
+            </div>
+            <div className="mt-6 border-t border-slate-100 pt-5">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h4 className="font-bold">ทำไมต้องสอบกับเรา?</h4>
+                  <p className="mt-1 text-xs text-slate-500">เพิ่ม แก้ไข หรือลบหัวข้อและคำอธิบายได้</p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => setHomePageSettings((current) => ({
+                    ...current,
+                    benefits: [...current.benefits, {
+                      id: `benefit-${Date.now()}`,
+                      title: "หัวข้อใหม่",
+                      detail: "รายละเอียด",
+                      image: current.benefits[0]?.image || "/images/webb/students-demo.png",
+                    }],
+                  }))}
+                >
+                  <LuPlus aria-hidden="true" className="mr-2 size-4" />
+                  เพิ่มหัวข้อ
+                </Button>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-2">
+                {homePageSettings.benefits.map((benefit) => (
+                  <article className="grid gap-3 rounded-xl border border-slate-200 p-3 sm:grid-cols-[120px_1fr]" key={benefit.id}>
+                    <div className="grid content-start gap-2">
+                      <WebBImage src={benefit.image} alt={`ภาพ ${benefit.title}`} className="h-24 w-full rounded-lg object-cover" />
+                      <label className="text-[11px] font-semibold text-slate-600">
+                        เปลี่ยนรูปหัวข้อ
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          aria-label={`เลือกรูป ${benefit.title}`}
+                          className="mt-1 block w-full text-[10px] text-slate-500"
+                          onChange={(event) => handleHomeCoverUpload(event.target.files?.[0], (src) =>
+                            setHomePageSettings((current) => ({
+                              ...current,
+                              benefits: current.benefits.map((item) => item.id === benefit.id ? { ...item, image: src } : item),
+                            })),
+                          )}
+                        />
+                      </label>
+                    </div>
+                    <div className="grid content-start gap-2">
+                      <WebBAdminInput
+                        value={benefit.title}
+                        aria-label="ชื่อหัวข้อ"
+                        onChange={(event) => setHomePageSettings((current) => ({
+                          ...current,
+                          benefits: current.benefits.map((item) => item.id === benefit.id ? { ...item, title: event.target.value } : item),
+                        }))}
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                      />
+                      <WebBAdminTextarea
+                        value={benefit.detail}
+                        aria-label="รายละเอียดหัวข้อ"
+                        onChange={(event) => setHomePageSettings((current) => ({
+                          ...current,
+                          benefits: current.benefits.map((item) => item.id === benefit.id ? { ...item, detail: event.target.value } : item),
+                        }))}
+                        className="min-h-20 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={() => setHomePageSettings((current) => ({
+                          ...current,
+                          benefits: current.benefits.filter((item) => item.id !== benefit.id),
+                        }))}
+                        aria-label={`ลบหัวข้อ ${benefit.title}`}
+                        title={`ลบหัวข้อ ${benefit.title}`}
+                      >
+                        <LuTrash2 aria-hidden="true" className="mr-2 size-4" />
+                        ลบหัวข้อนี้
+                      </Button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </Panel>
         </Section>
 
         {activeScreen === "settings" && activeRole === "Super Admin" && (

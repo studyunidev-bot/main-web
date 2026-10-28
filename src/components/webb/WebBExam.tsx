@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LuChevronDown, LuChevronUp } from "react-icons/lu";
 import type { ExamProduct } from "./data";
-import { WebBPreviewResultReport } from "./WebBStudentArea";
+import { WebBPreviewResultReport, type PreviewQuestionScore } from "./WebBStudentArea";
+import { adminMockKey } from "./webb-admin-mock-store";
+import { calculateTGAT3Summary, getTGAT3BlueprintPreset, type TGAT3AnswerRule } from "./tgat3-scoring";
 import { getExamPlan, getExamQuestionDetails, getExamResponseDetails, type ExamPlan, type ExamResponseType } from "./exam-documents";
 import PurchasedExamPdfViewer from "./PurchasedExamPdfViewer";
 import { addDemoEmail, calculateDemoScore, currentPurchaseForExam, currentPurchaseForRef, examAnswersStorageKey, examResultStorageKey, isDemoContentPublished, readDemoAccount, recordDemoRankingResult, setPurchaseExamStatus, updateAdminAttempt } from "./demo-store";
@@ -28,9 +30,9 @@ function calculatePreviewScore(
 ) {
   const answerRows = answerKey.slice(0, questionCount);
   const keyedCount = answerRows.filter((item) => item.value.trim()).length;
-  if (!keyedCount) return { score: null, keyStatus: "missing" as const };
+  if (!keyedCount) return { score: null, keyStatus: "missing" as const, questionScores: [] };
   if (answerRows.length < questionCount || keyedCount < questionCount)
-    return { score: null, keyStatus: "incomplete" as const };
+    return { score: null, keyStatus: "incomplete" as const, questionScores: [] };
 
   const normalize = (value: string) => value
     .trim()
@@ -40,22 +42,118 @@ function calculatePreviewScore(
     .map((choice) => (({ A: "1", B: "2", C: "3", D: "4", E: "5" } as Record<string, string>)[choice] || choice))
     .sort()
     .join(",");
-  const earned = answerRows.reduce((total, item, index) => {
+  const questionScores: PreviewQuestionScore[] = answerRows.map((item, index) => {
     const selected = answers[index];
     const choices = Array.isArray(selected) ? selected : selected === undefined ? [] : [selected];
     const normalizedSelection = choices
       .map((choice) => String(Number(choice) + 1))
       .sort()
       .join(",");
-    return total + (normalizedSelection === normalize(item.value) ? item.score : 0);
-  }, 0);
-  const maximum = scoreMaximum && scoreMaximum > 0
+    const correct = normalizedSelection === normalize(item.value);
+    return {
+      questionIndex: index,
+      questionNumber: String(index + 1),
+      answer: choices.map((choice) => String(Number(choice) + 1)).join(", ") || "—",
+      earned: correct ? item.score : 0,
+      maximum: item.score,
+      correct,
+    };
+  });
+  const earned = questionScores.reduce((total, question) => total + question.earned, 0);
+  const rawMaximum = answerRows.reduce((total, item) => total + item.score, 0);
+  const reportedMaximum = scoreMaximum && scoreMaximum > 0
     ? scoreMaximum
-    : answerRows.reduce((total, item) => total + item.score, 0);
+    : rawMaximum;
   return {
-    score: maximum > 0 ? Math.min(100, Math.round((earned / maximum) * 1000) / 10) : 0,
+    score:
+      rawMaximum > 0
+        ? Math.min(
+            100,
+            Math.round((earned / rawMaximum) * reportedMaximum * 10) / 10,
+          )
+        : 0,
     keyStatus: "ready" as const,
+    questionScores,
   };
+}
+
+function calculateTGAT3PreviewScore(
+  answers: Record<number, ExamAnswer>,
+  questionCount: number,
+  examSet: string,
+) {
+  let rules = getTGAT3BlueprintPreset();
+  try {
+    const storedRules = localStorage.getItem(
+      adminMockKey(`tgat3-dynamic-rules:${encodeURIComponent(examSet)}`),
+    );
+    if (storedRules) {
+      const parsedRules = JSON.parse(storedRules) as TGAT3AnswerRule[];
+      if (Array.isArray(parsedRules)) rules = parsedRules;
+    }
+  } catch {
+    // Use the built-in TGAT3 scoring blueprint when browser storage is unavailable.
+  }
+
+  const answerRules = rules.slice(0, questionCount);
+  const hasCompleteKey = answerRules.length === questionCount && answerRules.every((rule) => {
+    if (rule.isSecondOfLinkedPair) return true;
+    if (!Number.isFinite(rule.maxScore) || rule.maxScore <= 0) return false;
+    switch (rule.responseType) {
+      case "single": return Boolean(rule.singleCorrectChoice);
+      case "weighted": return Boolean(rule.weightedScores && Object.keys(rule.weightedScores).length);
+      case "multiple": return Boolean(rule.targetChoices?.length);
+      case "linked": return Boolean(rule.acceptedPairs?.length);
+      default: return false;
+    }
+  });
+  if (!hasCompleteKey) return { score: null, keyStatus: "incomplete" as const, questionScores: [] };
+
+  const normalizedAnswers = Object.fromEntries(
+    Object.entries(answers).map(([index, answer]) => [
+      index,
+      Array.isArray(answer)
+        ? answer.map((choice) => String(Number(choice) + 1))
+        : answer === "" || answer === undefined
+          ? ""
+          : String(Number(answer) + 1),
+    ]),
+  );
+  const summary = calculateTGAT3Summary(answerRules, normalizedAnswers);
+  const choiceLabel = (value: unknown) => {
+    const choices = Array.isArray(value) ? value : value === undefined ? [] : [value];
+    return choices.map((choice) => String(choice)).join(", ") || "—";
+  };
+  const questionScores: PreviewQuestionScore[] = summary.questionScores.map((question) => {
+    const answer = question.pairedQuestionNumber
+      ? `${choiceLabel(normalizedAnswers[question.questionNumber - 1])} → ${choiceLabel(normalizedAnswers[question.pairedQuestionNumber - 1])}`
+      : choiceLabel(normalizedAnswers[question.questionNumber - 1]);
+    return {
+      questionIndex: question.questionNumber - 1,
+      questionNumber: question.pairedQuestionNumber
+        ? `${question.questionNumber}–${question.pairedQuestionNumber}`
+        : String(question.questionNumber),
+      answer,
+      earned: question.rawScore,
+      maximum: question.maxRawScore,
+      correct: question.rawScore >= question.maxRawScore,
+      groupIndex: Number(question.partId.replace("part", "")),
+    };
+  });
+  return { score: summary.scaledTotalScore, keyStatus: "ready" as const, questionScores };
+}
+
+function calculatePreviewResult(
+  productId: string,
+  answers: Record<number, ExamAnswer>,
+  answerKey: PreviewAnswerKeyEntry[],
+  questionCount: number,
+  scoreMaximum: number | undefined,
+  examSet: string,
+) {
+  return productId === "tgat3"
+    ? calculateTGAT3PreviewScore(answers, questionCount, examSet)
+    : calculatePreviewScore(answers, answerKey, questionCount, scoreMaximum);
 }
 
 function clearTrialAttempt(resultKey: string, answerKey: string, startedAtKey: string) {
@@ -449,6 +547,7 @@ export default function WebBExam({
   const [previewSummary, setPreviewSummary] = useState<{
     score: number | null;
     keyStatus: "ready" | "missing" | "incomplete";
+    questionScores: PreviewQuestionScore[];
     answeredCount: number;
     questionCount: number;
     timedOut: boolean;
@@ -639,10 +738,18 @@ export default function WebBExam({
     if (remaining !== 0 || attemptStatus !== "ready") return;
     if (previewMode) {
       setConfirmSubmit(false);
-      const result = calculatePreviewScore(answers, previewAnswerKey, questionCount, previewScoreMaximum);
+      const result = calculatePreviewResult(
+        product.id,
+        answers,
+        previewAnswerKey,
+        questionCount,
+        previewScoreMaximum,
+        examSet,
+      );
       setPreviewSummary({
         score: result.score,
         keyStatus: result.keyStatus,
+        questionScores: result.questionScores,
         answeredCount,
         questionCount,
         timedOut: true,
@@ -728,10 +835,18 @@ export default function WebBExam({
     if (attemptStatus !== "ready") return;
     if (previewMode) {
       setConfirmSubmit(false);
-      const result = calculatePreviewScore(answers, previewAnswerKey, questionCount, previewScoreMaximum);
+      const result = calculatePreviewResult(
+        product.id,
+        answers,
+        previewAnswerKey,
+        questionCount,
+        previewScoreMaximum,
+        examSet,
+      );
       setPreviewSummary({
         score: result.score,
         keyStatus: result.keyStatus,
+        questionScores: result.questionScores,
         answeredCount,
         questionCount,
         timedOut: false,
@@ -780,6 +895,8 @@ export default function WebBExam({
         <WebBPreviewResultReport
           productId={product.id}
           examSet={examSet}
+          score={previewSummary.score}
+          questionScores={previewSummary.questionScores}
           onClose={() => onPreviewExit?.()}
         />
       </div>

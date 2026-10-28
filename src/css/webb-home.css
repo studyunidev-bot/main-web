@@ -9626,3 +9626,122 @@
 .wb-confirm-danger:hover { background: #b91c1c; }
 .wb-confirm-primary:hover { background: #f2bd00; }
 .wb-confirm-cancel:hover { background: #e2e8f0; }
+.wb-matrix-banner-image {
+  min-height: 0;
+  justify-content: center;
+  padding: 0;
+  border-radius: 22px;
+  background: transparent;
+}
+.wb-matrix-banner-image .wb-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 440px;
+  border-radius: 22px;
+  object-fit: cover;
+}
+.wb-feedback-dialog {
+  width: min(740px, 100%);
+  padding: 34px 40px 30px;
+}
+.wb-feedback-fieldset {
+  min-width: 0;
+  margin: 22px 0 18px;
+  padding: 0;
+  border: 0;
+}
+.wb-feedback-fieldset legend,
+.wb-feedback-message {
+  color: #262a32;
+  font-size: 14px;
+  font-weight: 700;
+}
+.wb-feedback-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 12px;
+}
+.wb-feedback-types button {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #e2e5eb;
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: #fff;
+  color: #606777;
+  font-size: 13px;
+  cursor: pointer;
+}
+.wb-feedback-types button.is-selected {
+  border-color: #e3bd00;
+  background: #fff8d6;
+  color: #413500;
+}
+.wb-feedback-message {
+  display: grid;
+  gap: 10px;
+}
+.wb-feedback-message textarea {
+  width: 100%;
+  min-height: 145px;
+  resize: vertical;
+  border: 1px solid #d9dce2;
+  border-radius: 18px;
+  padding: 16px;
+  background: #f7f7f8;
+  color: #262a32;
+  font-size: 14px;
+  font-weight: 400;
+  outline: none;
+}
+.wb-feedback-message textarea:focus {
+  border-color: #d6b200;
+  box-shadow: 0 0 0 3px #ffce0030;
+}
+.wb-feedback-message textarea::placeholder { color: #a4a7ae; }
+.wb-feedback-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: #fff8d6;
+  color: #3d3440;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.wb-feedback-note svg { width: 20px; height: 20px; flex: none; color: #8c6d00; }
+.wb-feedback-submit {
+  width: 100%;
+  min-height: 54px;
+  margin-top: 17px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--wb-btn-primary-bg, #ffce00);
+  color: var(--wb-btn-primary-text, #090909);
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.wb-feedback-submit:not(:disabled):hover { filter: brightness(.96); }
+.wb-feedback-submit:disabled {
+  background: #e4e5e8;
+  color: #92959b;
+  cursor: not-allowed;
+}
+.wb-mobile-exam-warning > p {
+  margin: 14px 0 22px;
+  color: #626b7b;
+  font-size: 14px;
+  line-height: 1.7;
+}
+@media (max-width: 560px) {
+  .wb-feedback-dialog { padding: 28px 18px 20px; }
+  .wb-feedback-types { display: grid; grid-template-columns: 1fr; }
+  .wb-feedback-types button { justify-content: center; }
+}

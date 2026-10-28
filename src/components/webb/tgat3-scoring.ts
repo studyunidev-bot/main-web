@@ -18,6 +18,7 @@ export type TGAT3AcceptedPair = {
 export type TGAT3AnswerRule = {
   id: string;
   questionNumber: number;
+  choiceCount?: number;
   partId: "part1" | "part2" | "part3" | "part4" | string;
   partTitle: string;
   responseType: TGAT3ScoringType;
@@ -39,13 +40,20 @@ export type TGAT3ScoreSummary = {
   totalQuestions: number;
   rawTotalScore: number;
   scaledTotalScore: number; // Scaled to 100 max
+  questionScores: Array<{
+    questionNumber: number;
+    pairedQuestionNumber?: number;
+    partId: string;
+    rawScore: number;
+    maxRawScore: number;
+  }>;
   sections: Array<{
     partId: string;
     partTitle: string;
     questionCount: number;
     rawScore: number;
     maxRawScore: number;
-    scaledScore: number; // Scaled to 25.00 max
+    scaledScore: number; // Contribution to the 100-point section total
   }>;
 };
 
@@ -102,18 +110,23 @@ export function gradeWeightedChoice(rule: TGAT3AnswerRule, studentAnswer: unknow
 
 /**
  * 3. Multiple Response Grading:
- * - 0.25 points per choice checked or left unchecked correctly across all 4 choices.
+ * - Compares all four choices, awarding 0.25 per correctly marked or unmarked choice.
  * - Special condition: 0 points if student left the entire question unanswered.
  */
 export function gradeMultipleResponse(rule: TGAT3AnswerRule, studentAnswer: unknown): number {
-  const selected = normalizeChoices(studentAnswer);
+  const allChoices = ["1", "2", "3", "4"];
+  const validChoices = new Set(allChoices);
+  const selected = normalizeChoices(studentAnswer).filter((choice) =>
+    validChoices.has(choice),
+  );
   if (selected.length === 0) {
     // Special myTCAS condition: Leaving the question empty gives 0 points
     return 0;
   }
 
-  const targets = (rule.targetChoices || []).map(normalizeChoice);
-  const allChoices = ["1", "2", "3", "4"];
+  const targets = (rule.targetChoices || [])
+    .map(normalizeChoice)
+    .filter((choice) => validChoices.has(choice));
   let correctCount = 0;
 
   for (const choice of allChoices) {
@@ -125,7 +138,7 @@ export function gradeMultipleResponse(rule: TGAT3AnswerRule, studentAnswer: unkn
     }
   }
 
-  return Number((correctCount * 0.25).toFixed(2));
+  return Number(((correctCount * rule.maxScore) / 4).toFixed(4));
 }
 
 /**
@@ -180,7 +193,7 @@ export function gradeTGAT3Question(
 }
 
 /**
- * Calculate scaled scores (each section = 25 max, total = 100 max)
+ * Scale the configured raw maximum across all TGAT3 question types to 100.
  */
 export function calculateTGAT3Summary(
   rules: TGAT3AnswerRule[],
@@ -227,9 +240,23 @@ export function calculateTGAT3Summary(
   };
 
   let totalRaw = 0;
+  const questionScores: TGAT3ScoreSummary["questionScores"] = [];
+  const linkedSecondaryQuestionNumbers = new Set(
+    rules
+      .filter(
+        (rule) =>
+          rule.responseType === "linked" &&
+          !rule.isSecondOfLinkedPair &&
+          rule.linkedPairQuestionNumber,
+      )
+      .map((rule) => rule.linkedPairQuestionNumber as number),
+  );
 
   for (let i = 0; i < rules.length; i++) {
     const rule = rules[i];
+    const isLinkedSecondary =
+      rule.isSecondOfLinkedPair ||
+      linkedSecondaryQuestionNumbers.has(rule.questionNumber);
     const pid = rule.partId || "part1";
     if (!partMap[pid]) {
       partMap[pid] = {
@@ -242,7 +269,7 @@ export function calculateTGAT3Summary(
     }
 
     partMap[pid].questionCount += 1;
-    partMap[pid].maxRawScore += rule.maxScore;
+    partMap[pid].maxRawScore += isLinkedSecondary ? 0 : rule.maxScore;
 
     let pairedAns: unknown = undefined;
     if (rule.responseType === "linked" && rule.linkedPairQuestionNumber) {
@@ -254,15 +281,32 @@ export function calculateTGAT3Summary(
       }
     }
 
-    const earned = gradeTGAT3Question(rule, studentAnswers[i], pairedAns);
+    const earned = isLinkedSecondary
+      ? 0
+      : gradeTGAT3Question(rule, studentAnswers[i], pairedAns);
     partMap[pid].rawScore += earned;
     totalRaw += earned;
+    if (!isLinkedSecondary) {
+      questionScores.push({
+        questionNumber: rule.questionNumber,
+        ...(rule.responseType === "linked" && rule.linkedPairQuestionNumber
+          ? { pairedQuestionNumber: rule.linkedPairQuestionNumber }
+          : {}),
+        partId: pid,
+        rawScore: earned,
+        maxRawScore: rule.maxScore,
+      });
+    }
   }
 
+  const totalMaxRawScore = Object.values(partMap).reduce(
+    (total, part) => total + part.maxRawScore,
+    0,
+  );
   const sections = Object.values(partMap).map((part) => {
-    // Scale each section to 25.00 points
+    // Each section contributes its share of the configured total maximum.
     const scaled =
-      part.maxRawScore > 0 ? (part.rawScore / part.maxRawScore) * 25 : 0;
+      totalMaxRawScore > 0 ? (part.rawScore / totalMaxRawScore) * 100 : 0;
     return {
       ...part,
       rawScore: Number(part.rawScore.toFixed(2)),
@@ -271,12 +315,15 @@ export function calculateTGAT3Summary(
     };
   });
 
-  const scaledTotal = sections.reduce((sum, s) => sum + s.scaledScore, 0);
+  const scaledTotal = totalMaxRawScore > 0
+    ? Math.min(100, (totalRaw / totalMaxRawScore) * 100)
+    : 0;
 
   return {
     totalQuestions: rules.length,
     rawTotalScore: Number(totalRaw.toFixed(2)),
     scaledTotalScore: Number(scaledTotal.toFixed(2)),
+    questionScores,
     sections,
   };
 }

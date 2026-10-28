@@ -4,31 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PublicShell } from "./PublicShell";
 import { WebBImage } from "./WebBImage";
-import { DEMO_AUTH_KEY } from "./demo-store";
+import { DEMO_AUTH_KEY, defaultWebBHomeSettings, readWebBHomeSettings, type WebBHomeSettings } from "./demo-store";
 import { initialCatalog, readCatalog, type CatalogFamily } from "./webb-exam-catalog-data";
-
-const benefits = [
-  {
-    title: "จำลองบรรยากาศสอบจริง",
-    detail:
-      "ฝึกทำข้อสอบเสมือนจริง คุ้นเคยกับบรรยากาศการสอบ ลดความตื่นเต้น และเพิ่มความมั่นใจก่อนลงสนามจริง",
-  },
-  {
-    title: "แนวข้อสอบอัปเดตล่าสุด",
-    detail:
-      "ฝึกฝนข้อสอบคุณภาพที่อัปเดตตามโครงสร้างปีล่าสุด คัดสรรโดยทีมติวเตอร์ผู้เชี่ยวชาญ เพื่อให้พร้อมกับข้อสอบจริง",
-  },
-  {
-    title: "สอบ ONLINE ทุกที่เวลา",
-    detail:
-      "สอบออนไลน์ได้ทุกที่ ทุกเวลา สะดวกและยืดหยุ่น พร้อมเลือกเวลาที่สอบได้ทันที ไม่ต้องเสียเวลาเดินทาง",
-  },
-  {
-    title: "วิเคราะห์ผลและ Ranking",
-    detail:
-      "วิเคราะห์ผลสอบอย่างละเอียด พร้อมดู Ranking เทียบกับผู้สอบทั่วประเทศ เพื่อรู้จุดที่ต้องพัฒนาและวางแผนเพิ่มคะแนน",
-  },
-];
 
 const guide = [
   {
@@ -141,28 +118,14 @@ function BrandMark() {
   );
 }
 
-function MatrixPreview() {
+function MatrixPreview({ imageSrc }: { imageSrc: string }) {
   return (
     <section
       className="wb-matrix wb-container"
       aria-label="ตารางแนวทางรายวิชาที่ใช้ยื่นคณะ ตัวอย่าง"
     >
-      <div className="wb-matrix-banner">
-        <div className="wb-matrix-title">
-          <BrandMark />
-          <div>
-            <span>เรียนต่อมหาลัย</span>
-            <strong>
-              TCAS 70
-              <br />
-              MOCK Exam
-            </strong>
-            <small>เช็กก่อน อ่านก่อน เตรียมพร้อมก่อนสอบจริง!</small>
-          </div>
-        </div>
-        <div className="wb-matrix-photo">
-          <WebBImage className="wb-image" alt="ภาพตัวอย่างสำหรับตาราง TCAS" />
-        </div>
+      <div className="wb-matrix-banner wb-matrix-banner-image">
+        <WebBImage className="wb-image" src={imageSrc} alt="เรียนต่อมหาลัย TCAS 70 MOCK Exam" />
       </div>
       <div className="wb-matrix-paper">
         <div className="wb-matrix-scroll">
@@ -236,6 +199,7 @@ export default function WebBHome() {
   const [studentLoggedIn, setStudentLoggedIn] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [catalogFamilies, setCatalogFamilies] = useState<CatalogFamily[]>(initialCatalog);
+  const [homeSettings, setHomeSettings] = useState<WebBHomeSettings>(defaultWebBHomeSettings);
 
   const subjects = catalogFamilies.map((family) => ({
     id: family.id,
@@ -260,6 +224,17 @@ export default function WebBHome() {
       window.removeEventListener("webb-demo-auth-updated", syncLogin);
       window.removeEventListener("pageshow", syncLogin);
       window.removeEventListener("popstate", syncLogin);
+    };
+  }, []);
+
+  useEffect(() => {
+    const syncSettings = () => setHomeSettings(readWebBHomeSettings());
+    syncSettings();
+    window.addEventListener("storage", syncSettings);
+    window.addEventListener("webb-home-settings-updated", syncSettings);
+    return () => {
+      window.removeEventListener("storage", syncSettings);
+      window.removeEventListener("webb-home-settings-updated", syncSettings);
     };
   }, []);
 
@@ -312,6 +287,7 @@ export default function WebBHome() {
           <figure className="wb-hero-photo">
             <WebBImage
               className="wb-image"
+              src={homeSettings.confidenceCover}
               alt="ภาพตัวอย่างนักเรียนเตรียมสอบ"
             />
           </figure>
@@ -332,7 +308,7 @@ export default function WebBHome() {
         </section>
         <section className="wb-trial wb-container">
           <div className="wb-trial-photo">
-            <WebBImage className="wb-image" alt="ภาพตัวอย่างบรรยากาศทำข้อสอบ" />
+            <WebBImage className="wb-image" src={homeSettings.freeTrialCover} alt="ภาพตัวอย่างบรรยากาศทำข้อสอบ" />
           </div>
           <div className="wb-trial-copy">
             <h2>ทดลองระบบสอบฟรี</h2>
@@ -351,11 +327,12 @@ export default function WebBHome() {
         <section className="wb-why wb-container" id="why">
           <h2>ทำไมต้องสอบกับเรา?</h2>
           <div className="wb-benefit-grid">
-            {benefits.map((benefit) => (
+            {homeSettings.benefits.map((benefit) => (
               <article className="wb-benefit-card" key={benefit.title}>
                 <div className="wb-benefit-image">
                   <WebBImage
                     className="wb-image"
+                    src={benefit.image}
                     alt="ภาพตัวอย่างจุดเด่นระบบสอบ"
                   />
                 </div>
@@ -404,7 +381,7 @@ export default function WebBHome() {
             ))}
           </div>
         </section>
-        <MatrixPreview />
+        <MatrixPreview imageSrc={homeSettings.tcasMockCover} />
         <section className="wb-guide wb-container" id="guide">
           <h2>คู่มือการสอบ</h2>
           <div className="wb-guide-grid">

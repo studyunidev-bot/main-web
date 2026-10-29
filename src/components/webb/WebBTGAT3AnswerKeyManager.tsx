@@ -36,6 +36,25 @@ const SCORING_TYPE_OPTIONS = [
   { value: "linked", label: "คำตอบสัมพันธ์กัน " },
 ];
 
+const WEIGHTED_SCORE_OPTIONS = [
+  { value: "", label: "เลือกคะแนน" },
+  { value: "0", label: "0 คะแนน" },
+  { value: "0.25", label: "0.25 คะแนน" },
+  { value: "0.5", label: "0.50 คะแนน" },
+  { value: "0.75", label: "0.75 คะแนน" },
+  { value: "1", label: "1 คะแนน" },
+];
+
+function formatWeightedScoreOption(option: { value: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {option.label}
+      {option.value === "0" && <LuX aria-label="ไม่ถูกต้อง" className="text-rose-600" />}
+      {option.value === "1" && <LuCheck aria-label="ถูกต้องที่สุด" className="text-emerald-600" />}
+    </span>
+  );
+}
+
 const DEFAULT_ACCEPTED_PAIRS = [
   { q1: "1", q2: "1", score: 2.0 },
   { q1: "2", q2: "3", score: 2.0 },
@@ -192,6 +211,72 @@ export default function WebBTGAT3AnswerKeyManager({
         r.id === id ? { ...r, ...updates, choiceCount } : { ...r, choiceCount },
       ),
     );
+  };
+
+  const handleResponseTypeChange = (rule: TGAT3AnswerRule, value: string) => {
+    const nextType = value as TGAT3ScoringType;
+    if (
+      nextType === "linked" &&
+      !rules.some((candidate) => candidate.questionNumber === rule.questionNumber + 1)
+    ) {
+      window.alert("คำตอบสัมพันธ์กันต้องมีข้อถัดไปให้จับคู่");
+      return;
+    }
+    if (
+      nextType === "linked" &&
+      rules.some(
+        (candidate) =>
+          candidate.questionNumber === rule.questionNumber + 1 &&
+          candidate.responseType === "linked" &&
+          !candidate.isSecondOfLinkedPair,
+      )
+    ) {
+      window.alert("ข้อถัดไปเป็นข้อหลักของคู่สัมพันธ์อื่นอยู่แล้ว");
+      return;
+    }
+    let nextUpdates: Partial<TGAT3AnswerRule> = { responseType: nextType };
+
+    if (nextType === "single") {
+      nextUpdates = {
+        ...nextUpdates,
+        singleCorrectChoice: rule.singleCorrectChoice || "1",
+        maxScore: 1.0,
+        isSecondOfLinkedPair: false,
+      };
+    } else if (nextType === "weighted") {
+      nextUpdates = {
+        ...nextUpdates,
+        weightedScores: rule.weightedScores || {},
+        maxScore: 1.0,
+        isSecondOfLinkedPair: false,
+      };
+    } else if (nextType === "multiple") {
+      nextUpdates = {
+        ...nextUpdates,
+        targetChoices: rule.targetChoices?.length ? rule.targetChoices : ["1", "3"],
+        maxScore: 1.0,
+        isSecondOfLinkedPair: false,
+      };
+    } else if (nextType === "linked") {
+      nextUpdates = {
+        ...nextUpdates,
+        linkedPairQuestionNumber: rule.questionNumber + 1,
+        acceptedPairs: rule.acceptedPairs?.length ? rule.acceptedPairs : DEFAULT_ACCEPTED_PAIRS,
+        maxScore: 2.0,
+      };
+    }
+
+    updateRule(rule.id, nextUpdates);
+  };
+
+  const updateWeightedScore = (rule: TGAT3AnswerRule, choice: string, value: string) => {
+    const weightedScores = { ...(rule.weightedScores || {}) };
+    if (value === "") {
+      delete weightedScores[choice];
+    } else {
+      weightedScores[choice] = Number(value);
+    }
+    updateRule(rule.id, { weightedScores });
   };
 
   // Add question
@@ -373,56 +458,7 @@ export default function WebBTGAT3AnswerKeyManager({
                           value={rule.responseType}
                           disabled={disabled || isLockedLinkedSecond}
                           options={SCORING_TYPE_OPTIONS}
-                          onChange={(val) => {
-                            const nextType = val as TGAT3ScoringType;
-                            let nextUpdates: Partial<TGAT3AnswerRule> = {
-                              responseType: nextType,
-                            };
-                            if (nextType === "single") {
-                              nextUpdates = {
-                                ...nextUpdates,
-                                singleCorrectChoice: rule.singleCorrectChoice || "1",
-                                maxScore: 1.0,
-                                isSecondOfLinkedPair: false,
-                              };
-                            } else if (nextType === "weighted") {
-                              nextUpdates = {
-                                ...nextUpdates,
-                                weightedScores: rule.weightedScores || {
-                                  "1": 0.25,
-                                  "2": 0.5,
-                                  "3": 0.75,
-                                  "4": 1.0,
-                                },
-                                maxScore: 1.0,
-                                isSecondOfLinkedPair: false,
-                              };
-                            } else if (nextType === "multiple") {
-                              nextUpdates = {
-                                ...nextUpdates,
-                                targetChoices: rule.targetChoices?.length
-                                  ? rule.targetChoices
-                                  : ["1", "3"],
-                                maxScore: 1.0,
-                                isSecondOfLinkedPair: false,
-                              };
-                            } else if (nextType === "linked") {
-                              nextUpdates = {
-                                ...nextUpdates,
-                                linkedPairQuestionNumber:
-                                  rule.linkedPairQuestionNumber ||
-                                  (rule.questionNumber % 2 === 1
-                                    ? rule.questionNumber + 1
-                                    : rule.questionNumber - 1),
-                                acceptedPairs:
-                                  rule.acceptedPairs?.length
-                                    ? rule.acceptedPairs
-                                    : DEFAULT_ACCEPTED_PAIRS,
-                                maxScore: 2.0,
-                              };
-                            }
-                            updateRule(rule.id, nextUpdates);
-                          }}
+                          onChange={(val) => handleResponseTypeChange(rule, val)}
                           ariaLabel={`ประเภทการตรวจข้อ ${displayQuestionNumber(rule.questionNumber)}`}
                           className="w-full text-xs font-bold text-slate-800"
                         />
@@ -515,37 +551,25 @@ export default function WebBTGAT3AnswerKeyManager({
                           </span>
 
                         </div>
-                        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                           {choiceItems.map((item) => (
                             <div
                               key={item.key}
-                              className="rounded-xl border border-amber-200/80 bg-white p-3 shadow-sm"
+                              className="flex min-w-0 items-center gap-2 rounded-xl border border-amber-200/80 bg-white px-2 py-2 shadow-sm"
                             >
-                              <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                                <span>{item.label}</span>
-                              </div>
-                              <div className="mt-2 flex items-center gap-1.5">
-                                <span className="text-xs text-slate-500">ได้:</span>
-                                <WebBAdminInput
-                                  type="number"
-                                  step="0.05"
-                                  min="0"
-                                  max="2"
+                              <span className="shrink-0 text-xs font-bold text-slate-800">
+                                ข้อ {item.label}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <AdminSelect
+                                  options={WEIGHTED_SCORE_OPTIONS}
+                                  formatOptionLabel={formatWeightedScoreOption}
                                   disabled={disabled}
-                                  value={rule.weightedScores?.[item.key] ?? 0}
-                                  onChange={(e) => {
-                                    const val = Number(e.target.value);
-                                    updateRule(rule.id, {
-                                      weightedScores: {
-                                        ...(rule.weightedScores || {}),
-                                        [item.key]: Number.isFinite(val) ? val : 0,
-                                      },
-                                    });
-                                  }}
-                                  className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-center text-xs font-bold text-blue-700 focus:border-blue-500"
+                                  value={rule.weightedScores?.[item.key] === undefined ? "" : String(rule.weightedScores[item.key])}
+                                  onChange={(value) => updateWeightedScore(rule, item.key, value)}
+                                  className="w-full min-w-0 text-xs font-bold text-blue-700"
                                   aria-label={`คะแนนตัวเลือก ${item.key} ข้อ ${displayQuestionNumber(rule.questionNumber)}`}
                                 />
-                                <span className="text-xs text-slate-500">คะแนน</span>
                               </div>
                             </div>
                           ))}
@@ -627,63 +651,18 @@ export default function WebBTGAT3AnswerKeyManager({
                                   กำหนดข้อที่สัมพันธ์กัน:
                                 </span>
 
-                                {/* สวิตช์ความสัมพันธ์ */}
-                                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-purple-200 bg-white px-2.5 py-1 text-xs font-semibold text-purple-900 shadow-sm">
-                                  <input
-                                    type="checkbox"
-                                    disabled={disabled}
-                                    checked={Boolean(rule.linkedPairQuestionNumber && rule.linkedPairQuestionNumber > 0)}
-                                    onChange={(e) => {
-                                      const isChecked = e.target.checked;
-                                      updateRule(rule.id, {
-                                        linkedPairQuestionNumber: isChecked ? (rule.questionNumber + 1) : 0,
-                                      });
-                                    }}
-                                    className="rounded border-purple-300 text-purple-600 focus:ring-purple-500"
-                                  />
-                                  <span>{rule.linkedPairQuestionNumber && rule.linkedPairQuestionNumber > 0 ? "มีข้อสัมพันธ์" : "ไม่มีความสัมพันธ์ (ใส่ 0)"}</span>
-                                </label>
-
-                                {rule.linkedPairQuestionNumber && rule.linkedPairQuestionNumber > 0 ? (
+                                {rules.some((item) => item.questionNumber === rule.questionNumber + 1) ? (
                                   <div className="flex items-center gap-1.5">
                                     <span className="text-xs text-purple-900">
-                                      ข้อ {displayQuestionNumber(rule.questionNumber)} คู่กับ
+                                      ข้อ {displayQuestionNumber(rule.questionNumber)} สัมพันธ์กับข้อถัดไป
                                     </span>
-                                    <WebBAdminInput
-                                      type="number"
-                                      min="0"
-                                      disabled={disabled}
-                                      value={rule.linkedPairQuestionNumber ? displayQuestionNumber(rule.linkedPairQuestionNumber) : 0}
-                                      onChange={(e) => {
-                                        const val = e.target.value === "" ? 0 : Number(e.target.value);
-                                        const targetQuestionNumber = val
-                                          ? val - questionNumberOffset
-                                          : 0;
-                                        const alreadyPairedBy = rules.find(
-                                          (candidate) =>
-                                            candidate.id !== rule.id &&
-                                            candidate.responseType === "linked" &&
-                                            !candidate.isSecondOfLinkedPair &&
-                                            candidate.linkedPairQuestionNumber === targetQuestionNumber,
-                                        );
-                                        if (alreadyPairedBy) {
-                                          window.alert(
-                                            `ข้อ ${displayQuestionNumber(val)} ถูกจับคู่กับข้อ ${displayQuestionNumber(alreadyPairedBy.questionNumber)} แล้ว`,
-                                          );
-                                          return;
-                                        }
-                                        updateRule(rule.id, {
-                                          linkedPairQuestionNumber: targetQuestionNumber,
-                                        });
-                                      }}
-                                      placeholder="0"
-                                      className="w-16 rounded-lg border border-purple-300 bg-white px-2 py-1 text-center font-bold text-purple-950 text-xs"
-                                      aria-label={`ข้อที่สัมพันธ์กับข้อ ${displayQuestionNumber(rule.questionNumber)}`}
-                                    />
+                                    <span className="rounded-lg border border-purple-200 bg-white px-2.5 py-1 text-xs font-bold text-purple-950">
+                                      ข้อ {displayQuestionNumber(rule.questionNumber + 1)}
+                                    </span>
                                   </div>
                                 ) : (
                                   <span className="rounded bg-purple-100 px-2 py-0.5 text-[11px] font-medium text-purple-800">
-                                    (ข้อเดี่ยว/ไม่มีคู่สัมพันธ์ ค่า: 0)
+                                    ไม่มีข้อถัดไปให้จับคู่
                                   </span>
                                 )}
                               </div>
@@ -857,10 +836,7 @@ export default function WebBTGAT3AnswerKeyManager({
                           value={rule.responseType}
                           disabled={disabled || isLockedLinkedSecond}
                           options={SCORING_TYPE_OPTIONS}
-                          onChange={(val) => {
-                            const nextType = val as TGAT3ScoringType;
-                            updateRule(rule.id, { responseType: nextType });
-                          }}
+                          onChange={(val) => handleResponseTypeChange(rule, val)}
                           ariaLabel={`ประเภทการตรวจข้อ ${displayQuestionNumber(rule.questionNumber)}`}
                           className="w-full text-xs font-semibold"
                         />
@@ -905,23 +881,13 @@ export default function WebBTGAT3AnswerKeyManager({
                                 className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1"
                               >
                                 <span className="font-bold text-slate-700">ข้อ {item.key}:</span>
-                                <WebBAdminInput
-                                  type="number"
-                                  step="0.05"
-                                  min="0"
-                                  max="2"
+                                <AdminSelect
+                                  options={WEIGHTED_SCORE_OPTIONS}
+                                  formatOptionLabel={formatWeightedScoreOption}
                                   disabled={disabled}
-                                  value={rule.weightedScores?.[item.key] ?? 0}
-                                  onChange={(e) => {
-                                    const val = Number(e.target.value);
-                                    updateRule(rule.id, {
-                                      weightedScores: {
-                                        ...(rule.weightedScores || {}),
-                                        [item.key]: Number.isFinite(val) ? val : 0,
-                                      },
-                                    });
-                                  }}
-                                  className="w-14 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-center text-xs font-bold"
+                                  value={rule.weightedScores?.[item.key] === undefined ? "" : String(rule.weightedScores[item.key])}
+                                  onChange={(value) => updateWeightedScore(rule, item.key, value)}
+                                  className="w-32 text-xs font-bold"
                                   aria-label={`คะแนนตัวเลือก ${item.key} ข้อ ${displayQuestionNumber(rule.questionNumber)}`}
                                 />
                               </div>

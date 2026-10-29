@@ -1,7 +1,7 @@
 "use client";
 
 import Select from "react-select";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 export type AdminSelectOption = { value: string; label: string };
 
@@ -14,6 +14,7 @@ type AdminSelectProps = {
   className?: string;
   ariaLabel?: string;
   isClearable?: boolean;
+  formatOptionLabel?: (option: AdminSelectOption) => ReactNode;
 };
 
 export default function AdminSelect({
@@ -25,6 +26,7 @@ export default function AdminSelect({
   className,
   ariaLabel,
   isClearable = false,
+  formatOptionLabel,
 }: AdminSelectProps) {
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
@@ -39,6 +41,7 @@ export default function AdminSelect({
       isDisabled={disabled}
       isClearable={isClearable}
       isSearchable
+      formatOptionLabel={(option) => formatOptionLabel?.(option) ?? option.label}
       placeholder={placeholder}
       aria-label={ariaLabel}
       className={className}
